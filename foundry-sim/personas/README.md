@@ -42,4 +42,5 @@ When `FOUNDRY_MODE=azure` is enabled (see `docs/PRD-azure-foundry-integration.md
 
 | File | Description |
 | --- | --- |
+| `steward.json` | **YOLO Steward** — first production persona (internal pilot). Identity card: `community/AGENT-IDENTITY-CARD.md` |
 | `example-steward.json` | EXAMPLE — a fictional community steward persona |

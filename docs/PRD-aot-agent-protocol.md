@@ -143,15 +143,15 @@ sequenceDiagram
 
 ## 9. Open Questions
 
-- Which model deployment will be used for the first internal pilot?
-- How is the agent's identity card versioned — as a file in the repository or a pinned discussion?
-- What happens if the hard limit is hit mid-response — truncate or abort and notify?
-- Should the agent depth tiers (Focused / Standard / Deep) map to specific token budgets or to prompt complexity heuristics?
+- ~~Which model deployment will be used for the first internal pilot?~~ **Resolved: `gpt-5.4-mini` (2026-03-17) on `yolo-foundry` — see `community/AGENT-IDENTITY-CARD.md`.**
+- ~~How is the agent's identity card versioned — as a file in the repository or a pinned discussion?~~ **Resolved: repository file `community/AGENT-IDENTITY-CARD.md` with an in-file change log.**
+- ~~What happens if the hard limit is hit mid-response — truncate or abort and notify?~~ **Resolved: limits are checked *before* each send; the run aborts with `ProtocolLimitError` and notifies. Output-token budgets are enforced server-side per request, so no mid-response client truncation occurs.**
+- ~~Should the agent depth tiers (Focused / Standard / Deep) map to specific token budgets or to prompt complexity heuristics?~~ **Resolved: token budgets — Focused 512 / Standard 1,024 / Deep 2,048 (`foundry-sim/agent.py` `DEPTH_TIERS`).**
 
 ## 10. Milestones
 
-1. **M1 — Sim gate:** `foundry-sim` tests pass; dashboard shows correct topology.
-2. **M2 — Identity card:** Draft the agent identity card with hard limits; get maintainer approval.
-3. **M3 — Internal pilot:** 3 internal discussions exercised; human review of every response.
+1. **M1 — Sim gate:** ✅ Done (2026-07-12). Full suite green incl. `TestAgentProtocol`; dashboard shows correct topology.
+2. **M2 — Identity card:** ✅ Done (2026-07-12). `community/AGENT-IDENTITY-CARD.md` drafted with hard limits; approved by maintainer with the implementation go-ahead.
+3. **M3 — Internal pilot:** 🚧 In progress (2026-07-12). Runner (`foundry-sim/agent.py`) live; first real invocation completed with human review. Requires ≥ 3 discussions before advancing.
 4. **M4 — Community pilot:** Opt-in, monitored; identity card and change log published.
 5. **M5 — GA:** General availability with full evidence record.

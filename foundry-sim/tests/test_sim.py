@@ -181,6 +181,92 @@ class TestAzureModeGuards(unittest.TestCase):
         self.assertEqual(client.list_fixtures(), [])
 
 
+class TestAgentProtocol(unittest.TestCase):
+    """AoT agent protocol runner (agent.py) — offline, sim mode only.
+
+    Covers PRD-aot-agent-protocol.md §6.1 (depth tiers), §6.3 (hard limits),
+    and §6.5 (response contract) without any network call.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        # Ensure agent.py binds to the SAME foundry_client module instance the
+        # tests monkey-patch, so ledger redirection works.
+        sys.modules["foundry_client"] = _fc_mod
+        agent_path = _SIM_DIR / "agent.py"
+        agent_spec = importlib.util.spec_from_file_location("agent", agent_path)
+        cls.agent_mod = importlib.util.module_from_spec(agent_spec)  # type: ignore[arg-type]
+        agent_spec.loader.exec_module(cls.agent_mod)  # type: ignore[union-attr]
+
+    def setUp(self) -> None:
+        os.environ.pop("FOUNDRY_MODE", None)
+        self._tmp = tempfile.NamedTemporaryFile(suffix=".json", delete=False)
+        self._tmp.write(b'{"runs": []}')
+        self._tmp.close()
+        self._orig_ledger = _fc_mod._LEDGER_PATH
+        _fc_mod._LEDGER_PATH = Path(self._tmp.name)
+
+    def tearDown(self) -> None:
+        _fc_mod._LEDGER_PATH = self._orig_ledger
+        Path(self._tmp.name).unlink(missing_ok=True)
+        os.environ.pop("FOUNDRY_MODE", None)
+
+    def _run(self, **kwargs):
+        defaults = {"persona_id": "steward", "depth": "focused",
+                    "decision_owner": "Test Owner"}
+        defaults.update(kwargs)
+        return self.agent_mod.AgentRun(**defaults)
+
+    def test_response_contract_header_and_footer(self) -> None:
+        """§6.5: disclosure header, human-decision footer, named owner."""
+        out = self._run().ask("Frame a discovery brief for a new workflow.")
+        first_line = out.splitlines()[0]
+        self.assertTrue(first_line.startswith("🤖 "))
+        self.assertIn("Depth: Focused", first_line)
+        self.assertIn("Simulated", first_line)
+        self.assertIn("Human decision required", out)
+        self.assertIn("Decision owner: Test Owner", out)
+
+    def test_unknown_depth_rejected(self) -> None:
+        """§6.1: depth must be a known tier."""
+        with self.assertRaises(ValueError) as ctx:
+            self._run(depth="ultra")
+        self.assertIn("depth", str(ctx.exception).lower())
+
+    def test_unknown_persona_rejected(self) -> None:
+        with self.assertRaises(FileNotFoundError):
+            self._run(persona_id="does-not-exist")
+
+    def test_depth_tiers_within_protocol_ceiling(self) -> None:
+        """§6.3: no tier may exceed the 2,048-token protocol ceiling."""
+        tiers = self.agent_mod.DEPTH_TIERS
+        self.assertEqual(set(tiers), {"focused", "standard", "deep"})
+        for tier, budget in tiers.items():
+            with self.subTest(tier=tier):
+                self.assertLessEqual(
+                    budget, self.agent_mod.PROTOCOL_MAX_OUTPUT_TOKENS
+                )
+
+    def test_request_cap_aborts_run(self) -> None:
+        """§6.3: request 11 must raise ProtocolLimitError before sending."""
+        run = self._run()
+        run._requests_made = self.agent_mod.PROTOCOL_MAX_REQUESTS_PER_RUN
+        with self.assertRaises(self.agent_mod.ProtocolLimitError):
+            run.ask("one more?")
+
+    def test_cost_cap_aborts_run(self) -> None:
+        """§6.3: estimated cost at/over USD 0.10 aborts before sending."""
+        run = self._run()
+        run._estimated_cost_usd = self.agent_mod.PROTOCOL_MAX_COST_PER_RUN_USD
+        with self.assertRaises(self.agent_mod.ProtocolLimitError):
+            run.ask("one more?")
+
+    def test_persona_system_prompt_reaches_messages(self) -> None:
+        """The steward persona must include read-only, decision-deferring language."""
+        persona = self.agent_mod.load_persona("steward")
+        self.assertIn("never make final decisions", persona["system_prompt"])
+
+
 class TestUnknownModeRaises(unittest.TestCase):
     def setUp(self) -> None:
         os.environ["FOUNDRY_MODE"] = "bogus"
