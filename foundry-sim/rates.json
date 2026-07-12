@@ -1,0 +1,37 @@
+{
+  "$comment": "ESTIMATE — these are illustrative placeholder rates only. They are NOT connected to any billing system and do NOT reflect current Azure OpenAI pricing. Update from https://azure.microsoft.com/en-us/pricing/details/cognitive-services/openai-service/ before using for real budget planning.",
+  "note": "All figures are ESTIMATES for simulation purposes only. No billing integration.",
+  "currency": "USD",
+  "unit": "per 1000 tokens",
+  "models": {
+    "gpt-4o": {
+      "input": 0.005,
+      "output": 0.015,
+      "label": "Azure OpenAI GPT-4o (ESTIMATE)",
+      "eligible_for_startup_credits": true,
+      "first_party": true
+    },
+    "gpt-4o-mini": {
+      "input": 0.00015,
+      "output": 0.0006,
+      "label": "Azure OpenAI GPT-4o mini (ESTIMATE)",
+      "eligible_for_startup_credits": true,
+      "first_party": true
+    },
+    "gpt-4-turbo": {
+      "input": 0.01,
+      "output": 0.03,
+      "label": "Azure OpenAI GPT-4 Turbo (ESTIMATE)",
+      "eligible_for_startup_credits": true,
+      "first_party": true
+    },
+    "auto": {
+      "input": 0.001,
+      "output": 0.003,
+      "label": "Auto-routed (blended ESTIMATE — actual model unknown until routed)",
+      "eligible_for_startup_credits": true,
+      "first_party": true,
+      "note": "In auto mode the router selects the model. This blended rate is a conservative placeholder for ROI estimation only."
+    }
+  }
+}

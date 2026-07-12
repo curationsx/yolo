@@ -1,0 +1,32 @@
+{
+  "id": "fixture-aot-workflow-review",
+  "label": "EXAMPLE — fictional workflow review response",
+  "description": "Canned response for a workflow-clinic review scenario. Fictional data only.",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Review this research synthesis workflow for missing checkpoints."
+    }
+  ],
+  "response": {
+    "id": "sim-chatcmpl-00002",
+    "object": "chat.completion",
+    "model": "auto",
+    "sim_note": "SIMULATED — no network call, no cost",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "**Workflow Clinic Review: Research Synthesis**\n\n**Missing checkpoints identified:**\n1. No explicit 'source credibility assessment' step before synthesis begins. Recommend a human-gated verification of each source's authority and recency.\n2. Confidence labeling is listed in the output contract but not enforced in the compose step — add a reminder prompt instruction.\n3. No rollback path if synthesis produces conflicting conclusions from equally weighted sources. Recommend a 'flag for human adjudication' branch.\n\n**Strengths:** Clear actor assignments, explicit output contract, linked to a review gate before publication.\n\n**Suggested revision:** Add a Step 2a: 'Source Credibility Gate — human reviews each source for authority, recency, and access before synthesis proceeds.'\n\n**Evidence still needed:** Run the workflow on three varied research tasks and record where the model fabricated a citation or missed a conflicting source."
+        },
+        "finish_reason": "stop"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 18,
+      "completion_tokens": 165,
+      "total_tokens": 183
+    }
+  }
+}

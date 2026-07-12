@@ -1,0 +1,156 @@
+# foundry-sim — Local Offline Foundry Emulator
+
+```text
+┌─ F O U N D R Y - S I M  //  A o T  C O M M U N I T Y ─────────────┐
+│  LOCAL OFFLINE EMULATOR  ×  ZERO COST  ×  NO NETWORK CALLS         │
+│  FOUNDRY_MODE=sim  ·  All figures labeled ESTIMATE                 │
+└──────────────────────────────────────────[ SIM → REAL = config ]───┘
+```
+
+**A local, offline, zero-cost emulation of Azure AI Foundry** so you can see the visuals, build personas and workflows, and judge ROI _before_ connecting any real Azure keys or incurring any spend.
+
+> **This package makes no network calls and incurs no cost.** It runs entirely on your machine using Python 3.9+ standard library. No pip installs required.
+
+---
+
+## What it is
+
+`foundry-sim` is a staging layer that:
+
+1. **Mirrors the Azure OpenAI client interface** — `client.chat(messages)` returns the same response shape you'd get from the real Azure OpenAI API, so switching to the real client is a configuration change, not a rewrite.
+2. **Returns deterministic canned responses** from `fixtures/` — fictional, non-sensitive data that exercises the full AoT loop without touching any API.
+3. **Tracks simulated token usage and estimated cost** in `ledger.json` using configurable rates from `rates.json`, so you can project burn rate against your Azure Startup Credits before spending anything.
+4. **Displays a terminal dashboard** (`dash.py`) with emulated topology, per-run token counts, and an ESTIMATE-labeled cost/ROI table.
+5. **Provides scaffolding** (`personas/` and `workflows/`) that the maintainer owns and builds out — clean, documented extension points.
+
+## What it is NOT
+
+- **Not a live Azure integration.** `FOUNDRY_MODE=azure` raises a clear error and directs you to `docs/PRD-azure-foundry-integration.md`.
+- **Not a billing system.** All cost figures are labeled ESTIMATE and are local math only.
+- **Not a showcase of agent logs.** No session transcripts are captured, stored, or displayed.
+
+---
+
+## Quick start
+
+```bash
+# 1. Run the terminal dashboard (no installs needed)
+python foundry-sim/dash.py
+
+# 2. Add demo runs to populate the ledger, then display
+python foundry-sim/dash.py --demo
+
+# 3. Run the tests
+python -m unittest foundry-sim/tests/test_sim.py -v
+
+# 4. Use the client in your own scripts
+python - <<'EOF'
+import sys; sys.path.insert(0, "foundry-sim")
+from foundry_client import FoundryClient
+client = FoundryClient()
+resp = client.chat([{"role": "user", "content": "Help me frame a strategy brief."}])
+print(resp["choices"][0]["message"]["content"])
+EOF
+```
+
+---
+
+## The sim / azure seam
+
+The only difference between sim mode and the future real Azure mode is one environment variable:
+
+| `FOUNDRY_MODE` | Behaviour |
+| --- | --- |
+| `sim` (default) | Returns fixture responses. No network. No cost. |
+| `azure` | Raises `NotImplementedError` — not enabled in this build. See `docs/PRD-azure-foundry-integration.md`. |
+
+In `auto` profile (`SIM_PROFILE=auto`, the default), the simulator does not pin a specific paid model. It emulates generic response behavior so you can layer personas and workflows on top of whatever the Copilot auto engine routes to. When you're ready to connect, you add the Azure env vars and flip `FOUNDRY_MODE=azure` — the `client.chat()` interface does not change.
+
+### Environment variables
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `FOUNDRY_MODE` | `sim` | `sim` for offline emulation; `azure` raises an error until the real integration is built. |
+| `SIM_PROFILE` | `auto` | Persona profile hint. `auto` = no pinned model; matches Copilot auto routing. |
+| `AZURE_OPENAI_ENDPOINT` | _(unset)_ | Used only in `azure` mode (not enabled here). |
+| `AZURE_OPENAI_DEPLOYMENT` | _(unset)_ | Used only in `azure` mode (not enabled here). |
+| `AZURE_OPENAI_API_VERSION` | _(unset)_ | Used only in `azure` mode (not enabled here). |
+| `AZURE_CLIENT_ID` | _(unset)_ | Used only in `azure` mode — Entra ID managed identity (not enabled here). |
+| `AZURE_OPENAI_API_KEY` | _(unset)_ | Used only in `azure` mode — local-dev fallback only (not enabled here). |
+
+See `.env.example` in the repository root for the full list of names.
+
+---
+
+## Directory layout
+
+```
+foundry-sim/
+├── README.md                  ← this file
+├── foundry_client.py          ← client shim (stdlib only)
+├── dash.py                    ← terminal dashboard (stdlib only)
+├── rates.json                 ← configurable ESTIMATE rate table
+├── ledger.json                ← simulated cost ledger (runtime-generated)
+├── fixtures/
+│   ├── strategy-brief.json    ← canned response: strategy discovery
+│   ├── workflow-review.json   ← canned response: workflow clinic
+│   └── rubber-duck.json       ← canned response: rubber-duck debugging
+├── personas/
+│   ├── README.md              ← schema + how to add personas
+│   └── example-steward.json   ← EXAMPLE persona (maintainer builds out)
+├── workflows/
+│   ├── README.md              ← schema + how to add workflows
+│   └── example-research-synthesis.json  ← EXAMPLE workflow (maintainer builds out)
+└── tests/
+    └── test_sim.py            ← stdlib unittest, no installs required
+```
+
+---
+
+## Extending the simulator
+
+### Add a persona
+Copy `personas/example-steward.json`, edit the fields, and use the `system_prompt` as the first message (`role: "system"`) in your `client.chat()` calls. See `personas/README.md` for the full schema.
+
+### Add a workflow
+Copy `workflows/example-research-synthesis.json`, edit the steps, and iterate over them in your script. See `workflows/README.md` for the full schema.
+
+### Add a fixture
+Add a new `.json` file to `fixtures/` following the existing structure: an `id`, a `messages` array, and a `response` object matching the Azure OpenAI ChatCompletion shape. The client will pick it up automatically.
+
+### Adjust rate estimates
+Edit `rates.json` to update the ESTIMATE placeholder rates. The dashboard and ledger will reflect the new values on the next run. These figures are estimates only — see the note in `rates.json`.
+
+---
+
+## Mermaid: AoT loop wired to Foundry
+
+```mermaid
+flowchart LR
+    A([Intent]) --> B([Context])
+    B --> C([Compose])
+    C --> D([Act])
+    D --> E([Verify])
+    E --> F([Learn])
+    F --> A
+
+    subgraph foundry-sim [foundry-sim / Azure Foundry]
+        P(Persona) --> S(FoundryClient.chat)
+        S --> R(Fixture / Real Response)
+        R --> L(Ledger: token count + ESTIMATE cost)
+    end
+
+    C --> P
+    R --> D
+```
+
+---
+
+## When you're ready to connect to Azure
+
+1. Read `docs/PRD-azure-foundry-integration.md` — it covers Entra ID auth, the first-party-only model allowlist, Startup Credits guardrails, and budget alerts.
+2. Add the Azure env vars to your environment or GitHub secrets (never to the repository).
+3. Set `FOUNDRY_MODE=azure`.
+4. The `FoundryClient` interface is identical — no code changes in your personas or workflows.
+
+> **Startup Credits note:** Microsoft for Startups credits apply to first-party Azure OpenAI deployments only. Third-party / Marketplace models in Foundry (e.g., Anthropic Claude, Fireworks) bill directly even when credits are unused. See `docs/PRD-azure-foundry-integration.md` §5 Startup Credits Guardrails.

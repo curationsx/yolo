@@ -1,0 +1,32 @@
+{
+  "id": "fixture-aot-strategy-brief",
+  "label": "EXAMPLE — fictional strategy brief response",
+  "description": "Canned response for the 'strategy-discovery-brief' prompt fixture. Fictional data only.",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Help me frame a discovery brief for a new community knowledge-sharing platform."
+    }
+  ],
+  "response": {
+    "id": "sim-chatcmpl-00001",
+    "object": "chat.completion",
+    "model": "auto",
+    "sim_note": "SIMULATED — no network call, no cost",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "**Discovery Brief: Community Knowledge-Sharing Platform**\n\n**Problem statement:** Contributors to a distributed community currently lack a single, searchable place to surface reusable patterns, prompts, and workflows. Knowledge accumulates in private chat threads and is lost between projects.\n\n**Target users:** Operators and practitioners who use AI-assisted workflows and want to share findings with peers without proprietary lock-in.\n\n**Constraints:** Must support offline-first artifacts, Git-based versioning, and no mandatory SaaS dependency. Must not require authentication to browse.\n\n**Success looks like:** A new contributor can find a relevant prompt within five minutes of landing on the front page and can submit their own within thirty minutes.\n\n**Open questions:** What moderation model scales to a community of 500? How do we avoid the popularity-contest trap in resource rankings?\n\n**Recommended next step:** Run the `strategy-discovery-brief` prompt in this repository against a specific initiative to produce a structured output the team can review."
+        },
+        "finish_reason": "stop"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 22,
+      "completion_tokens": 178,
+      "total_tokens": 200
+    }
+  }
+}
