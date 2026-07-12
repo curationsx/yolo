@@ -38,7 +38,7 @@ This single command:
 1. Verifies Python 3.9+ is available and prints an actionable error if not
 2. Confirms all required source files are present
 3. Validates all fixture JSON files
-4. Runs the full test suite (22 tests, all offline)
+4. Runs the full test suite (all offline)
 5. Runs a minimal smoke test of `dash.py` and `FoundryClient`
 
 It is **safe to run repeatedly** (idempotent). No pip installs, no sudo, no network calls.

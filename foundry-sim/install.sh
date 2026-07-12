@@ -154,7 +154,7 @@ except Exception as e:
     sys.exit(1)
 
 try:
-    import dash  # noqa: F401 — presence check only
+    import dash  # noqa: F401 - presence check only
     print("  [OK]   dash import")
 except Exception as e:
     print(f"  [FAIL] dash import: {e}", file=sys.stderr)
