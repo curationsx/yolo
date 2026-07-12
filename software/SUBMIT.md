@@ -29,6 +29,23 @@ Open a pull request that adds an entry to [entries.json](entries.json) (matching
 
 Categories: `research`, `model-access`, `automation`, `observability-evaluation`, `knowledge-data`, `development`, `design-content`, `community-documentation`.
 
+## Optional trust fields
+
+Encouraged where you can state them with confidence — leave out anything you can't defend:
+
+```json
+{
+  "license": "open-source | source-available | open-weight | proprietary-free-tier | proprietary | mixed",
+  "source_repository": "https://official-source-repo.example",
+  "platforms": ["Linux", "macOS", "Windows", "Web", "iOS", "Android"],
+  "last_reviewed": "2026-07-12",
+  "review_status": "verified | needs-review",
+  "tags": ["local-first", "self-hostable"]
+}
+```
+
+The `license` buckets are deliberately coarse and **not interchangeable**: *open-source* (OSI-style license), *source-available* (visible source, restricted use — e.g. fair-code), *open-weight* (downloadable model weights, possibly restricted license), *proprietary-free-tier*, *proprietary*, and *mixed* (meaningfully different licenses across components). When in doubt, use `mixed` and explain in the PR — or omit the field.
+
 ## Required in the PR description
 
 - **Evidence of the job**: how you (or a documented case) actually use this tool in a Human × AI workflow. "It's popular" is not evidence.

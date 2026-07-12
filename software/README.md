@@ -50,7 +50,7 @@ When comparing tools *for your own decision*, we suggest these dimensions — th
 
 ## Categories and starter collection
 
-The starter collection lists well-known tools per category as *reference points*. Fields per entry: primary use, deployment shape, notable strength, a trade-off or question to verify, and the official reference. See [entries.json](entries.json) for the data; a rendered summary:
+The starter collection lists well-known tools per category as *reference points*. Fields per entry: primary use, deployment shape, notable strength, a trade-off or question to verify, and the official reference. Entries may also carry optional trust metadata: `license` (a coarse bucket — open-source, source-available, open-weight, proprietary-free-tier, proprietary, or mixed; these are **not interchangeable terms**), `source_repository`, `platforms`, `tags`, plus `last_reviewed` and `review_status` so staleness is visible instead of hidden. See [entries.json](entries.json) for the data; a rendered summary:
 
 ### Research
 - **Zotero** — reference and source management; local-first with sync option; strong open ecosystem; verify sync storage handling for sensitive sources. (zotero.org)

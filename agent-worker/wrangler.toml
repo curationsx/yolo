@@ -1,0 +1,33 @@
+#:schema node_modules/wrangler/config-schema.json
+# CURATIONS agent gateway — persona agents for curations.dev landing pages.
+#
+# Secrets (set via `wrangler secret put`, NEVER committed):
+#   AZURE_OPENAI_API_KEY   — key for the yolo-foundry Azure OpenAI account
+#   COSMOS_KEY             — primary key for the yolo-curations-feed Cosmos account
+#
+# Vars below are non-secret endpoints/config only.
+
+name = "curations-agent-gateway"
+main = "src/index.ts"
+compatibility_date = "2026-06-01"
+
+[vars]
+AZURE_OPENAI_ENDPOINT = "https://yolo-foundry.cognitiveservices.azure.com"
+AZURE_OPENAI_DEPLOYMENT = "gpt-5.4-mini"
+COSMOS_ENDPOINT = "https://yolo-curations-feed.documents.azure.com"
+COSMOS_DATABASE = "curations"
+COSMOS_CONTAINER = "engagements"
+# Comma-separated allowed origins for CORS (Pages preview + prod + local dev)
+ALLOWED_ORIGINS = "https://curations.dev,https://www.curations.dev,https://curations-dev.pages.dev,http://localhost:4321"
+# Public caps — tune without redeploying code
+MAX_QUESTION_CHARS = "4000"
+MAX_OUTPUT_TOKENS = "512"
+PER_IP_DAILY_LIMIT = "10"
+GLOBAL_DAILY_LIMIT = "200"
+
+[[kv_namespaces]]
+binding = "RATE"
+id = "1135f4f6f7bb46338cfd42d39b3a974a"
+
+[observability]
+enabled = true

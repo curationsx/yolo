@@ -1,0 +1,64 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import {
+  REPO_URL,
+  ENTRIES_URL,
+  SUBMIT_URL,
+  METHODOLOGY_SOURCE_URL,
+} from '../lib/labels';
+---
+
+<BaseLayout
+  title="Methodology — YOLO Software Directory"
+  description="How entries are selected, described, and corrected. Directory, not ranking. No paid placement."
+>
+  <article class="prose">
+    <h1>Methodology</h1>
+    <p>
+      This site is a read-only presentation of
+      <a href={ENTRIES_URL}><code>software/entries.json</code></a> in the
+      <a href={REPO_URL}>curationsx/yolo</a> repository. Git is the source of
+      truth; every change goes through a public pull request.
+    </p>
+
+    <h2>What this directory is</h2>
+    <ul>
+      <li>A curated map of tool categories with well-known reference points.</li>
+      <li>Descriptive, durable fields only — the job a tool does, its deployment shape, one defensible strength, and the trade-off to verify.</li>
+      <li>Transparent: each entry links to its official site and, where one exists, its public source repository.</li>
+    </ul>
+
+    <h2>What it deliberately is not</h2>
+    <ul>
+      <li>No rankings, star ratings, or “best tool” badges.</li>
+      <li>No paid placement or affiliate links — no entry is ever traded for anything.</li>
+      <li>No pricing or feature inventories: those rot fast, so we omit them rather than mislead.</li>
+      <li>No AI-generated descriptions that aren't stored and reviewed in the repository.</li>
+    </ul>
+
+    <h2>Licensing buckets are not interchangeable</h2>
+    <p>
+      Entries use coarse licensing postures: <strong>open source</strong> (OSI-style),
+      <strong>source available</strong> (visible source, restricted use),
+      <strong>open-weight access</strong> (downloadable model weights, possibly restricted),
+      <strong>proprietary with a free tier</strong>, <strong>proprietary</strong>, and
+      <strong>mixed</strong>. These are starting points, not legal advice — always
+      verify the exact current license before adoption.
+    </p>
+
+    <h2>Freshness</h2>
+    <p>
+      Entries carry a <code>last_reviewed</code> date and a review status.
+      “Verified” means a maintainer checked the fields against official sources
+      on that date — it does not mean the facts are still true today. Tool facts
+      decay; verify directly.
+    </p>
+
+    <h2>Contribute</h2>
+    <ul>
+      <li><a href={SUBMIT_URL}>Propose a tool</a> — inclusion criteria and required fields.</li>
+      <li><a href={`${REPO_URL}/issues/new`}>Suggest a correction</a> — evidence beats opinion.</li>
+      <li><a href={METHODOLOGY_SOURCE_URL}>Full policy</a> — inclusion, exclusion, and disclosure rules.</li>
+    </ul>
+  </article>
+</BaseLayout>

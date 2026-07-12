@@ -10,7 +10,23 @@
       "deployment": "local",
       "notable_strength": "Local-first with a strong open ecosystem and durable open formats.",
       "verify_before_use": "How synced storage handles sensitive sources, and current sync terms.",
-      "reference": "https://www.zotero.org"
+      "reference": "https://www.zotero.org",
+      "license": "open-source",
+      "source_repository": "https://github.com/zotero/zotero",
+      "platforms": [
+        "Linux",
+        "macOS",
+        "Windows",
+        "Web",
+        "iOS"
+      ],
+      "tags": [
+        "local-first",
+        "citations",
+        "research-management"
+      ],
+      "last_reviewed": "2026-07-12",
+      "review_status": "verified"
     },
     {
       "id": "ollama",
@@ -20,7 +36,21 @@
       "deployment": "local",
       "notable_strength": "Keeps prompts and data on your own machine.",
       "verify_before_use": "Hardware requirements against the specific models you need, and each model's license.",
-      "reference": "https://ollama.com"
+      "reference": "https://ollama.com",
+      "license": "open-source",
+      "source_repository": "https://github.com/ollama/ollama",
+      "platforms": [
+        "Linux",
+        "macOS",
+        "Windows"
+      ],
+      "tags": [
+        "local-first",
+        "model-runner",
+        "offline"
+      ],
+      "last_reviewed": "2026-07-12",
+      "review_status": "verified"
     },
     {
       "id": "hugging-face",
@@ -30,7 +60,19 @@
       "deployment": "hybrid",
       "notable_strength": "Breadth of open models and artifacts under one roof.",
       "verify_before_use": "The license terms of each individual model or dataset — they vary widely.",
-      "reference": "https://huggingface.co"
+      "reference": "https://huggingface.co",
+      "license": "mixed",
+      "source_repository": "https://github.com/huggingface",
+      "platforms": [
+        "Web"
+      ],
+      "tags": [
+        "model-hub",
+        "datasets",
+        "open-weights"
+      ],
+      "last_reviewed": "2026-07-12",
+      "review_status": "verified"
     },
     {
       "id": "n8n",
@@ -40,7 +82,22 @@
       "deployment": "hybrid",
       "notable_strength": "Source-available with a self-hosting option for data control.",
       "verify_before_use": "License fit for your use case and where connector data flows.",
-      "reference": "https://n8n.io"
+      "reference": "https://n8n.io",
+      "license": "source-available",
+      "source_repository": "https://github.com/n8n-io/n8n",
+      "platforms": [
+        "Web",
+        "Linux",
+        "macOS",
+        "Windows"
+      ],
+      "tags": [
+        "automation",
+        "self-hostable",
+        "fair-code"
+      ],
+      "last_reviewed": "2026-07-12",
+      "review_status": "verified"
     },
     {
       "id": "langfuse",
@@ -50,7 +107,19 @@
       "deployment": "hybrid",
       "notable_strength": "Open-source core with self-hosting for sensitive traces.",
       "verify_before_use": "What prompt/response data is stored, where, and for how long.",
-      "reference": "https://langfuse.com"
+      "reference": "https://langfuse.com",
+      "license": "mixed",
+      "source_repository": "https://github.com/langfuse/langfuse",
+      "platforms": [
+        "Web"
+      ],
+      "tags": [
+        "llm-observability",
+        "tracing",
+        "self-hostable"
+      ],
+      "last_reviewed": "2026-07-12",
+      "review_status": "verified"
     },
     {
       "id": "obsidian",
@@ -60,7 +129,22 @@
       "deployment": "local",
       "notable_strength": "Durable plain-text storage you fully control.",
       "verify_before_use": "Trustworthiness of any community plugin — plugins run with local access.",
-      "reference": "https://obsidian.md"
+      "reference": "https://obsidian.md",
+      "license": "proprietary-free-tier",
+      "platforms": [
+        "Linux",
+        "macOS",
+        "Windows",
+        "iOS",
+        "Android"
+      ],
+      "tags": [
+        "local-first",
+        "markdown",
+        "plain-text"
+      ],
+      "last_reviewed": "2026-07-12",
+      "review_status": "verified"
     },
     {
       "id": "sqlite",
@@ -70,7 +154,21 @@
       "deployment": "local",
       "notable_strength": "Zero-dependency durability with a long stability record.",
       "verify_before_use": "Concurrency fit for multi-writer scenarios.",
-      "reference": "https://sqlite.org"
+      "reference": "https://sqlite.org",
+      "license": "open-source",
+      "source_repository": "https://sqlite.org/src",
+      "platforms": [
+        "Linux",
+        "macOS",
+        "Windows"
+      ],
+      "tags": [
+        "public-domain",
+        "embedded",
+        "zero-config"
+      ],
+      "last_reviewed": "2026-07-12",
+      "review_status": "verified"
     },
     {
       "id": "git",
@@ -80,7 +178,21 @@
       "deployment": "local",
       "notable_strength": "Complete history and diff evidence, host-independent.",
       "verify_before_use": "Your team's history-rewriting norms, so provenance survives.",
-      "reference": "https://git-scm.com"
+      "reference": "https://git-scm.com",
+      "license": "open-source",
+      "source_repository": "https://github.com/git/git",
+      "platforms": [
+        "Linux",
+        "macOS",
+        "Windows"
+      ],
+      "tags": [
+        "version-control",
+        "distributed",
+        "offline"
+      ],
+      "last_reviewed": "2026-07-12",
+      "review_status": "verified"
     },
     {
       "id": "vs-code",
@@ -90,7 +202,22 @@
       "deployment": "local",
       "notable_strength": "Large extension ecosystem across languages and workflows.",
       "verify_before_use": "Telemetry settings and the data handling of each extension you add.",
-      "reference": "https://code.visualstudio.com"
+      "reference": "https://code.visualstudio.com",
+      "license": "mixed",
+      "source_repository": "https://github.com/microsoft/vscode",
+      "platforms": [
+        "Linux",
+        "macOS",
+        "Windows",
+        "Web"
+      ],
+      "tags": [
+        "editor",
+        "extensions",
+        "code-oss"
+      ],
+      "last_reviewed": "2026-07-12",
+      "review_status": "verified"
     },
     {
       "id": "pandoc",
@@ -100,7 +227,21 @@
       "deployment": "local",
       "notable_strength": "Deterministic, scriptable output suitable for reproducible pipelines.",
       "verify_before_use": "Conversion fidelity for complex layouts before relying on it.",
-      "reference": "https://pandoc.org"
+      "reference": "https://pandoc.org",
+      "license": "open-source",
+      "source_repository": "https://github.com/jgm/pandoc",
+      "platforms": [
+        "Linux",
+        "macOS",
+        "Windows"
+      ],
+      "tags": [
+        "document-conversion",
+        "markdown",
+        "cli"
+      ],
+      "last_reviewed": "2026-07-12",
+      "review_status": "verified"
     },
     {
       "id": "github",
@@ -110,7 +251,18 @@
       "deployment": "cloud",
       "notable_strength": "Pull-request review maps directly to human checkpoints.",
       "verify_before_use": "Data policies and access controls for private or sensitive material.",
-      "reference": "https://github.com"
+      "reference": "https://github.com",
+      "license": "proprietary-free-tier",
+      "platforms": [
+        "Web"
+      ],
+      "tags": [
+        "code-hosting",
+        "collaboration",
+        "ci-cd"
+      ],
+      "last_reviewed": "2026-07-12",
+      "review_status": "verified"
     },
     {
       "id": "discourse",
@@ -120,7 +272,70 @@
       "deployment": "hybrid",
       "notable_strength": "Searchable, well-structured long-form community archives.",
       "verify_before_use": "The moderation workload a healthy instance requires.",
-      "reference": "https://www.discourse.org"
+      "reference": "https://www.discourse.org",
+      "license": "open-source",
+      "source_repository": "https://github.com/discourse/discourse",
+      "platforms": [
+        "Web"
+      ],
+      "tags": [
+        "forums",
+        "community",
+        "self-hostable"
+      ],
+      "last_reviewed": "2026-07-12",
+      "review_status": "verified"
+    },
+    {
+      "id": "cloudflare",
+      "name": "Cloudflare",
+      "category": "development",
+      "primary_use": "Edge platform for deploying serverless Workers, static sites, and network services close to users.",
+      "deployment": "cloud",
+      "notable_strength": "Generous free tier across Workers, Pages, and DNS with a single integrated developer platform.",
+      "verify_before_use": "Current Workers CPU/request limits on your plan tier, and data-locality options if you have residency requirements.",
+      "reference": "https://www.cloudflare.com",
+      "license": "proprietary-free-tier",
+      "source_repository": "https://github.com/cloudflare",
+      "platforms": [
+        "Web"
+      ],
+      "last_reviewed": "2026-07-12",
+      "review_status": "verified",
+      "tags": [
+        "edge-compute",
+        "serverless",
+        "workers",
+        "hosting",
+        "dns"
+      ]
+    },
+    {
+      "id": "supabase",
+      "name": "Supabase",
+      "category": "knowledge-data",
+      "primary_use": "Postgres-based backend platform with auth, storage, realtime, and vector search for application data.",
+      "deployment": "hybrid",
+      "notable_strength": "Standard Postgres under the hood — your data stays in a portable, open format you can export or self-host.",
+      "verify_before_use": "Row Level Security defaults on your tables, current free-tier pause policy, and pgvector limits for embedding workloads.",
+      "reference": "https://supabase.com",
+      "license": "open-source",
+      "source_repository": "https://github.com/supabase/supabase",
+      "platforms": [
+        "Web",
+        "Linux",
+        "macOS",
+        "Windows"
+      ],
+      "last_reviewed": "2026-07-12",
+      "review_status": "verified",
+      "tags": [
+        "postgres",
+        "auth",
+        "realtime",
+        "vector-search",
+        "self-hostable"
+      ]
     }
   ]
 }

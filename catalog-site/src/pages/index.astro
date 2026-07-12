@@ -1,0 +1,76 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import TrustNotice from '../components/TrustNotice.astro';
+import SoftwareCard from '../components/SoftwareCard.astro';
+import { CATEGORY_LABELS, DEPLOYMENT_LABELS, LICENSE_LABELS } from '../lib/labels';
+
+const entries = (await getCollection('software'))
+  .map((e) => e.data)
+  .sort((a, b) => a.name.localeCompare(b.name));
+
+const categories = [...new Set(entries.map((e) => e.category))].sort();
+const deployments = [...new Set(entries.map((e) => e.deployment))].sort();
+const licenses = [...new Set(entries.flatMap((e) => (e.license ? [e.license] : [])))].sort();
+---
+
+<BaseLayout
+  title="YOLO Software Directory — tools for Human × AI work"
+  description="A curated, job-to-be-done directory of software for Human × AI workflows. Not a ranking. No paid placement. Verify current terms directly."
+>
+  <div class="page-intro">
+    <h1>Software for <em>Human × AI</em> work</h1>
+    <p>
+      A curated map of tools by the job they do — with the trade-off you should
+      verify before relying on each one.
+    </p>
+  </div>
+
+  <TrustNotice />
+
+  <form class="filters" role="search" aria-label="Filter the directory">
+    <div class="search-field">
+      <label for="filter-search">Search</label>
+      <input
+        type="search"
+        id="filter-search"
+        placeholder="Name, use, or tag…"
+        autocomplete="off"
+      />
+    </div>
+    <div>
+      <label for="filter-category">Category</label>
+      <select id="filter-category">
+        <option value="">All</option>
+        {categories.map((c) => <option value={c}>{CATEGORY_LABELS[c]}</option>)}
+      </select>
+    </div>
+    <div>
+      <label for="filter-deployment">Deployment</label>
+      <select id="filter-deployment">
+        <option value="">All</option>
+        {deployments.map((d) => <option value={d}>{DEPLOYMENT_LABELS[d]}</option>)}
+      </select>
+    </div>
+    <div>
+      <label for="filter-license">Licensing</label>
+      <select id="filter-license">
+        <option value="">All</option>
+        {licenses.map((l) => <option value={l}>{LICENSE_LABELS[l]}</option>)}
+      </select>
+    </div>
+  </form>
+
+  <p class="result-count" data-result-count aria-live="polite">
+    {entries.length} tools
+  </p>
+
+  <ul class="card-grid" data-directory-grid>
+    {entries.map((entry) => <SoftwareCard entry={entry} />)}
+  </ul>
+</BaseLayout>
+
+<script>
+  import { initFilters } from '../components/SoftwareFilters';
+  initFilters();
+</script>

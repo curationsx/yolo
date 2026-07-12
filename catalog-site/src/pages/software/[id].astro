@@ -1,0 +1,203 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import DeploymentBadge from '../../components/DeploymentBadge.astro';
+import EngagePanel from '../../components/EngagePanel.astro';
+import EngagementFeed from '../../components/EngagementFeed.astro';
+import {
+  CATEGORY_LABELS,
+  LICENSE_LABELS,
+  correctionUrl,
+  withBase,
+  ENTRIES_URL,
+  METHODOLOGY_SOURCE_URL,
+} from '../../lib/labels';
+
+interface LandingData {
+  id: string;
+  persona: {
+    id: string;
+    display_name: string;
+    disclosure: string;
+    grounding_note: string;
+  };
+  tagline: string;
+  workflow_stages: { stage: string; snapshot: string }[];
+  doc_links: { label: string; url: string }[];
+}
+
+// Pilot landing pages: entries with extended data get the engagement layer.
+const landingModules = import.meta.glob<{ default: LandingData }>(
+  '../../data/landing/*.json',
+  { eager: true },
+);
+const LANDING: Record<string, LandingData> = {};
+for (const mod of Object.values(landingModules)) {
+  LANDING[mod.default.id] = mod.default;
+}
+
+export async function getStaticPaths() {
+  const entries = await getCollection('software');
+  return entries.map((entry) => ({
+    params: { id: entry.data.id },
+    props: { entry: entry.data },
+  }));
+}
+
+const { entry } = Astro.props;
+const landing = LANDING[entry.id];
+---
+
+<BaseLayout
+  title={`${entry.name} — YOLO Software Directory`}
+  description={entry.primary_use}
+>
+  <nav aria-label="Breadcrumb" style="margin-top: 1.5rem;">
+    <a href={withBase('/')}>← All tools</a>
+  </nav>
+
+  <div class="detail-header">
+    <h1>{entry.name}</h1>
+    <DeploymentBadge deployment={entry.deployment} />
+    {entry.license && <span class="badge">{LICENSE_LABELS[entry.license]}</span>}
+    {
+      entry.review_status && (
+        <span class={`badge badge-${entry.review_status}`}>
+          {entry.review_status === 'verified'
+            ? `Reviewed ${entry.last_reviewed}`
+            : 'Needs re-review'}
+        </span>
+      )
+    }
+  </div>
+  <p class="muted" style="color: var(--muted-foreground); margin-top: 0;">
+    {landing ? landing.tagline : CATEGORY_LABELS[entry.category]}
+  </p>
+
+  <div class="detail-grid">
+    <div class="detail-main">
+      <h2>What it does</h2>
+      <p>{entry.primary_use}</p>
+
+      <h2>Durable strength</h2>
+      <p>{entry.notable_strength}</p>
+
+      <h2>Verify before adoption</h2>
+      <p class="verify-callout">⚠️ {entry.verify_before_use}</p>
+
+      <h2>Contribute</h2>
+      <p>
+        Spotted something stale?
+        <a href={correctionUrl(entry.name)}>Suggest a correction</a> ·
+        <a href={ENTRIES_URL}>view the source data</a> ·
+        <a href={METHODOLOGY_SOURCE_URL}>read the methodology</a>.
+      </p>
+
+      {
+        landing && (
+          <>
+            <h2>In the Human × AI workflow</h2>
+            <div class="stage-cards">
+              {landing.workflow_stages.map((s) => (
+                <article class="stage-card">
+                  <span class="badge badge-deploy">{s.stage}</span>
+                  <p>{s.snapshot}</p>
+                </article>
+              ))}
+            </div>
+
+            <h2>Go deeper</h2>
+            <p class="doc-links">
+              {landing.doc_links.map((d, i) => (
+                <>
+                  {i > 0 && ' · '}
+                  <a href={d.url} rel="noopener">
+                    {d.label}
+                  </a>
+                </>
+              ))}
+            </p>
+          </>
+        )
+      }
+    </div>
+
+    <aside>
+      <dl class="facts">
+        <dt>Official site</dt>
+        <dd><a href={entry.reference} rel="noopener">{entry.reference.replace('https://', '')}</a></dd>
+
+        {
+          entry.source_repository && (
+            <>
+              <dt>Source repository</dt>
+              <dd>
+                <a href={entry.source_repository} rel="noopener">
+                  {entry.source_repository.replace('https://', '')}
+                </a>
+              </dd>
+            </>
+          )
+        }
+
+        {
+          entry.platforms && (
+            <>
+              <dt>Platforms</dt>
+              <dd>{entry.platforms.join(' · ')}</dd>
+            </>
+          )
+        }
+
+        {
+          entry.license && (
+            <>
+              <dt>Licensing posture</dt>
+              <dd>{LICENSE_LABELS[entry.license]} — verify the exact license directly</dd>
+            </>
+          )
+        }
+
+        {
+          entry.tags && (
+            <>
+              <dt>Tags</dt>
+              <dd class="tag-row">
+                {entry.tags.map((t) => (
+                  <span class="badge">{t}</span>
+                ))}
+              </dd>
+            </>
+          )
+        }
+
+        {
+          entry.last_reviewed && (
+            <>
+              <dt>Last reviewed</dt>
+              <dd>{entry.last_reviewed}</dd>
+            </>
+          )
+        }
+
+        <dt>CLI</dt>
+        <dd><code>python tools/yolo.py show {entry.id}</code></dd>
+      </dl>
+    </aside>
+  </div>
+
+  {
+    landing && (
+      <>
+        <EngagePanel
+          toolId={entry.id}
+          toolName={entry.name}
+          personaName={landing.persona.display_name}
+          disclosure={landing.persona.disclosure}
+          groundingNote={landing.persona.grounding_note}
+        />
+        <EngagementFeed toolId={entry.id} toolName={entry.name} />
+      </>
+    )
+  }
+</BaseLayout>

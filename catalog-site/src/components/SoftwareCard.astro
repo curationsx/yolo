@@ -1,0 +1,44 @@
+---
+import DeploymentBadge from './DeploymentBadge.astro';
+import { CATEGORY_LABELS, LICENSE_LABELS, withBase } from '../lib/labels';
+import type { CollectionEntry } from 'astro:content';
+
+interface Props {
+  entry: CollectionEntry<'software'>['data'];
+}
+
+const { entry } = Astro.props;
+
+const searchable = [
+  entry.name,
+  entry.primary_use,
+  entry.notable_strength,
+  ...(entry.tags ?? []),
+]
+  .join(' ')
+  .toLowerCase();
+---
+
+<li
+  class="card"
+  data-search={searchable}
+  data-category={entry.category}
+  data-deployment={entry.deployment}
+  data-license={entry.license ?? ''}
+>
+  <div class="card-head">
+    <h3>{entry.name}</h3>
+    <DeploymentBadge deployment={entry.deployment} />
+    {entry.license && <span class="badge">{LICENSE_LABELS[entry.license]}</span>}
+  </div>
+  <p class="muted">{CATEGORY_LABELS[entry.category]}</p>
+  <p>{entry.primary_use}</p>
+  <p class="muted">{entry.notable_strength}</p>
+  <p class="card-verify">⚠️ Verify before use: {entry.verify_before_use}</p>
+  <div class="card-actions">
+    <a class="btn btn-primary" href={withBase(`/software/${entry.id}/`)}>Details</a>
+    <a class="btn btn-secondary" href={entry.reference} rel="noopener">
+      Official site ↗
+    </a>
+  </div>
+</li>

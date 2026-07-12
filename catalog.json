@@ -120,10 +120,26 @@
       "deployment": "local",
       "file": "software/entries.json",
       "id": "zotero",
+      "last_reviewed": "2026-07-12",
+      "license": "open-source",
       "name": "Zotero",
       "notable_strength": "Local-first with a strong open ecosystem and durable open formats.",
+      "platforms": [
+        "Linux",
+        "macOS",
+        "Windows",
+        "Web",
+        "iOS"
+      ],
       "primary_use": "Reference and source management for research workflows.",
       "reference": "https://www.zotero.org",
+      "review_status": "verified",
+      "source_repository": "https://github.com/zotero/zotero",
+      "tags": [
+        "local-first",
+        "citations",
+        "research-management"
+      ],
       "verify_before_use": "How synced storage handles sensitive sources, and current sync terms."
     },
     {
@@ -131,10 +147,24 @@
       "deployment": "local",
       "file": "software/entries.json",
       "id": "ollama",
+      "last_reviewed": "2026-07-12",
+      "license": "open-source",
       "name": "Ollama",
       "notable_strength": "Keeps prompts and data on your own machine.",
+      "platforms": [
+        "Linux",
+        "macOS",
+        "Windows"
+      ],
       "primary_use": "Run open-weight language models locally.",
       "reference": "https://ollama.com",
+      "review_status": "verified",
+      "source_repository": "https://github.com/ollama/ollama",
+      "tags": [
+        "local-first",
+        "model-runner",
+        "offline"
+      ],
       "verify_before_use": "Hardware requirements against the specific models you need, and each model's license."
     },
     {
@@ -142,10 +172,22 @@
       "deployment": "hybrid",
       "file": "software/entries.json",
       "id": "hugging-face",
+      "last_reviewed": "2026-07-12",
+      "license": "mixed",
       "name": "Hugging Face",
       "notable_strength": "Breadth of open models and artifacts under one roof.",
+      "platforms": [
+        "Web"
+      ],
       "primary_use": "Model hub, datasets, and hosted inference.",
       "reference": "https://huggingface.co",
+      "review_status": "verified",
+      "source_repository": "https://github.com/huggingface",
+      "tags": [
+        "model-hub",
+        "datasets",
+        "open-weights"
+      ],
       "verify_before_use": "The license terms of each individual model or dataset \u2014 they vary widely."
     },
     {
@@ -153,10 +195,25 @@
       "deployment": "hybrid",
       "file": "software/entries.json",
       "id": "n8n",
+      "last_reviewed": "2026-07-12",
+      "license": "source-available",
       "name": "n8n",
       "notable_strength": "Source-available with a self-hosting option for data control.",
+      "platforms": [
+        "Web",
+        "Linux",
+        "macOS",
+        "Windows"
+      ],
       "primary_use": "Workflow automation connecting tools and services.",
       "reference": "https://n8n.io",
+      "review_status": "verified",
+      "source_repository": "https://github.com/n8n-io/n8n",
+      "tags": [
+        "automation",
+        "self-hostable",
+        "fair-code"
+      ],
       "verify_before_use": "License fit for your use case and where connector data flows."
     },
     {
@@ -164,10 +221,22 @@
       "deployment": "hybrid",
       "file": "software/entries.json",
       "id": "langfuse",
+      "last_reviewed": "2026-07-12",
+      "license": "mixed",
       "name": "Langfuse",
       "notable_strength": "Open-source core with self-hosting for sensitive traces.",
+      "platforms": [
+        "Web"
+      ],
       "primary_use": "Tracing and evaluation for LLM applications.",
       "reference": "https://langfuse.com",
+      "review_status": "verified",
+      "source_repository": "https://github.com/langfuse/langfuse",
+      "tags": [
+        "llm-observability",
+        "tracing",
+        "self-hostable"
+      ],
       "verify_before_use": "What prompt/response data is stored, where, and for how long."
     },
     {
@@ -175,10 +244,25 @@
       "deployment": "local",
       "file": "software/entries.json",
       "id": "obsidian",
+      "last_reviewed": "2026-07-12",
+      "license": "proprietary-free-tier",
       "name": "Obsidian",
       "notable_strength": "Durable plain-text storage you fully control.",
+      "platforms": [
+        "Linux",
+        "macOS",
+        "Windows",
+        "iOS",
+        "Android"
+      ],
       "primary_use": "Local-first personal knowledge base in Markdown.",
       "reference": "https://obsidian.md",
+      "review_status": "verified",
+      "tags": [
+        "local-first",
+        "markdown",
+        "plain-text"
+      ],
       "verify_before_use": "Trustworthiness of any community plugin \u2014 plugins run with local access."
     },
     {
@@ -186,10 +270,24 @@
       "deployment": "local",
       "file": "software/entries.json",
       "id": "sqlite",
+      "last_reviewed": "2026-07-12",
+      "license": "open-source",
       "name": "SQLite",
       "notable_strength": "Zero-dependency durability with a long stability record.",
+      "platforms": [
+        "Linux",
+        "macOS",
+        "Windows"
+      ],
       "primary_use": "Embedded database for local, auditable data work.",
       "reference": "https://sqlite.org",
+      "review_status": "verified",
+      "source_repository": "https://sqlite.org/src",
+      "tags": [
+        "public-domain",
+        "embedded",
+        "zero-config"
+      ],
       "verify_before_use": "Concurrency fit for multi-writer scenarios."
     },
     {
@@ -197,10 +295,24 @@
       "deployment": "local",
       "file": "software/entries.json",
       "id": "git",
+      "last_reviewed": "2026-07-12",
+      "license": "open-source",
       "name": "Git",
       "notable_strength": "Complete history and diff evidence, host-independent.",
+      "platforms": [
+        "Linux",
+        "macOS",
+        "Windows"
+      ],
       "primary_use": "Version control; the provenance backbone for artifact history.",
       "reference": "https://git-scm.com",
+      "review_status": "verified",
+      "source_repository": "https://github.com/git/git",
+      "tags": [
+        "version-control",
+        "distributed",
+        "offline"
+      ],
       "verify_before_use": "Your team's history-rewriting norms, so provenance survives."
     },
     {
@@ -208,10 +320,25 @@
       "deployment": "local",
       "file": "software/entries.json",
       "id": "vs-code",
+      "last_reviewed": "2026-07-12",
+      "license": "mixed",
       "name": "Visual Studio Code",
       "notable_strength": "Large extension ecosystem across languages and workflows.",
+      "platforms": [
+        "Linux",
+        "macOS",
+        "Windows",
+        "Web"
+      ],
       "primary_use": "Extensible code editor common in AI-assisted development.",
       "reference": "https://code.visualstudio.com",
+      "review_status": "verified",
+      "source_repository": "https://github.com/microsoft/vscode",
+      "tags": [
+        "editor",
+        "extensions",
+        "code-oss"
+      ],
       "verify_before_use": "Telemetry settings and the data handling of each extension you add."
     },
     {
@@ -219,10 +346,24 @@
       "deployment": "local",
       "file": "software/entries.json",
       "id": "pandoc",
+      "last_reviewed": "2026-07-12",
+      "license": "open-source",
       "name": "Pandoc",
       "notable_strength": "Deterministic, scriptable output suitable for reproducible pipelines.",
+      "platforms": [
+        "Linux",
+        "macOS",
+        "Windows"
+      ],
       "primary_use": "Universal document conversion between markup and document formats.",
       "reference": "https://pandoc.org",
+      "review_status": "verified",
+      "source_repository": "https://github.com/jgm/pandoc",
+      "tags": [
+        "document-conversion",
+        "markdown",
+        "cli"
+      ],
       "verify_before_use": "Conversion fidelity for complex layouts before relying on it."
     },
     {
@@ -230,10 +371,21 @@
       "deployment": "cloud",
       "file": "software/entries.json",
       "id": "github",
+      "last_reviewed": "2026-07-12",
+      "license": "proprietary-free-tier",
       "name": "GitHub",
       "notable_strength": "Pull-request review maps directly to human checkpoints.",
+      "platforms": [
+        "Web"
+      ],
       "primary_use": "Repository hosting, review, and community workflows.",
       "reference": "https://github.com",
+      "review_status": "verified",
+      "tags": [
+        "code-hosting",
+        "collaboration",
+        "ci-cd"
+      ],
       "verify_before_use": "Data policies and access controls for private or sensitive material."
     },
     {
@@ -241,11 +393,76 @@
       "deployment": "hybrid",
       "file": "software/entries.json",
       "id": "discourse",
+      "last_reviewed": "2026-07-12",
+      "license": "open-source",
       "name": "Discourse",
       "notable_strength": "Searchable, well-structured long-form community archives.",
+      "platforms": [
+        "Web"
+      ],
       "primary_use": "Community forum platform for durable public knowledge.",
       "reference": "https://www.discourse.org",
+      "review_status": "verified",
+      "source_repository": "https://github.com/discourse/discourse",
+      "tags": [
+        "forums",
+        "community",
+        "self-hostable"
+      ],
       "verify_before_use": "The moderation workload a healthy instance requires."
+    },
+    {
+      "category": "development",
+      "deployment": "cloud",
+      "file": "software/entries.json",
+      "id": "cloudflare",
+      "last_reviewed": "2026-07-12",
+      "license": "proprietary-free-tier",
+      "name": "Cloudflare",
+      "notable_strength": "Generous free tier across Workers, Pages, and DNS with a single integrated developer platform.",
+      "platforms": [
+        "Web"
+      ],
+      "primary_use": "Edge platform for deploying serverless Workers, static sites, and network services close to users.",
+      "reference": "https://www.cloudflare.com",
+      "review_status": "verified",
+      "source_repository": "https://github.com/cloudflare",
+      "tags": [
+        "edge-compute",
+        "serverless",
+        "workers",
+        "hosting",
+        "dns"
+      ],
+      "verify_before_use": "Current Workers CPU/request limits on your plan tier, and data-locality options if you have residency requirements."
+    },
+    {
+      "category": "knowledge-data",
+      "deployment": "hybrid",
+      "file": "software/entries.json",
+      "id": "supabase",
+      "last_reviewed": "2026-07-12",
+      "license": "open-source",
+      "name": "Supabase",
+      "notable_strength": "Standard Postgres under the hood \u2014 your data stays in a portable, open format you can export or self-host.",
+      "platforms": [
+        "Web",
+        "Linux",
+        "macOS",
+        "Windows"
+      ],
+      "primary_use": "Postgres-based backend platform with auth, storage, realtime, and vector search for application data.",
+      "reference": "https://supabase.com",
+      "review_status": "verified",
+      "source_repository": "https://github.com/supabase/supabase",
+      "tags": [
+        "postgres",
+        "auth",
+        "realtime",
+        "vector-search",
+        "self-hostable"
+      ],
+      "verify_before_use": "Row Level Security defaults on your tables, current free-tier pause policy, and pgvector limits for embedding workloads."
     }
   ],
   "workflows": [

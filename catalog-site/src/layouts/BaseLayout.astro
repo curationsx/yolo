@@ -1,0 +1,48 @@
+---
+import '../styles/global.css';
+import { withBase, REPO_URL, ENTRIES_URL, SUBMIT_URL } from '../lib/labels';
+
+interface Props {
+  title: string;
+  description: string;
+}
+
+const { title, description } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <meta name="generator" content={Astro.generator} />
+    <link rel="icon" type="image/svg+xml" href={withBase('/favicon.svg')} />
+    <title>{title}</title>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="wrap">
+        <a class="brand" href={withBase('/')}>YOLO <span>Software Directory</span></a>
+        <nav class="site-nav" aria-label="Site">
+          <a href={withBase('/')}>Directory</a>
+          <a href={withBase('/methodology/')}>Methodology</a>
+          <a href={REPO_URL}>GitHub</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <slot />
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        <span>Directory, not ranking. No paid placement.</span>
+        <a href={ENTRIES_URL}>View source data</a>
+        <a href={SUBMIT_URL}>Propose a tool</a>
+        <a href={`${REPO_URL}/issues/new`}>Suggest a correction</a>
+      </div>
+    </footer>
+  </body>
+</html>

@@ -1,0 +1,11 @@
+---
+import { DEPLOYMENT_LABELS } from '../lib/labels';
+
+interface Props {
+  deployment: string;
+}
+
+const { deployment } = Astro.props;
+---
+
+<span class="badge badge-deploy">{DEPLOYMENT_LABELS[deployment] ?? deployment}</span>

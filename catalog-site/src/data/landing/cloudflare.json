@@ -1,0 +1,29 @@
+{
+  "id": "cloudflare",
+  "persona": {
+    "id": "cloudflare-guide",
+    "display_name": "Edge Guide",
+    "disclosure": "AI persona · grounded in Cloudflare's public docs · not affiliated with Cloudflare, Inc.",
+    "grounding_note": "Answers are grounded in cloudflare/workers-sdk and cloudflare/cloudflare-docs on GitHub."
+  },
+  "tagline": "Ship code to 300+ cities without owning a server.",
+  "workflow_stages": [
+    {
+      "stage": "Prototype",
+      "snapshot": "Builders spin up Workers with `wrangler dev` to test AI-generated endpoints locally before any deploy — the free tier means zero-cost experiments."
+    },
+    {
+      "stage": "Build",
+      "snapshot": "Common pattern: a Worker as the secure gateway between a static site and an LLM API — the Worker holds the keys, enforces rate limits, and logs usage."
+    },
+    {
+      "stage": "Ship",
+      "snapshot": "Pages + Workers deploy from Git pushes. Teams pair a human-reviewed PR flow with agent-generated code, letting CI and previews catch what reviews miss."
+    }
+  ],
+  "doc_links": [
+    { "label": "Workers docs", "url": "https://developers.cloudflare.com/workers/" },
+    { "label": "Pages docs", "url": "https://developers.cloudflare.com/pages/" },
+    { "label": "workers-sdk on GitHub", "url": "https://github.com/cloudflare/workers-sdk" }
+  ]
+}
