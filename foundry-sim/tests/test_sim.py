@@ -163,8 +163,11 @@ class TestUnknownModeRaises(unittest.TestCase):
         os.environ.pop("FOUNDRY_MODE", None)
 
     def test_unknown_mode_raises_value_error(self) -> None:
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValueError) as ctx:
             FoundryClient()
+        msg = str(ctx.exception)
+        self.assertIn("sim", msg)
+        self.assertIn("azure", msg)
 
 
 class TestLedger(unittest.TestCase):

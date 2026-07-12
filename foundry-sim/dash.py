@@ -32,6 +32,8 @@ _FIXTURES_DIR = _HERE / "fixtures"
 
 # ── Box-drawing constants ───────────────────────────────────────────────────
 W = 72  # total box width (inner)
+_VALID_EXTENSIONS = {".json", ".yml", ".yaml"}
+_HIDDEN_PREFIX = "_"
 
 
 def _box(title: str, lines: list[str], width: int = W) -> str:
@@ -70,7 +72,7 @@ def _list_yaml_or_json_names(directory: Path) -> list[str]:
         return []
     names = []
     for p in sorted(directory.iterdir()):
-        if p.is_file() and p.suffix in (".json", ".yml", ".yaml") and not p.name.startswith("_"):
+        if p.is_file() and p.suffix in _VALID_EXTENSIONS and not p.name.startswith(_HIDDEN_PREFIX):
             names.append(p.stem)
     return names
 

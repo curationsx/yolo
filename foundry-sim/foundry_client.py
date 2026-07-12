@@ -34,6 +34,7 @@ _HERE = Path(__file__).resolve().parent
 _FIXTURES_DIR = _HERE / "fixtures"
 _LEDGER_PATH = _HERE / "ledger.json"
 _RATES_PATH = _HERE / "rates.json"
+_COST_PRECISION = 8  # decimal places for estimated USD cost in ledger
 
 
 class FoundryClient:
@@ -190,6 +191,8 @@ class FoundryClient:
             (m["content"] for m in reversed(messages) if m.get("role") == "user"),
             "(no user message)",
         )
+        prompt_tokens = len(last_user.split())
+        completion_tokens = 12
         return {
             "id": "sim-fallback",
             "response": {
@@ -209,9 +212,9 @@ class FoundryClient:
                     }
                 ],
                 "usage": {
-                    "prompt_tokens": len(last_user.split()),
-                    "completion_tokens": 12,
-                    "total_tokens": len(last_user.split()) + 12,
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "total_tokens": prompt_tokens + completion_tokens,
                 },
             },
         }
@@ -240,7 +243,7 @@ class FoundryClient:
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
             "total_tokens": usage.get("total_tokens", 0),
-            "estimated_cost_usd": round(estimated_cost, 8),
+            "estimated_cost_usd": round(estimated_cost, _COST_PRECISION),
             "note": "ESTIMATE — sim mode only, no billing",
         }
         ledger.setdefault("runs", []).append(run)
