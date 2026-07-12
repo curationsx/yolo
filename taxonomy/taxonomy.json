@@ -1,0 +1,124 @@
+{
+  "name": "AoT Taxonomy",
+  "version": "0.1.0",
+  "description": "Versioned vocabulary for describing Human x AI (AoT) compositions. See taxonomy/README.md.",
+  "dimensions": {
+    "intent": {
+      "question": "Why is this system running?",
+      "concepts": {
+        "create": "Produce a new artifact (draft, design, plan).",
+        "analyze": "Understand existing material (synthesis, classification).",
+        "decide-support": "Prepare a human decision without making it.",
+        "transform": "Convert material between forms or formats.",
+        "monitor": "Watch for conditions that need human attention.",
+        "learn": "Improve the system itself from experience."
+      }
+    },
+    "actors": {
+      "question": "Who and what participates?",
+      "concepts": {
+        "owner": "The accountable human for the outcome.",
+        "reviewer": "A human providing independent checking.",
+        "operator": "A human executing steps.",
+        "contributor": "A human providing material or expertise.",
+        "ai-model": "A model performing inference (generation, analysis).",
+        "tool-agent": "Software executing bounded, defined operations."
+      }
+    },
+    "inputs": {
+      "question": "What goes in?",
+      "concepts": {
+        "instruction": "A prompt, brief, or task statement.",
+        "document": "Text material to process.",
+        "dataset": "Structured data.",
+        "conversation": "Dialogue or meeting material (with consent).",
+        "signal": "An event or metric that triggers work."
+      }
+    },
+    "context": {
+      "question": "What surrounds the task?",
+      "concepts": {
+        "domain-knowledge": "Facts and expertise relevant to the domain.",
+        "constraints": "Boundaries: budget, policy, deadline, scope.",
+        "history": "What happened before: prior runs, decisions, incidents.",
+        "style-guide": "Voice, format, and editorial requirements.",
+        "environment": "Operational surroundings: systems, permissions, load."
+      }
+    },
+    "models_tools": {
+      "question": "What capabilities are composed?",
+      "concepts": {
+        "text-model": "Language model for generation or analysis.",
+        "retrieval": "Finding relevant material from a corpus.",
+        "automation": "Connecting and triggering steps across tools.",
+        "storage": "Keeping artifacts durably and findably.",
+        "transport": "Moving information between people and systems.",
+        "evaluation-harness": "Checking outputs against expectations."
+      }
+    },
+    "actions": {
+      "question": "What gets done?",
+      "concepts": {
+        "generate": "Produce new content.",
+        "summarize": "Compress content preserving what matters.",
+        "classify": "Assign material to categories.",
+        "extract": "Pull structured items from unstructured material.",
+        "route": "Send work to the right actor.",
+        "execute": "Perform an operation on a system.",
+        "publish": "Make an artifact available to its audience."
+      }
+    },
+    "outputs": {
+      "question": "What comes out?",
+      "concepts": {
+        "draft": "Material requiring human revision before use.",
+        "structured-record": "Machine-readable result (list, table, entry).",
+        "decision-input": "Material prepared for a human decision.",
+        "publication": "A released, disclosed, attributed artifact.",
+        "log": "The record of what happened."
+      }
+    },
+    "human_controls": {
+      "question": "Where can a human steer or stop?",
+      "concepts": {
+        "checkpoint": "A defined human review point work cannot pass alone.",
+        "approval": "Explicit human sign-off required to proceed.",
+        "limit": "A bound on what automation may do without a human.",
+        "override": "A human's ability to countermand the system.",
+        "rollback": "The documented way to undo a step.",
+        "disclosure": "Telling affected people that AI was involved."
+      }
+    },
+    "evidence_provenance": {
+      "question": "How is it auditable?",
+      "concepts": {
+        "source-list": "What material fed the work, with origins.",
+        "version-history": "The sequence of changes to an artifact.",
+        "run-record": "Inputs, outputs, and settings of a specific run.",
+        "review-record": "Who reviewed, what they found, what they decided.",
+        "attribution": "Which contributions were human and which AI."
+      }
+    },
+    "risks": {
+      "question": "What can go wrong?",
+      "concepts": {
+        "fabrication": "Confident output with no basis (citations, facts, data).",
+        "privacy-leak": "Data shared beyond consent or policy.",
+        "bias": "Systematic skew in analysis or generation.",
+        "over-automation": "Removing human judgment where it was load-bearing.",
+        "provenance-loss": "Inability to trace how an artifact came to be.",
+        "drift": "Gradual divergence between the documented and actual system."
+      }
+    },
+    "feedback_learning": {
+      "question": "How does it improve?",
+      "concepts": {
+        "review-notes": "Human observations captured during checking.",
+        "metrics": "Quantitative signals about runs over time.",
+        "retro": "A structured learning review after the work.",
+        "revision": "Folding lessons back into the artifact, with a version bump.",
+        "retirement": "Honestly ending an artifact that no longer serves."
+      }
+    }
+  }
+}

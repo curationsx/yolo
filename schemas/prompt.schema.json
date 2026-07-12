@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/curationsx/yolo/schemas/prompt.schema.json",
+  "title": "Prompt front matter",
+  "description": "Validates the YAML front matter of files in prompts/. The validator (tools/yolo.py) parses the front matter and checks it against this schema, plus the required Markdown sections listed in prompts/README.md.",
+  "type": "object",
+  "required": ["id", "title", "category", "version", "status", "license", "tags"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "description": "Unique slug. The filename is '<category>-<id>.md'."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 3,
+      "description": "Human-readable title."
+    },
+    "category": {
+      "type": "string",
+      "enum": ["strategy", "research", "operations", "creative", "engineering", "safety", "decision", "retrospective"],
+      "description": "Prompt category; also the filename prefix."
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Semver. Bump rules in PLAYBOOK.md."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "tested", "stable", "retired"],
+      "description": "Honesty label; see docs/QUALITY.md."
+    },
+    "license": {
+      "type": "string",
+      "minLength": 2,
+      "description": "License of the prompt text itself."
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
+      "minItems": 1,
+      "description": "Lowercase tags; prefer taxonomy concepts where one fits."
+    }
+  }
+}
