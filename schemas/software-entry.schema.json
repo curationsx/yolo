@@ -1,0 +1,66 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/curationsx/yolo/schemas/software-entry.schema.json",
+  "title": "Software directory entry",
+  "description": "Validates entries in software/entries.json. Fields are deliberately durable: no pricing, no feature inventories. See software/README.md.",
+  "type": "object",
+  "required": ["id", "name", "category", "primary_use", "deployment", "notable_strength", "verify_before_use", "reference"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "description": "Unique slug."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The tool's name."
+    },
+    "category": {
+      "type": "string",
+      "enum": ["research", "model-access", "automation", "observability-evaluation", "knowledge-data", "development", "design-content", "community-documentation"],
+      "description": "Directory category."
+    },
+    "primary_use": {
+      "type": "string",
+      "minLength": 10,
+      "description": "One sentence: the job this tool does."
+    },
+    "deployment": {
+      "type": "string",
+      "enum": ["local", "self-hosted", "cloud", "hybrid"],
+      "description": "Deployment shape."
+    },
+    "notable_strength": {
+      "type": "string",
+      "minLength": 10,
+      "description": "One durable, defensible strength. No superlatives you can't support."
+    },
+    "verify_before_use": {
+      "type": "string",
+      "minLength": 10,
+      "description": "The trade-off or question a user should verify directly with the vendor."
+    },
+    "reference": {
+      "type": "string",
+      "pattern": "^https://",
+      "description": "Official project/site URL."
+    }
+  },
+  "definitions": {
+    "collection": {
+      "title": "Software entries collection",
+      "type": "object",
+      "required": ["version", "entries"],
+      "properties": {
+        "$schema": { "type": "string" },
+        "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+        "entries": {
+          "type": "array",
+          "items": { "$ref": "#" }
+        }
+      }
+    }
+  }
+}

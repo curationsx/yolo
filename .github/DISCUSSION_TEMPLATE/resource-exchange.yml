@@ -1,0 +1,62 @@
+title: "[Resource Exchange] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Propose evidence-backed resources, not promotional drops. Individual commercial tools follow the [software submission path](https://github.com/curationsx/yolo/blob/main/software/SUBMIT.md).
+  - type: input
+    id: resource
+    attributes:
+      label: Resource name and canonical URL
+    validations:
+      required: true
+  - type: dropdown
+    id: type
+    attributes:
+      label: Resource type
+      options:
+        - Standard or framework
+        - Research or dataset
+        - Awesome list or collection
+        - Learning resource
+        - Community
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: job
+    attributes:
+      label: Job it supports
+      description: Which Human × AI task does this improve, and for whom?
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence and provenance
+      description: Describe first-hand use or evidence, who maintains it, and when you last checked it.
+    validations:
+      required: true
+  - type: textarea
+    id: verify
+    attributes:
+      label: What should users verify?
+      description: Name limitations, freshness risks, license/terms questions, or safety concerns.
+    validations:
+      required: true
+  - type: textarea
+    id: disclosure
+    attributes:
+      label: Affiliation and AI-assistance disclosure
+      description: State any relationship or benefit; say "none" when none. Disclose material AI assistance.
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Submission confirmation
+      options:
+        - label: This is not a paid placement, referral, or undisclosed promotion.
+          required: true
+        - label: I checked that the link and description are current.
+          required: true

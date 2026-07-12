@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/curationsx/yolo/schemas/workflow.schema.json",
+  "title": "Workflow front matter",
+  "description": "Validates the YAML front matter of files in workflows/. The validator (tools/yolo.py) parses the front matter and checks it against this schema, plus the required Markdown sections listed in workflows/README.md.",
+  "type": "object",
+  "required": ["id", "title", "version", "status", "maturity", "license", "tags"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "description": "Unique slug; matches the filename without extension."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 3,
+      "description": "Human-readable title."
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Semver."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "tested", "stable", "retired"],
+      "description": "Editorial lifecycle label; see docs/QUALITY.md."
+    },
+    "maturity": {
+      "type": "string",
+      "enum": ["foundation", "exercised", "proven"],
+      "description": "Execution history; see workflows/README.md."
+    },
+    "license": {
+      "type": "string",
+      "minLength": 2,
+      "description": "License of the workflow document."
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
+      "minItems": 1,
+      "description": "Lowercase tags; prefer taxonomy concepts where one fits."
+    }
+  }
+}

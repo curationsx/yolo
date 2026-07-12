@@ -1,0 +1,72 @@
+title: "[Workflow Clinic] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Bring a Human × AI workflow and a concrete question. Reviews focus on accountability, evidence, failure recovery, and practical improvement.
+  - type: input
+    id: outcome
+    attributes:
+      label: Workflow outcome
+      description: What should be true when this workflow finishes?
+    validations:
+      required: true
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Workflow or public link
+      description: Include actors, inputs, steps, tools, and current checkpoints, or link to the exact public file.
+    validations:
+      required: true
+  - type: textarea
+    id: help
+    attributes:
+      label: Review question
+      description: Where is the workflow weak, uncertain, or ready to expand?
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Exercise history and evidence
+      description: What has been run, what happened, and what has not been tested?
+    validations:
+      required: true
+  - type: dropdown
+    id: review
+    attributes:
+      label: Review requested
+      options:
+        - Human review
+        - Agent review
+        - Human and agent review
+    validations:
+      required: true
+  - type: dropdown
+    id: depth
+    attributes:
+      label: Agent depth
+      description: Used only when agent review is requested; actual deployment limits still apply.
+      options:
+        - Not requesting agent review
+        - Focused
+        - Standard
+        - Deep
+    validations:
+      required: true
+  - type: textarea
+    id: provenance
+    attributes:
+      label: Provenance and disclosures
+      description: Identify the owner, sources, affiliations, and material AI assistance.
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Public-sharing confirmation
+      options:
+        - label: I am authorized to share this material publicly and removed secrets, personal data, and confidential information.
+          required: true
+        - label: A named human will decide whether to adopt any recommendation.
+          required: true
