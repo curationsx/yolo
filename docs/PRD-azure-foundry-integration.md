@@ -92,6 +92,12 @@ The Azure Foundry integration MUST use **Standard (pay-as-you-go) token-based bi
 - Prefer the most cost-effective standard token option available for the required model (e.g., Global Standard deployment of a small/mini model tier).
 - Any deployment SKU other than Standard requires explicit written approval from the maintainer before creation.
 
+**Maintainer approval (2026-07-12):** Azure AI Foundry is approved as the future host for the real integration, under these conditions:
+
+- Spend draws on the **Microsoft for Startups credits** on the existing subscription.
+- Models are **OpenAI-family mini/small tiers** (e.g., a `*-mini` deployment) on Standard pay-as-you-go token billing.
+- All rules in this section (no PTU, no pre-paid) continue to apply.
+
 ### 5.5 Billing separation note
 
 GitHub metered billing (Actions, Codespaces, Copilot) is billed separately from Azure credits. Do not assume Azure credits offset GitHub charges. Monitor both billing buckets independently.
