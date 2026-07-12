@@ -132,27 +132,53 @@ class TestSimModeDefault(unittest.TestCase):
         self.assertIn("total_tokens", usage)
 
 
-class TestAzureModeRaises(unittest.TestCase):
-    """FOUNDRY_MODE=azure must raise NotImplementedError immediately."""
+class TestAzureModeGuards(unittest.TestCase):
+    """FOUNDRY_MODE=azure enforces config + allowlist guards at construction.
+
+    No network calls happen in __init__, so these tests remain fully offline.
+    """
 
     def setUp(self) -> None:
         os.environ["FOUNDRY_MODE"] = "azure"
+        for var in ("AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_DEPLOYMENT", "AZURE_OPENAI_API_KEY"):
+            os.environ.pop(var, None)
 
     def tearDown(self) -> None:
-        os.environ.pop("FOUNDRY_MODE", None)
+        for var in (
+            "FOUNDRY_MODE",
+            "AZURE_OPENAI_ENDPOINT",
+            "AZURE_OPENAI_DEPLOYMENT",
+            "AZURE_OPENAI_API_KEY",
+        ):
+            os.environ.pop(var, None)
 
-    def test_azure_mode_raises_not_implemented(self) -> None:
-        with self.assertRaises(NotImplementedError) as ctx:
+    def test_azure_mode_requires_config(self) -> None:
+        with self.assertRaises(ValueError) as ctx:
             FoundryClient()
-        self.assertIn("not enabled", str(ctx.exception))
-        self.assertIn("PRD-azure-foundry-integration.md", str(ctx.exception))
-
-    def test_azure_mode_error_mentions_startup_credits(self) -> None:
-        with self.assertRaises(NotImplementedError) as ctx:
-            FoundryClient()
-        # The error message should direct user to the PRD which covers credits
         msg = str(ctx.exception)
+        self.assertIn("AZURE_OPENAI_ENDPOINT", msg)
         self.assertIn("PRD-azure-foundry-integration.md", msg)
+
+    def test_azure_mode_blocks_third_party_models(self) -> None:
+        os.environ["AZURE_OPENAI_ENDPOINT"] = "https://example.cognitiveservices.azure.com/"
+        os.environ["AZURE_OPENAI_DEPLOYMENT"] = "claude-3-opus"
+        with self.assertRaises(ValueError) as ctx:
+            FoundryClient()
+        self.assertIn("allowlist", str(ctx.exception))
+
+    def test_azure_mode_tier2_requires_approval(self) -> None:
+        os.environ["AZURE_OPENAI_ENDPOINT"] = "https://example.cognitiveservices.azure.com/"
+        os.environ["AZURE_OPENAI_DEPLOYMENT"] = "gpt-4o"
+        with self.assertRaises(ValueError) as ctx:
+            FoundryClient()
+        self.assertIn("maintainer approval", str(ctx.exception))
+
+    def test_azure_mode_constructs_offline_with_allowed_deployment(self) -> None:
+        os.environ["AZURE_OPENAI_ENDPOINT"] = "https://example.cognitiveservices.azure.com/"
+        os.environ["AZURE_OPENAI_DEPLOYMENT"] = "gpt-5.4-mini"
+        client = FoundryClient()
+        self.assertEqual(client.mode, "azure")
+        self.assertEqual(client.list_fixtures(), [])
 
 
 class TestUnknownModeRaises(unittest.TestCase):

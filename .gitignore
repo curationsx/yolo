@@ -1,3 +1,28 @@
 __pycache__/
 *.pyc
+*.pyo
 .DS_Store
+
+# Python virtual environments
+.venv/
+venv/
+env/
+
+# Python packaging / build artifacts
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Local environment / secrets (never commit)
+.env
+.env.local
+
+# foundry-sim azure-mode ledger (real runs; never commit — PRD §6.5)
+foundry-sim/ledger.azure.json
+
+# Editor / IDE
+.idea/
+.vscode/
+*.swp
+*~

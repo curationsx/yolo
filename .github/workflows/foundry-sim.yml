@@ -1,0 +1,53 @@
+name: Foundry Sim
+
+on:
+  pull_request:
+    paths:
+      - "foundry-sim/**"
+      - ".github/workflows/foundry-sim.yml"
+  push:
+    branches: [main]
+    paths:
+      - "foundry-sim/**"
+      - ".github/workflows/foundry-sim.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: foundry-sim-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.9 is the documented minimum; 3.12–3.14 cover current supported releases.
+        # No pip install or dependency caching: foundry-sim is stdlib-only.
+        python-version: ["3.9", "3.12", "3.13", "3.14"]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Run bootstrap (checks, tests, smoke test)
+        run: bash foundry-sim/install.sh
+
+      - name: Verify working tree stays clean
+        run: |
+          git status --porcelain
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::foundry-sim/install.sh modified the checkout (files listed above). CI runs must not write ledger entries or other tracked files."
+            exit 1
+          fi
