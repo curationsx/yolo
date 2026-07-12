@@ -65,6 +65,11 @@ Read the full treatment in [docs/AOT.md](docs/AOT.md).
 | [docs/GLOSSARY.md](docs/GLOSSARY.md) | Shared vocabulary |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Now / Next / Later |
 | [docs/PRD-digital-stewardship.md](docs/PRD-digital-stewardship.md) | Digital stewardship PRD |
+| [docs/PRD-community-discussion-board.md](docs/PRD-community-discussion-board.md) | Community Discussion Board PRD — activation, forms, distillation pipeline |
+| [docs/PRD-aot-agent-protocol.md](docs/PRD-aot-agent-protocol.md) | AoT Agent Protocol PRD — opt-in, read-only, bounded-spend agent protocol |
+| [docs/PRD-azure-foundry-integration.md](docs/PRD-azure-foundry-integration.md) | Azure Foundry Integration PRD — design gated behind the sim emulator |
+| [docs/PRD-catalog-surface.md](docs/PRD-catalog-surface.md) | Catalog Surface PRD — browsable catalog from `catalog.json` |
+| [foundry-sim/](foundry-sim/) | Local offline simulator — zero-cost Azure Foundry emulation, no network calls |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute |
 
 ## What makes this good, great, amazing, top 0.1%?

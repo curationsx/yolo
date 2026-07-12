@@ -12,6 +12,8 @@ Now / Next / Later. No dates, no promises — direction, honestly stated. Items 
 - Standard-library CLI: `doctor`, `list`, `search`, `show`, `catalog` — offline, no telemetry.
 - Contribution guide.
 - Proposed Community Grid with discussion forms, PRD showcase, resource exchange, and a vendor-neutral agent protocol.
+- Full PRD suite: [Community Discussion Board](PRD-community-discussion-board.md), [AoT Agent Protocol](PRD-aot-agent-protocol.md), [Azure Foundry Integration](PRD-azure-foundry-integration.md), [Catalog Surface](PRD-catalog-surface.md).
+- Local offline Foundry emulator (`foundry-sim/`) — zero-cost, no network, standard-library-only staging layer for evaluating personas, workflows, and ROI before connecting real Azure keys.
 
 ## Next (as the community forms)
 
@@ -21,12 +23,14 @@ Now / Next / Later. No dates, no promises — direction, honestly stated. Items 
 - CI that runs `python tools/yolo.py doctor` on pull requests.
 - Prompt evaluation notes: lightweight before/after records when prompts are revised.
 - Expand the software directory using [software/SUBMIT.md](../software/SUBMIT.md) submissions.
-- Enable and manually exercise the [Community Grid](../community/README.md); name initial human stewards before deploying any agent.
-- Evaluate a read-only agent on public fictional fixtures before any community pilot.
+- Enable and manually exercise the [Community Grid](../community/README.md); name initial human stewards before deploying any agent (see [Community Discussion Board PRD](PRD-community-discussion-board.md)).
+- Evaluate a read-only agent on public fictional fixtures via `foundry-sim/` before any community pilot (see [AoT Agent Protocol PRD](PRD-aot-agent-protocol.md)).
+- Build out personas and workflows in `foundry-sim/personas/` and `foundry-sim/workflows/` to validate ROI before connecting to real Azure (maintainer-owned).
 
 ## Later (earned, not scheduled)
 
-- A published catalog surface generated from `catalog.json` for browsing without cloning.
+- Connect real Azure AI Foundry (first-party Azure OpenAI only; see [Azure Foundry Integration PRD](PRD-azure-foundry-integration.md) — gated behind sim validation and Startup Credits guardrails).
+- A published catalog surface generated from `catalog.json` for browsing without cloning (see [Catalog Surface PRD](PRD-catalog-surface.md)).
 - Worked case studies of workflows applied end-to-end, with evidence.
 - Taxonomy v2 informed by real usage, with migration notes.
 - Accessibility review of all artifacts against a documented checklist.

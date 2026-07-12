@@ -1,0 +1,32 @@
+{
+  "id": "fixture-aot-rubber-duck",
+  "label": "EXAMPLE — fictional rubber-duck debugging response",
+  "description": "Canned response for the engineering rubber-duck debugging prompt. Fictional data only.",
+  "messages": [
+    {
+      "role": "user",
+      "content": "My pagination function returns the wrong page on the third call."
+    }
+  ],
+  "response": {
+    "id": "sim-chatcmpl-00003",
+    "object": "chat.completion",
+    "model": "auto",
+    "sim_note": "SIMULATED — no network call, no cost",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "Let's work through this together. I won't guess your bug — I'll ask questions until you see it yourself.\n\n1. When you say 'third call,' does that mean the third paginated request in a single session, or the third time you've run the full test suite?\n2. What state does the pagination function carry between calls? Is the cursor or offset stored in memory, a database, or passed explicitly each time?\n3. What does 'wrong page' mean exactly — is it returning page 2 instead of page 3, or returning the same page as before?\n4. Can you reproduce it with a minimal example that doesn't require the full application stack?"
+        },
+        "finish_reason": "stop"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 20,
+      "completion_tokens": 112,
+      "total_tokens": 132
+    }
+  }
+}

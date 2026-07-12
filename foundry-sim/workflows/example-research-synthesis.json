@@ -1,0 +1,58 @@
+{
+  "$comment": "EXAMPLE workflow — fictional, non-sensitive. Mirrors workflows/research-synthesis-review-publication.md.",
+  "id": "example-research-synthesis",
+  "label": "EXAMPLE — Research Synthesis, Review, and Publication",
+  "description": "A multi-step workflow that takes a research question from framing through synthesis to human-reviewed publication. Maps to the AoT loop with explicit human checkpoints.",
+  "aot_phases": ["Intent", "Context", "Compose", "Act", "Verify", "Learn"],
+  "steps": [
+    {
+      "step": 1,
+      "phase": "Intent",
+      "persona": "example-steward",
+      "instruction": "State the research question, scope, and constraints. What is the intended audience and output format?",
+      "human_checkpoint": true,
+      "checkpoint_description": "Human confirms the question is correctly framed before gathering sources."
+    },
+    {
+      "step": 2,
+      "phase": "Context",
+      "persona": null,
+      "instruction": "List the sources to be synthesized. For each source: title, URL or citation, author, date, and why it is relevant.",
+      "human_checkpoint": true,
+      "checkpoint_description": "Human verifies source authority, recency, and access before synthesis proceeds."
+    },
+    {
+      "step": 3,
+      "phase": "Compose",
+      "persona": "example-steward",
+      "instruction": "Synthesize the listed sources into a structured summary. Label each claim with its source. Flag conflicting evidence explicitly. Use confidence labels: high / medium / low.",
+      "human_checkpoint": false,
+      "checkpoint_description": null
+    },
+    {
+      "step": 4,
+      "phase": "Act",
+      "persona": null,
+      "instruction": "Draft the output document from the synthesis. Include an executive summary, key findings, limitations, and open questions.",
+      "human_checkpoint": false,
+      "checkpoint_description": null
+    },
+    {
+      "step": 5,
+      "phase": "Verify",
+      "persona": "example-steward",
+      "instruction": "Review the draft against the original intent. Flag any unsupported claims, missing citations, or conclusions that exceed the evidence.",
+      "human_checkpoint": true,
+      "checkpoint_description": "Human reviews the verification report and decides whether to publish, revise, or discard."
+    },
+    {
+      "step": 6,
+      "phase": "Learn",
+      "persona": null,
+      "instruction": "Record what worked, what failed, and what should change in the workflow or prompts for next time.",
+      "human_checkpoint": true,
+      "checkpoint_description": "Human logs the retrospective note and any workflow improvements as a PR or discussion."
+    }
+  ],
+  "notes": "EXAMPLE — maintainer should adapt steps, personas, and checkpoints to real research tasks. This file is a documented stub."
+}

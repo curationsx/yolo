@@ -1,0 +1,5 @@
+{
+  "$comment": "Simulated cost ledger — updated at runtime by dash.py and client.py. All figures are ESTIMATES based on rates.json. No real billing.",
+  "note": "ESTIMATE — local simulation only. No Azure billing connection.",
+  "runs": []
+}
