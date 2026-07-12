@@ -5,3 +5,7 @@
 This repository is the emerging home of CurationsX and **AoT — Artificial of Things**: practical, accountable Human × AI workflows.
 
 > Early foundation under active curation.
+
+## Documents
+
+- [PRD — Digital Stewardship](docs/PRD-digital-stewardship.md): community framework for accountable Human × AI workflows, adaptive guardrails, and provenance.
