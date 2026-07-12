@@ -1,3 +1,25 @@
 __pycache__/
 *.pyc
+*.pyo
 .DS_Store
+
+# Python virtual environments
+.venv/
+venv/
+env/
+
+# Python packaging / build artifacts
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Local environment / secrets (never commit)
+.env
+.env.local
+
+# Editor / IDE
+.idea/
+.vscode/
+*.swp
+*~

@@ -13,6 +13,72 @@
 
 ---
 
+## System prerequisites
+
+| Requirement | Version | Notes |
+| --- | --- | --- |
+| Python | **3.9 or newer** | Standard library only — no packages to install |
+| bash | any | Required to run `install.sh`; optional otherwise |
+
+No other system packages, pip dependencies, virtual environments, or external services are needed. Everything runs fully offline.
+
+---
+
+## Installation
+
+### One-command bootstrap (recommended)
+
+Run from the repository root:
+
+```bash
+bash foundry-sim/install.sh
+```
+
+This single command:
+1. Verifies Python 3.9+ is available and prints an actionable error if not
+2. Confirms all required source files are present
+3. Validates all fixture JSON files
+4. Runs the full test suite (22 tests, all offline)
+5. Runs a minimal smoke test of `dash.py` and `FoundryClient`
+
+It is **safe to run repeatedly** (idempotent). No pip installs, no sudo, no network calls.
+
+#### Prerequisite-check only
+
+```bash
+bash foundry-sim/install.sh --check
+```
+
+Runs checks 1–4 above and exits. Use this in CI or before committing changes to verify the environment is clean without executing the full test run.
+
+### Manual verification (no script)
+
+If you prefer not to use the shell script, run these commands manually from the repository root:
+
+```bash
+# 1. Check Python version (must be 3.9+)
+python --version
+
+# 2. Run the test suite
+python -m unittest foundry-sim/tests/test_sim.py -v
+
+# 3. Smoke-test the dashboard
+python foundry-sim/dash.py
+
+# 4. Smoke-test the client
+python - <<'EOF'
+import sys; sys.path.insert(0, "foundry-sim")
+from foundry_client import FoundryClient
+client = FoundryClient()
+resp = client.chat([{"role": "user", "content": "Help me frame a strategy brief."}],
+                   record_to_ledger=False)
+print(resp["choices"][0]["message"]["content"])
+print("sim_note:", resp["sim_note"])
+EOF
+```
+
+---
+
 ## What it is
 
 `foundry-sim` is a staging layer that:
@@ -78,7 +144,21 @@ In `auto` profile (`SIM_PROFILE=auto`, the default), the simulator does not pin 
 | `AZURE_CLIENT_ID` | _(unset)_ | Used only in `azure` mode — Entra ID managed identity (not enabled here). |
 | `AZURE_OPENAI_API_KEY` | _(unset)_ | Used only in `azure` mode — local-dev fallback only (not enabled here). |
 
-See `.env.example` in the repository root for the full list of names.
+See `.env.example` in the repository root for the full list of names. **Never commit real credentials to the repository.**
+
+---
+
+## Optional components
+
+All components are included in the repository checkout — there is nothing to download separately.
+
+| Component | Status | Notes |
+| --- | --- | --- |
+| `fixtures/` | Required | Three canned response fixtures (strategy-brief, workflow-review, rubber-duck) |
+| `rates.json` | Required | ESTIMATE token-rate table used by ledger cost calculations |
+| `personas/` | Optional | Scaffolding — add your own persona JSON files following the schema in `personas/README.md` |
+| `workflows/` | Optional | Scaffolding — add your own workflow JSON files following the schema in `workflows/README.md` |
+| `ledger.json` | Runtime-generated | Created/updated by `FoundryClient.chat()` and `dash.py`; committed as an empty seed |
 
 ---
 
@@ -87,10 +167,11 @@ See `.env.example` in the repository root for the full list of names.
 ```
 foundry-sim/
 ├── README.md                  ← this file
+├── install.sh                 ← idempotent one-command bootstrap + test runner
 ├── foundry_client.py          ← client shim (stdlib only)
 ├── dash.py                    ← terminal dashboard (stdlib only)
 ├── rates.json                 ← configurable ESTIMATE rate table
-├── ledger.json                ← simulated cost ledger (runtime-generated)
+├── ledger.json                ← simulated cost ledger (runtime-generated seed)
 ├── fixtures/
 │   ├── strategy-brief.json    ← canned response: strategy discovery
 │   ├── workflow-review.json   ← canned response: workflow clinic
@@ -104,6 +185,55 @@ foundry-sim/
 └── tests/
     └── test_sim.py            ← stdlib unittest, no installs required
 ```
+
+---
+
+## Troubleshooting
+
+### `python: command not found`
+
+Try `python3` instead of `python`. On some systems the default Python is version 2:
+
+```bash
+python3 --version
+python3 -m unittest foundry-sim/tests/test_sim.py -v
+```
+
+### `SyntaxError` or `TypeError` on import
+
+Check your Python version. This project requires **Python 3.9 or newer**:
+
+```bash
+python --version   # must be 3.9+
+```
+
+### Tests fail with `ModuleNotFoundError: No module named 'foundry_client'`
+
+Run tests from the repository root, not from inside `foundry-sim/`:
+
+```bash
+# correct — from repository root
+python -m unittest foundry-sim/tests/test_sim.py -v
+
+# also correct
+python foundry-sim/tests/test_sim.py
+```
+
+### `FOUNDRY_MODE=azure` raises `NotImplementedError`
+
+This is expected. The Azure integration is not yet enabled. The error message directs you to `docs/PRD-azure-foundry-integration.md`, which describes the full design and auth setup.
+
+### `ledger.json` accumulates run data locally
+
+Run `python foundry-sim/dash.py --demo` to add demo data. To reset the ledger, restore the seed file:
+
+```bash
+git checkout foundry-sim/ledger.json
+```
+
+### `bash foundry-sim/install.sh` fails on Windows
+
+Use Git Bash, WSL, or run the manual verification steps directly with Python. The `install.sh` script requires a bash-compatible shell.
 
 ---
 
