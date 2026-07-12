@@ -18,6 +18,9 @@ build/
 .env
 .env.local
 
+# foundry-sim azure-mode ledger (real runs; never commit — PRD §6.5)
+foundry-sim/ledger.azure.json
+
 # Editor / IDE
 .idea/
 .vscode/

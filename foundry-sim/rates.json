@@ -4,6 +4,14 @@
   "currency": "USD",
   "unit": "per 1000 tokens",
   "models": {
+    "gpt-5.4-mini": {
+      "input": 0.00025,
+      "output": 0.002,
+      "label": "Azure OpenAI GPT-5.4 mini (ESTIMATE)",
+      "eligible_for_startup_credits": true,
+      "first_party": true,
+      "note": "Tier 1 approved deployment (PRD §5.1). Verify against live Azure pricing before budget planning."
+    },
     "gpt-4o": {
       "input": 0.005,
       "output": 0.015,

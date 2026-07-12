@@ -132,26 +132,37 @@ EOF
 
 ## The sim / azure seam
 
-The only difference between sim mode and the future real Azure mode is one environment variable:
+The only difference between sim mode and the real Azure mode is one environment variable:
 
 | `FOUNDRY_MODE` | Behaviour |
 | --- | --- |
 | `sim` (default) | Returns fixture responses. No network. No cost. |
-| `azure` | Raises `NotImplementedError` — not enabled in this build. See `docs/PRD-azure-foundry-integration.md`. |
+| `azure` | Calls a real Azure OpenAI deployment. Guarded by an allowlist, per-run caps, and a separate ledger. See `docs/PRD-azure-foundry-integration.md`. |
 
 In `auto` profile (`SIM_PROFILE=auto`, the default), the simulator does not pin a specific paid model. It emulates generic response behavior so you can layer personas and workflows on top of whatever the Copilot auto engine routes to. When you're ready to connect, you add the Azure env vars and flip `FOUNDRY_MODE=azure` — the `client.chat()` interface does not change.
+
+### Azure mode guardrails
+
+Azure mode is real spend, so it ships with hard guards (all enforced in `foundry_client.py`):
+
+- **Allowlist:** only Tier 1 first-party mini deployments (e.g. `gpt-5.4-mini`) are accepted. Full-size models require maintainer approval; unknown names are rejected outright.
+- **Per-run caps:** max 50 requests and $1.00 estimated cost per client instance; 4096 max completion tokens per call; 30s timeout.
+- **Auth:** Entra ID bearer token via `az` CLI (no keys needed). `AZURE_OPENAI_API_KEY` is a local-dev fallback only.
+- **Separate ledger:** real runs go to `foundry-sim/ledger.azure.json`, which is **git-ignored** — the sim's committed `ledger.json` never mixes with real spend. Cost figures are ESTIMATEs from `rates.json`; token counts are actual.
+- **CI never runs azure mode.** The workflow has no Azure credentials and no login step by design.
 
 ### Environment variables
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `FOUNDRY_MODE` | `sim` | `sim` for offline emulation; `azure` raises an error until the real integration is built. |
+| `FOUNDRY_MODE` | `sim` | `sim` for offline emulation; `azure` for the real, guarded integration. |
 | `SIM_PROFILE` | `auto` | Persona profile hint. `auto` = no pinned model; matches Copilot auto routing. |
-| `AZURE_OPENAI_ENDPOINT` | _(unset)_ | Used only in `azure` mode (not enabled here). |
-| `AZURE_OPENAI_DEPLOYMENT` | _(unset)_ | Used only in `azure` mode (not enabled here). |
-| `AZURE_OPENAI_API_VERSION` | _(unset)_ | Used only in `azure` mode (not enabled here). |
-| `AZURE_CLIENT_ID` | _(unset)_ | Used only in `azure` mode — Entra ID managed identity (not enabled here). |
-| `AZURE_OPENAI_API_KEY` | _(unset)_ | Used only in `azure` mode — local-dev fallback only (not enabled here). |
+| `AZURE_OPENAI_ENDPOINT` | _(unset)_ | Azure mode: full endpoint URL, e.g. `https://<resource>.cognitiveservices.azure.com/`. |
+| `AZURE_OPENAI_DEPLOYMENT` | _(unset)_ | Azure mode: deployment name — must pass the Tier 1 allowlist (e.g. `gpt-5.4-mini`). |
+| `AZURE_OPENAI_API_VERSION` | _(unset)_ | Azure mode: optional API version override for the legacy endpoint path. |
+| `AZURE_CLIENT_ID` | _(unset)_ | Azure mode: Entra ID managed identity hint (optional). |
+| `AZURE_OPENAI_API_KEY` | _(unset)_ | Azure mode: local-dev fallback auth only. Prefer `az login`. |
+| `FOUNDRY_LEDGER_PATH` | _(unset)_ | Azure mode: override the azure ledger location (defaults to `foundry-sim/ledger.azure.json`). |
 
 See `.env.example` in the repository root for the full list of names. **Never commit real credentials to the repository.**
 
@@ -228,9 +239,9 @@ python -m unittest foundry-sim/tests/test_sim.py -v
 python foundry-sim/tests/test_sim.py
 ```
 
-### `FOUNDRY_MODE=azure` raises `NotImplementedError`
+### `FOUNDRY_MODE=azure` fails with an allowlist or endpoint error
 
-This is expected. The Azure integration is not yet enabled. The error message directs you to `docs/PRD-azure-foundry-integration.md`, which describes the full design and auth setup.
+Azure mode requires `AZURE_OPENAI_ENDPOINT` and an allowlisted `AZURE_OPENAI_DEPLOYMENT` (Tier 1 mini models only — see `docs/PRD-azure-foundry-integration.md` §5.1). Full-size model names are rejected until a maintainer approves them; unknown names are always rejected. Authenticate with `az login` first — the client fetches an Entra bearer token via the `az` CLI.
 
 ### `ledger.json` accumulates run data locally
 

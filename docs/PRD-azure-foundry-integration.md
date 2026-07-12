@@ -1,8 +1,8 @@
 # PRD — Azure AI Foundry Integration
 
-**Status:** Draft · **Owner:** CurationsX · **Scope:** Real Azure AI Foundry integration design — **explicitly gated behind the `foundry-sim` local emulator**
+**Status:** Implemented (v1 live 2026-07-12) · **Owner:** CurationsX · **Scope:** Real Azure AI Foundry integration design — **explicitly gated behind the `foundry-sim` local emulator**
 
-> ⚠️ **This integration is NOT enabled in the current build.** `FOUNDRY_MODE=azure` raises a clear error. The local offline simulator (`foundry-sim/`) is the only active mode. Read this PRD to understand the design and prepare for a future real connection. Do not connect keys or incur spend until the sim stage is validated.
+> ✅ **This integration is now LIVE (2026-07-12).** `FOUNDRY_MODE=azure` calls a real Azure OpenAI deployment (`gpt-5.4-mini` on `yolo-foundry`, eastus2), guarded by the Tier 1 allowlist, per-run caps, and a git-ignored azure ledger. The local offline simulator (`foundry-sim/`) remains the default mode (`FOUNDRY_MODE=sim`) and the only mode CI runs.
 
 ## 1. Purpose
 
@@ -52,7 +52,8 @@ Only first-party Azure OpenAI deployment name patterns are permitted, in two tie
 # Tier 1 — approved for the initial integration (per §5.4 maintainer approval):
 # OpenAI-family mini/small tiers on Standard pay-as-you-go billing only.
 FIRST_PARTY_ALLOWED_PREFIXES = [
-    "gpt-5-mini",              # confirm exact current-gen mini name at M3
+    "gpt-5.4-mini",            # ✅ deployed: yolo-foundry / eastus2 / version 2026-03-17 / GlobalStandard
+    "gpt-5-mini",
     "gpt-4.1-mini",
     "gpt-4o-mini",
     "text-embedding-3-small",
@@ -277,14 +278,14 @@ Still open:
 
 - Which Azure region will host the OpenAI deployment (affects latency, data residency, and mini-tier model availability)?
 - Which API version (`AZURE_OPENAI_API_VERSION`) will be locked at first deployment?
-- Exact current-generation mini deployment name (verify against the live model catalog at M3).
+- ~~Exact current-generation mini deployment name~~ **Resolved: `gpt-5.4-mini` version 2026-03-17 (eastus2, GlobalStandard).**
 - Remaining Microsoft for Startups credit balance and expiration date (check in Founders Hub portal before M3 — determines how much runway the credits actually provide).
 
 ## 12. Milestones
 
 1. **M1 — Sim validated:** ✅ Done (2026-07-12). Emulator runs fully offline; 22/22 tests pass across Python 3.9–3.14 in CI (`.github/workflows/foundry-sim.yml`); dashboard shows correct topology and ESTIMATE cost.
 2. **M2 — Design approved:** ✅ Done (2026-07-12). Maintainer approved Foundry as host under §5.4 conditions (Startups credits, mini tier, PAYG only).
-3. **M3 — Azure provisioning:** Verify remaining Startups credit balance and expiration in Founders Hub; refresh the model allowlist against the live catalog; create `rg-yolo-foundry` with tags; create the scoped budget with confirmed amount and alerts (§5.6); create the Azure OpenAI resource and one Tier 1 mini deployment on Standard billing.
-4. **M4 — Auth configured:** `DefaultAzureCredential` tested with managed identity; API key fallback documented; no credentials in CI (§6.6).
-5. **M5 — Integration tested:** Real integration tested against the Tier 1 deployment; per-run caps validated; azure ledger (`ledger.azure.json`, git-ignored) records real token counts (§6.5); spend-anomaly runbook commands verified against the live resource (§5.8).
+3. **M3 — Azure provisioning:** ✅ Done (2026-07-12). `rg-yolo-foundry` created in eastus2 with tags; `yolo-foundry` AIServices resource (S0); `gpt-5.4-mini` deployment (version 2026-03-17, GlobalStandard PAYG); scoped budget `yolo-foundry-50-monthly` USD 50/month with 50/80/100% actual + 100% forecast alerts (§5.6). Startups credit balance/expiry still needs a manual Founders Hub portal check (not queryable via CLI).
+4. **M4 — Auth configured:** ✅ Done (2026-07-12). Entra bearer token via `az` CLI verified against the live deployment; API key fallback documented in `.env.example`; no credentials in CI (§6.6).
+5. **M5 — Integration tested:** ✅ Done (2026-07-12). Real chat completion succeeded against `gpt-5.4-mini` (28 tokens, correct response); allowlist + per-run caps enforced in `foundry_client.py` with offline guard tests; azure ledger (`ledger.azure.json`, git-ignored) recorded the real run with actual token counts (§6.5).
 6. **M6 — Community pilot:** First real agent invocation under the protocol in `docs/PRD-aot-agent-protocol.md`.
