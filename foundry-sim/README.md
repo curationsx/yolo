@@ -77,6 +77,15 @@ print("sim_note:", resp["sim_note"])
 EOF
 ```
 
+### Continuous integration
+
+GitHub Actions runs `bash foundry-sim/install.sh` automatically (workflow:
+`.github/workflows/foundry-sim.yml`) on every pull request or push that touches
+`foundry-sim/`, across Python 3.9 through 3.14. Local developers run the exact
+same command — there is no separate CI script. The simulator needs **no Azure
+credentials** in CI or anywhere else; Azure mode remains future work
+(see `docs/PRD-azure-foundry-integration.md`).
+
 ---
 
 ## What it is
