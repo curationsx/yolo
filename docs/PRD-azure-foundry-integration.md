@@ -82,7 +82,17 @@ Set the following Azure Cost Management alerts in the Azure portal for the subsc
 
 These alerts are a manual setup step in the Azure portal; they are not configured by code in this repository.
 
-### 5.4 Billing separation note
+> **Important:** Azure budgets generate *notifications only* — they do not automatically stop or deallocate resources. Treat every budget as an alarm, not a circuit breaker. Any "block further spend" behavior requires an explicit action group / automation, which must be designed and approved separately.
+
+### 5.4 Billing model — pay-as-you-go only (hard rule)
+
+The Azure Foundry integration MUST use **Standard (pay-as-you-go) token-based billing only**.
+
+- **Never** provision PTU (Provisioned Throughput Units), reserved capacity, or any pre-paid monthly package. These bill continuously regardless of usage — a prior accidental provisioned-capacity dependency cost roughly **USD 499/day** with zero usage.
+- Prefer the most cost-effective standard token option available for the required model (e.g., Global Standard deployment of a small/mini model tier).
+- Any deployment SKU other than Standard requires explicit written approval from the maintainer before creation.
+
+### 5.5 Billing separation note
 
 GitHub metered billing (Actions, Codespaces, Copilot) is billed separately from Azure credits. Do not assume Azure credits offset GitHub charges. Monitor both billing buckets independently.
 
