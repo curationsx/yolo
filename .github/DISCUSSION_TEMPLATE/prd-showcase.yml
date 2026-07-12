@@ -1,0 +1,74 @@
+title: "[PRD Showcase] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Read the [PRD Showcase Guide](https://github.com/curationsx/yolo/blob/main/community/PRD-SHOWCASE.md). Share only an authorized public PRD and retain human ownership of every product decision.
+  - type: input
+    id: prd
+    attributes:
+      label: Exact public PRD URL
+      description: Link to the document or stable file path, not only the repository home page.
+    validations:
+      required: true
+  - type: input
+    id: owner
+    attributes:
+      label: Human decision owner
+      description: Who will evaluate recommendations and record the outcome?
+    validations:
+      required: true
+  - type: textarea
+    id: frame
+    attributes:
+      label: Product frame
+      description: Summarize the problem, users, stage, constraints, goals, and non-goals.
+    validations:
+      required: true
+  - type: textarea
+    id: questions
+    attributes:
+      label: Decisions and review questions
+      description: Which decisions are open, and what kind of critique would be useful?
+    validations:
+      required: true
+  - type: dropdown
+    id: review
+    attributes:
+      label: Review requested
+      options:
+        - Human review
+        - Agent review
+        - Human and agent review
+    validations:
+      required: true
+  - type: dropdown
+    id: depth
+    attributes:
+      label: Agent depth
+      description: Used only when agent review is requested; actual deployment limits still apply.
+      options:
+        - Not requesting agent review
+        - Focused
+        - Standard
+        - Deep
+    validations:
+      required: true
+  - type: textarea
+    id: provenance
+    attributes:
+      label: Provenance and disclosures
+      description: State your relationship to the PRD, permission to share, affiliations, and material AI assistance.
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Public-sharing confirmation
+      options:
+        - label: I am authorized to request public review of this PRD.
+          required: true
+        - label: I removed secrets, personal data, customer records, and confidential information.
+          required: true
+        - label: I understand that the discussion does not grant repository crawl or write permission.
+          required: true

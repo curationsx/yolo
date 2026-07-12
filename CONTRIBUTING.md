@@ -27,6 +27,8 @@ python tools/yolo.py catalog                 # regenerate if you changed artifac
 | Software entry | [software/SUBMIT.md](software/SUBMIT.md) |
 | Taxonomy concept | [taxonomy/README.md](taxonomy/README.md) — include an artifact that uses it |
 | Usage notes / evidence | Comment on or PR the artifact; real-world misses are gold |
+| Prompt, workflow, or PRD feedback | Once activated, start with the matching [Community Grid](community/) route; move durable changes to a PR |
+| Resource proposal | Use the [Resource Exchange](community/RESOURCES.md); individual tools follow the software path |
 | Docs and fixes | Plain PR |
 
 ## Review process
@@ -39,4 +41,4 @@ Early-stage: decisions rest with maintainers, made in the open on PRs and issues
 
 ## Questions
 
-Open an issue. Explaining your question to the duck first is optional but traditional. 🦆
+Until the proposed [Community Grid](community/README.md) is activated, open an issue. After activation, use AoT Q&A for open-ended practice questions and issues for bounded repository problems. Explaining your question to the duck first is optional but traditional. 🦆

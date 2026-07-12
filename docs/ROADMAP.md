@@ -11,6 +11,7 @@ Now / Next / Later. No dates, no promises — direction, honestly stated. Items 
 - Versioned machine-readable taxonomy and JSON Schemas for prompts, workflows, and software entries.
 - Standard-library CLI: `doctor`, `list`, `search`, `show`, `catalog` — offline, no telemetry.
 - Contribution guide.
+- Proposed Community Grid with discussion forms, PRD showcase, resource exchange, and a vendor-neutral agent protocol.
 
 ## Next (as the community forms)
 
@@ -20,6 +21,8 @@ Now / Next / Later. No dates, no promises — direction, honestly stated. Items 
 - CI that runs `python tools/yolo.py doctor` on pull requests.
 - Prompt evaluation notes: lightweight before/after records when prompts are revised.
 - Expand the software directory using [software/SUBMIT.md](../software/SUBMIT.md) submissions.
+- Enable and manually exercise the [Community Grid](../community/README.md); name initial human stewards before deploying any agent.
+- Evaluate a read-only agent on public fictional fixtures before any community pilot.
 
 ## Later (earned, not scheduled)
 
@@ -29,6 +32,7 @@ Now / Next / Later. No dates, no promises — direction, honestly stated. Items 
 - Accessibility review of all artifacts against a documented checklist.
 - Localization of core documents if contributors materialize for it.
 - Signature experience refinements based on what users actually reach for.
+- Evidence-backed discussion-to-artifact distillation and progressively expanded agent capabilities, only after the prior permission tier is proven.
 
 ## What we will not do
 
@@ -36,3 +40,4 @@ Now / Next / Later. No dates, no promises — direction, honestly stated. Items 
 - Collect telemetry of any kind.
 - Publish fake badges, invented testimonials, or adoption claims we can't evidence.
 - Lock any workflow to a specific vendor.
+- Treat enterprise AI capacity as permission for unbounded or invisible agent usage.

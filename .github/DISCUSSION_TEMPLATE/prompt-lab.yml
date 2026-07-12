@@ -1,0 +1,72 @@
+title: "[Prompt Lab] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Share only public, authorized material. Human and agent reviewers will preserve your intent, surface assumptions, and propose changes—not make the final decision.
+  - type: input
+    id: outcome
+    attributes:
+      label: Intended outcome
+      description: What should this prompt help a person accomplish?
+    validations:
+      required: true
+  - type: textarea
+    id: prompt
+    attributes:
+      label: Prompt or public link
+      description: Paste the prompt or link to its exact public location. Remove sensitive data.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context and constraints
+      description: Who uses it, with what inputs, boundaries, model/tool assumptions, and human review?
+    validations:
+      required: true
+  - type: textarea
+    id: observed
+    attributes:
+      label: What you tried
+      description: Include evaluation cases, observed failures, and evidence. Say "not yet tested" when applicable.
+    validations:
+      required: true
+  - type: dropdown
+    id: review
+    attributes:
+      label: Review requested
+      options:
+        - Human review
+        - Agent review
+        - Human and agent review
+    validations:
+      required: true
+  - type: dropdown
+    id: depth
+    attributes:
+      label: Agent depth
+      description: Used only when agent review is requested; actual deployment limits still apply.
+      options:
+        - Not requesting agent review
+        - Focused
+        - Standard
+        - Deep
+    validations:
+      required: true
+  - type: textarea
+    id: provenance
+    attributes:
+      label: Provenance and disclosures
+      description: Identify authorship, sources, affiliations, and material AI assistance.
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Public-sharing confirmation
+      options:
+        - label: I am authorized to share this material publicly and removed secrets, personal data, and confidential information.
+          required: true
+        - label: I understand suggestions remain drafts until a human accepts and verifies them.
+          required: true

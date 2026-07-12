@@ -57,6 +57,7 @@ Read the full treatment in [docs/AOT.md](docs/AOT.md).
 | [prompts/](prompts/) | Standalone, metadata-rich prompts you can use today |
 | [workflows/](workflows/) | Human × AI workflows with explicit checkpoints and rollback |
 | [software/](software/) | Curated, job-to-be-done tool directory with a neutral rubric |
+| [community/](community/) | GitHub Discussions blueprint, agent protocol, PRD showcase, and resource exchange |
 | [taxonomy/](taxonomy/) | The machine-readable AoT taxonomy |
 | [schemas/](schemas/) | JSON Schemas that validate prompts, workflows, and software entries |
 | [docs/AOT.md](docs/AOT.md) | AoT explained with examples and anti-patterns |
@@ -71,7 +72,7 @@ Read the full treatment in [docs/AOT.md](docs/AOT.md).
 An honest quality model — where we are and where we're headed (details in [docs/QUALITY.md](docs/QUALITY.md)):
 
 - **Good** — clear purpose, navigable docs, useful starter artifacts, healthy repo basics. *This PR aims here and beyond.*
-- **Great** — consistent schemas, tested examples, contribution pathways, explicit human checkpoints. *Schemas and checkpoints ship now; community pathways are open.*
+- **Great** — consistent schemas, tested examples, contribution pathways, explicit human checkpoints. *Schemas and checkpoints ship now; community pathways are documented and await activation.*
 - **Amazing** — an executable knowledge system: machine-readable taxonomy, a validating CLI, transparent rubric. *The CLI and taxonomy ship now; depth grows with use.*
 - **Top 0.1%** — unusual trust and taste: provenance, evaluation, accessibility, strong curation, a signature experience people remember. *The roadmap, not a claim.*
 

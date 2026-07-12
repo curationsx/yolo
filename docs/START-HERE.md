@@ -39,6 +39,7 @@ Open [workflows/](../workflows/) and pick the one closest to your work. Each wor
 | Understand AoT properly | [AOT.md](AOT.md) |
 | Write your own prompt | [PLAYBOOK.md](../PLAYBOOK.md) + [prompts/README.md](../prompts/README.md) |
 | Write your own workflow | [workflows/README.md](../workflows/README.md) |
+| Explore the proposed prompt lab, workflow clinic, and PRD showcase | [community/README.md](../community/README.md) |
 | Propose a tool | [software/SUBMIT.md](../software/SUBMIT.md) |
 | Contribute anything | [CONTRIBUTING.md](../CONTRIBUTING.md) |
 
