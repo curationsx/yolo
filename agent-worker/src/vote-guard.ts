@@ -262,11 +262,8 @@ export class VoteGuard {
     // row as an extra vote.
     const countResult = await queryDocumentsWithSession<number>(
       votes,
-      "SELECT VALUE COUNT(1) FROM c WHERE (NOT IS_DEFINED(c.doc_type) OR c.doc_type = @type) AND c.id != @scoreId",
-      [
-        { name: "@type", value: "vote" },
-        { name: "@scoreId", value: "score" },
-      ],
+      "SELECT VALUE COUNT(1) FROM c WHERE (NOT IS_DEFINED(c.doc_type) OR c.doc_type = 'vote') AND c.id != 'score'",
+      [],
       body.target_id,
       sessionToken,
     );
