@@ -153,6 +153,7 @@ module apps 'modules/apps.bicep' = {
   params: {
     location: location
     containerAppsEnvironmentId: containerAppsEnvironment.id
+    containerAppsEnvironmentDefaultDomain: containerAppsEnvironment.properties.defaultDomain
     acrLoginServer: acr.properties.loginServer
     keyVaultUri: keyVault.properties.vaultUri
     gatewayIdentityId: gatewayIdentity.id

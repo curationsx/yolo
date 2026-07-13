@@ -12,6 +12,9 @@ param location string
 @description('Resource ID of the existing cae-yolo-prod Container Apps environment.')
 param containerAppsEnvironmentId string
 
+@description('Default domain of the existing cae-yolo-prod Container Apps environment (e.g. <random>.eastus2.azurecontainerapps.io), used to construct ca-yolo-gateway\'s INTERNAL fqdn for caj-yolo-ops\'s health check. Calling the gateway\'s external fqdn from inside the same environment is still subject to its ipSecurityRestrictions (confirmed: only traffic via the internal fqdn bypasses external ingress restrictions entirely); the internal fqdn avoids that path altogether rather than requiring a new same-environment allow rule.')
+param containerAppsEnvironmentDefaultDomain string
+
 @description('Login server of the existing yolocurationsprod registry, e.g. yolocurationsprod.azurecr.io.')
 param acrLoginServer string
 
@@ -115,6 +118,62 @@ var stagingIpRestrictions = enableStagingIpRestriction ? [
     action: 'Allow'
   }
 ] : []
+
+// ca-yolo-gateway's INTERNAL fqdn (as opposed to gatewayApp.properties.
+// configuration.ingress.fqdn, which is the EXTERNAL fqdn). Every app in a
+// Container Apps environment -- including ones with external ingress -- is
+// additionally reachable at <app-name>.internal.<environment-default-domain>
+// from other apps in the SAME environment, and that internal path bypasses
+// external ingress (and its ipSecurityRestrictions) entirely: it never
+// traverses the environment's external load balancer at all. Calling the
+// EXTERNAL fqdn from inside the same environment is still subject to those
+// restrictions. caj-yolo-ops uses this internal fqdn specifically so its
+// gateway health check works pre-cutover without needing any new
+// same-environment ipSecurityRestrictions allow rule.
+var gatewayInternalFqdn = 'ca-yolo-gateway.internal.${containerAppsEnvironmentDefaultDomain}'
+
+// Bounded (10s per route, two routes checked sequentially), read-only
+// liveness/readiness check run by caj-yolo-ops. Uses only `node` (present
+// on any Node-based image, including the gateway image reused here via
+// opsImageTag) and Node's built-in fetch/AbortController -- no dependency
+// on scripts/azure/** or any other file existing inside the image. Logs
+// only the route path and HTTP status/error name, never a response body,
+// header value, or any env var -- so no secret can leak into job logs.
+// Exits 0 only if every route responds with an HTTP 2xx/3xx (res.ok);
+// exits 1 (Container Apps job execution status becomes "Failed") on any
+// timeout, network error, or non-2xx/3xx response.
+var gatewayVerifyScript = '''
+const base = process.env.GATEWAY_URL;
+const routes = ["/api/live", "/api/ready"];
+const timeoutMs = 10000;
+async function check(route) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(base + route, { signal: controller.signal });
+    clearTimeout(timer);
+    console.log(route + ": HTTP " + res.status);
+    return res.ok;
+  } catch (err) {
+    clearTimeout(timer);
+    console.error(route + ": request failed (" + err.name + ")");
+    return false;
+  }
+}
+(async () => {
+  let allOk = true;
+  for (const route of routes) {
+    const ok = await check(route);
+    if (!ok) allOk = false;
+  }
+  if (!allOk) {
+    console.error("Gateway verification FAILED.");
+    process.exit(1);
+  }
+  console.log("Gateway verification passed.");
+  process.exit(0);
+})();
+'''
 
 resource gatewayApp 'Microsoft.App/containerApps@2025-01-01' = {
   name: 'ca-yolo-gateway'
@@ -375,6 +434,18 @@ resource opsJob 'Microsoft.App/jobs@2025-01-01' = {
         {
           name: 'ops'
           image: opsImageTag
+          // Overrides the image's default long-running gateway server CMD
+          // (opsImageTag defaults to gatewayImageTag, i.e. the same image)
+          // with a bounded, self-contained health check instead. Without
+          // this, `az containerapp job start` would launch the gateway
+          // server, which never exits, and deploy.sh's --verify-gateway
+          // polling would just time out at replicaTimeout rather than ever
+          // observing a real pass/fail signal.
+          command: [
+            'node'
+            '-e'
+            gatewayVerifyScript
+          ]
           resources: {
             cpu: json('0.25')
             memory: '0.5Gi'
@@ -385,7 +456,9 @@ resource opsJob 'Microsoft.App/jobs@2025-01-01' = {
             { name: 'COSMOS_ENDPOINT', value: cosmosEndpoint }
             { name: 'COSMOS_DATABASE', value: cosmosDatabaseName }
             { name: 'COSMOS_GATEWAY_STATE_CONTAINER', value: cosmosGatewayStateContainerName }
-            { name: 'GATEWAY_URL', value: 'https://${gatewayApp.properties.configuration.ingress.fqdn}' }
+            // Internal fqdn, not gatewayApp.properties.configuration.ingress.fqdn
+            // (the external one) -- see gatewayInternalFqdn's comment above.
+            { name: 'GATEWAY_URL', value: 'https://${gatewayInternalFqdn}' }
             { name: 'COPILOT_RUNTIME_SHARED_SECRET', secretRef: 'copilot-runtime-shared-secret' }
           ]
         }
