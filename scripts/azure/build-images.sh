@@ -8,8 +8,7 @@
 #
 # Usage:
 #   scripts/azure/build-images.sh [--apply] [--acr <name>] [--sha <sha>]
-#                                  [--gateway-only] [--copilot-only]
-#                                  [--registry-login-server <fqdn>] [--json]
+#                                  [--gateway-only] [--copilot-only] [--json]
 #
 # Default mode prints the exact `az acr build` invocations without running
 # them. Pass --apply to actually submit the remote builds. The script always
@@ -43,8 +42,7 @@ COPILOT_IMAGE_REPO="yolo/copilot-runtime"
 usage() {
   cat <<EOF
 Usage: $(basename "$0") [--apply] [--acr <name>] [--sha <sha>]
-                        [--gateway-only] [--copilot-only]
-                        [--registry-login-server <fqdn>] [--json] [--help]
+                        [--gateway-only] [--copilot-only] [--json] [--help]
 
 Builds container images with 'az acr build'. Dry run by default; pass
 --apply to submit the remote builds.
@@ -115,6 +113,12 @@ build_one() {
 
 main() {
   require_cmd az
+  # Every deployed artifact must trace to a committed Git SHA (plan
+  # Acceptance Criteria #20). resolve_sha()'s no-override path already
+  # calls this transitively via current_git_sha, but an explicit --sha
+  # override bypassed it entirely -- enforce it here, unconditionally,
+  # before resolving or building anything, regardless of --sha.
+  require_clean_worktree "$REPO_ROOT"
   local sha
   sha="$(resolve_sha)"
   log_info "Using immutable image tag (git SHA): $sha"

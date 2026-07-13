@@ -126,7 +126,11 @@ the branch policy above is the second, independent layer of protection.
 Builds the gateway and Copilot runtime images with `az acr build` (no local
 Docker). Tags are the current (or explicitly pinned) Git commit SHA —
 mutable tags like `latest` are rejected. Dry run prints the exact commands;
-`--apply` submits the remote builds.
+`--apply` submits the remote builds. Refuses on an uncommitted git
+worktree **unconditionally** — including when `--sha` is given explicitly
+to pin a specific already-verified commit — so a dirty tree can never
+silently slip an unverified change into an image tagged with a *different*
+(older, committed) SHA.
 
 ### deploy.sh
 

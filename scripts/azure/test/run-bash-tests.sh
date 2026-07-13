@@ -388,6 +388,17 @@ ledger="${SCRATCH}/build-dirty.ledger"
 out="$(run_script "$ledger" "${AZURE_DIR}/build-images.sh" 2>&1)"
 code=$?
 assert_exit_code "build-images refuses dirty worktree" 1 "$code"
+assert_contains "build-images explains the uncommitted-changes refusal" "$out" "uncommitted changes"
+
+echo "-- refuses on dirty worktree even with an explicit --sha override (regression guard: resolve_sha's override path used to bypass the worktree check entirely) --"
+ledger="${SCRATCH}/build-dirty-sha-override.ledger"
+: > "$ledger"
+valid_sha="$(git -C "$FIXTURE_REPO" rev-parse HEAD)"
+out="$(run_script "$ledger" "${AZURE_DIR}/build-images.sh" --sha "$valid_sha" 2>&1)"
+code=$?
+assert_exit_code "build-images refuses dirty worktree even with --sha given" 1 "$code"
+assert_contains "build-images explains the uncommitted-changes refusal even with --sha given" "$out" "uncommitted changes"
+assert_not_contains "build-images with --sha on a dirty tree never calls acr build" "$(cat "$ledger")" "acr build"
 git -C "$FIXTURE_REPO" checkout -- README.md
 
 echo "-- rejects invalid --sha --"
@@ -396,6 +407,10 @@ ledger="${SCRATCH}/build-badsha.ledger"
 out="$(run_script "$ledger" "${AZURE_DIR}/build-images.sh" --sha "not-a-sha!" 2>&1)"
 code=$?
 assert_exit_code "build-images rejects malformed --sha" 1 "$code"
+
+echo "-- usage/help never advertises the removed, unimplemented --registry-login-server flag --"
+out="$("${AZURE_DIR}/build-images.sh" --help 2>&1)"
+assert_not_contains "build-images --help does not mention --registry-login-server" "$out" "registry-login-server"
 
 echo "-- --gateway-only and --copilot-only are mutually exclusive --"
 ledger="${SCRATCH}/build-mutex.ledger"
