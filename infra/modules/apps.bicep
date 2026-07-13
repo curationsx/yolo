@@ -429,13 +429,6 @@ resource opsJob 'Microsoft.App/jobs@2025-01-01' = {
           identity: gatewayIdentityId
         }
       ]
-      secrets: [
-        {
-          name: 'copilot-runtime-shared-secret'
-          keyVaultUrl: '${keyVaultUri}secrets/copilot-runtime-shared-secret'
-          identity: gatewayIdentityId
-        }
-      ]
     }
     template: {
       containers: [
@@ -467,7 +460,14 @@ resource opsJob 'Microsoft.App/jobs@2025-01-01' = {
             // Internal fqdn, not gatewayApp.properties.configuration.ingress.fqdn
             // (the external one) -- see gatewayInternalFqdn's comment above.
             { name: 'GATEWAY_URL', value: 'https://${gatewayInternalFqdn}' }
-            { name: 'COPILOT_RUNTIME_SHARED_SECRET', secretRef: 'copilot-runtime-shared-secret' }
+            // No COPILOT_RUNTIME_SHARED_SECRET here (least privilege):
+            // neither the bounded health-check command above nor
+            // scripts/azure/reconcile-scores.mjs (confirmed by reading it
+            // fresh -- it authenticates Cosmos with
+            // DefaultAzureCredential/ManagedIdentityCredential via
+            // AZURE_CLIENT_ID, never a shared secret) uses it. Re-add it
+            // only alongside a concrete ops job command that actually
+            // consumes it.
           ]
         }
       ]
