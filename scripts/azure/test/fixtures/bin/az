@@ -162,6 +162,17 @@ case "$1 $2" in
     esac
     ;;
   "acr build")
+    docker_file_path=""
+    previous=""
+    for arg in "$@"; do
+      if [[ "$previous" == "--file" ]]; then
+        docker_file_path="$arg"
+        break
+      fi
+      previous="$arg"
+    done
+    [[ -n "$docker_file_path" ]] || fail "fixture az: acr build missing --file"
+    [[ -f "$docker_file_path" ]] || fail "ERROR: Unable to find '$docker_file_path'."
     if [[ "${AZ_ACR_BUILD_FAIL:-0}" == "1" ]]; then
       fail "fixture az: simulated acr build failure"
     fi

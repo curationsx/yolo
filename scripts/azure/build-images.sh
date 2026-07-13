@@ -85,19 +85,20 @@ resolve_sha() {
 build_one() {
   local label="$1" context="$2" dockerfile="$3" repo="$4" sha="$5"
   local image_ref="${ACR_NAME}.azurecr.io/${repo}:${sha}"
+  local dockerfile_path="${context}/${dockerfile}"
   BUILT_IMAGE_REF="$image_ref"
 
   if [[ ! -d "$context" ]]; then
     die "$label build context not found at $context"
   fi
-  if [[ ! -f "${context}/${dockerfile}" ]]; then
-    log_warn "$label Dockerfile not found yet at ${context}/${dockerfile} -- this lane may still be pending (agent-worker/ image work)."
+  if [[ ! -f "$dockerfile_path" ]]; then
+    die "$label Dockerfile not found at $dockerfile_path"
   fi
 
   local cmd=(az acr build
     --registry "$ACR_NAME"
     --image "${repo}:${sha}"
-    --file "$dockerfile"
+    --file "$dockerfile_path"
     "$context")
 
   if [[ "$APPLY" != "1" ]]; then
