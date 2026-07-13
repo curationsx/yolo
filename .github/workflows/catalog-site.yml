@@ -27,6 +27,12 @@ on:
       - "tools/yolo.py"
       - ".github/workflows/catalog-site.yml"
   workflow_dispatch:
+    inputs:
+      generate_oracle_baseline:
+        description: "Generate Linux Visual Oracle candidates for human review"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -83,6 +89,21 @@ jobs:
       - name: Run Visual Oracle contract
         working-directory: catalog-site
         run: npm run test:visual:ci
+
+      - name: Generate Linux Visual Oracle candidates
+        if: github.event_name == 'workflow_dispatch' && inputs.generate_oracle_baseline
+        working-directory: catalog-site
+        env:
+          GENERATE_ORACLE_BASELINE: "1"
+        run: npm run test:visual:update
+
+      - name: Publish Linux Visual Oracle candidates
+        if: github.event_name == 'workflow_dispatch' && inputs.generate_oracle_baseline
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-oracle-linux-candidates
+          path: catalog-site/test/visual-oracle.spec.mjs-snapshots/*-linux.png
+          if-no-files-found: error
 
       - name: Test and typecheck Cloudflare Worker
         working-directory: agent-worker

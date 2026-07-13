@@ -100,8 +100,9 @@ export async function installDeterministicNetwork(page) {
  */
 export async function assertOracleScreenshot(page, testInfo, name, options) {
   const expectedPath = testInfo.snapshotPath(name);
+  const isExplicitBaselineGeneration = process.env.GENERATE_ORACLE_BASELINE === '1';
   test.skip(
-    !fs.existsSync(expectedPath),
+    !fs.existsSync(expectedPath) && !isExplicitBaselineGeneration,
     `No reviewed baseline for this platform/project yet at ${expectedPath}. ` +
       'Generate one deliberately with "npm run test:visual:update", have a human ' +
       'review the resulting PNG, and commit it — never let this test silently ' +
@@ -109,4 +110,3 @@ export async function assertOracleScreenshot(page, testInfo, name, options) {
   );
   await expect(page).toHaveScreenshot(name, options);
 }
-
