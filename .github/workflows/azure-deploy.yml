@@ -178,6 +178,27 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Query Static Web Apps hostname
+        # infra/runtime.bicep does not (and should not) output
+        # staticWebAppDefaultHostname -- the Static Web App resource is
+        # created by infra/bootstrap.bicep's foundation module, not by
+        # runtime.bicep, so a runtime deployment has nothing to output here.
+        # Query the already-provisioned resource directly instead. Also
+        # needed below to give the gateway an exact, no-wildcard CORS origin
+        # for this generated hostname (stagingSiteOrigin).
+        id: swa_site
+        run: |
+          HOSTNAME="$(az staticwebapp show \
+            --name stapp-yolo-prod \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --query defaultHostname -o tsv)"
+          if [ -z "$HOSTNAME" ]; then
+            echo "::error::Could not resolve stapp-yolo-prod's defaultHostname. Has infra/bootstrap.bicep been applied yet?" >&2
+            exit 1
+          fi
+          echo "hostname=${HOSTNAME}" >> "$GITHUB_OUTPUT"
+          echo "origin=https://${HOSTNAME}" >> "$GITHUB_OUTPUT"
+
       - name: Install Bicep CLI
         run: az bicep install
 
@@ -213,7 +234,8 @@ jobs:
             --parameters gatewayImageTag="${{ steps.build_images.outputs.gateway_image }}" \
             --parameters copilotImageTag="${{ steps.build_images.outputs.copilot_image }}" \
             --parameters wyattStagingIpCidr="${{ vars.WYATT_STAGING_IP_CIDR }}" \
-            --parameters enableStagingIpRestriction=true
+            --parameters enableStagingIpRestriction=true \
+            --parameters stagingSiteOrigin="${{ steps.swa_site.outputs.origin }}"
 
       - name: az deployment group create — infra/runtime.bicep
         id: deploy_infra
@@ -228,9 +250,9 @@ jobs:
             --parameters copilotImageTag="${{ steps.build_images.outputs.copilot_image }}" \
             --parameters wyattStagingIpCidr="${{ vars.WYATT_STAGING_IP_CIDR }}" \
             --parameters enableStagingIpRestriction=true \
+            --parameters stagingSiteOrigin="${{ steps.swa_site.outputs.origin }}" \
             --query "properties.outputs" -o json | tee deploy-outputs.json
           echo "gateway_fqdn=$(jq -r '.gatewayFqdn.value' deploy-outputs.json)" >> "$GITHUB_OUTPUT"
-          echo "static_site_hostname=$(jq -r '.staticWebAppDefaultHostname.value // empty' deploy-outputs.json)" >> "$GITHUB_OUTPUT"
           rm -f deploy-outputs.json
 
       - name: Build Astro site (generated Azure gateway hostname — never api.curations.dev pre-cutover)
@@ -283,12 +305,22 @@ jobs:
             echo "scripts/azure/deploy.sh not present yet (separate lane) — skipping."
           fi
 
-      - name: Post-deploy verification (read-only)
+      - name: Post-deploy verification (site only, read-only)
+        # Only the public Static Web App is externally verified from this
+        # runner. ca-yolo-gateway sits behind the pre-cutover default-deny
+        # IP restriction (enableStagingIpRestriction=true, allow-listing
+        # only Wyatt's current IP) -- ingress is deliberately NOT weakened
+        # to let a GitHub-hosted runner through, so a --gateway-url check
+        # here would just fail on an IP it was never meant to admit. Per
+        # .azure/deployment-plan.md, gateway health/contract verification
+        # pre-cutover is caj-yolo-ops's job (it runs inside cae-yolo-prod,
+        # unaffected by the *external* ingress IP restriction) via
+        # scripts/azure/verify.mjs run from that job, or from Wyatt's own
+        # allow-listed IP directly -- not from this runner.
         run: |
           if [ -f scripts/azure/verify.mjs ]; then
             node scripts/azure/verify.mjs \
-              --gateway-url "https://${{ steps.deploy_infra.outputs.gateway_fqdn }}" \
-              --site-url "https://${{ steps.deploy_infra.outputs.static_site_hostname }}"
+              --site-url "${{ steps.swa_site.outputs.origin }}"
           else
             echo "scripts/azure/verify.mjs not present yet (separate lane) — skipping."
           fi
@@ -325,6 +357,24 @@ jobs:
           client-id: ${{ vars.AZURE_GITHUB_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Query Static Web Apps hostname
+        # See the staging job's identical step: infra/runtime.bicep does not
+        # output staticWebAppDefaultHostname (that resource is created by
+        # infra/bootstrap.bicep, not runtime.bicep), so this is queried
+        # directly from the already-provisioned resource instead.
+        id: swa_site
+        run: |
+          HOSTNAME="$(az staticwebapp show \
+            --name stapp-yolo-prod \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --query defaultHostname -o tsv)"
+          if [ -z "$HOSTNAME" ]; then
+            echo "::error::Could not resolve stapp-yolo-prod's defaultHostname. Has infra/bootstrap.bicep been applied yet?" >&2
+            exit 1
+          fi
+          echo "hostname=${HOSTNAME}" >> "$GITHUB_OUTPUT"
+          echo "origin=https://${HOSTNAME}" >> "$GITHUB_OUTPUT"
 
       - name: Install Bicep CLI
         run: az bicep install
@@ -374,7 +424,6 @@ jobs:
             --parameters enableStagingIpRestriction=false \
             --query "properties.outputs" -o json | tee deploy-outputs.json
           echo "gateway_fqdn=$(jq -r '.gatewayFqdn.value' deploy-outputs.json)" >> "$GITHUB_OUTPUT"
-          echo "static_site_hostname=$(jq -r '.staticWebAppDefaultHostname.value // empty' deploy-outputs.json)" >> "$GITHUB_OUTPUT"
           rm -f deploy-outputs.json
 
       - name: Build Astro site (rebuild same committed SHA against api.curations.dev)
@@ -426,11 +475,14 @@ jobs:
           fi
 
       - name: Post-deploy verification (production, read-only)
+        # Production's gateway has no IP restriction
+        # (enableStagingIpRestriction=false), so this runner can verify it
+        # directly, unlike the staging job.
         run: |
           if [ -f scripts/azure/verify.mjs ]; then
             node scripts/azure/verify.mjs \
               --gateway-url "https://${{ steps.deploy_infra.outputs.gateway_fqdn }}" \
-              --site-url "https://${{ steps.deploy_infra.outputs.static_site_hostname }}"
+              --site-url "${{ steps.swa_site.outputs.origin }}"
           else
             echo "scripts/azure/verify.mjs not present yet (separate lane) — skipping."
           fi

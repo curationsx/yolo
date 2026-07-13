@@ -66,15 +66,21 @@ param copilotImageTag string
 @description('Immutable ACR image reference for caj-yolo-ops. Defaults to the gateway image, which carries the same operational tooling.')
 param opsImageTag string = gatewayImageTag
 
+@description('Exact, no-wildcard CORS origin for the generated Azure Static Web Apps hostname (e.g. https://stapp-yolo-prod.azurestaticapps.net), queried by the workflow via `az staticwebapp show` immediately before this deployment. Only folded into corsAllowedOrigins default when environmentName is not production; leave empty to fall back to localhost-only. Never a wildcard.')
+param stagingSiteOrigin string = ''
+
 @description('Allowed CORS origins for the public gateway. Must list only production, the generated Azure staging hostname, and localhost where applicable.')
 param corsAllowedOrigins array = environmentName == 'production'
   ? [
       'https://curations.dev'
       'https://www.curations.dev'
     ]
-  : [
-      'http://localhost:4321'
-    ]
+  : concat(
+      [
+        'http://localhost:4321'
+      ],
+      empty(stagingSiteOrigin) ? [] : [stagingSiteOrigin]
+    )
 
 @description('Cosmos DB endpoint for yolo-curations-feed (non-secret; identity-based auth). Supply from infra/bootstrap.bicep\'s cosmosAccountEndpoint output.')
 param cosmosEndpoint string
