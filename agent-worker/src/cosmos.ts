@@ -12,6 +12,18 @@ export interface CosmosConfig {
 }
 
 const COSMOS_API_VERSION = "2018-12-31";
+export type CosmosParameterValue =
+  | string
+  | number
+  | boolean
+  | null
+  | string[]
+  | number[];
+
+export interface CosmosSessionResult<T> {
+  value: T;
+  sessionToken: string | null;
+}
 
 function b64ToBytes(b64: string): Uint8Array {
   const bin = atob(b64);
@@ -52,7 +64,7 @@ async function authHeader(
 
 async function cosmosFetch(
   cfg: CosmosConfig,
-  verb: "GET" | "POST",
+  verb: "GET" | "POST" | "DELETE",
   resourceType: string,
   resourceLink: string,
   path: string,
@@ -74,28 +86,118 @@ async function cosmosFetch(
   });
 }
 
+function sessionHeaders(sessionToken?: string): Record<string, string> {
+  return sessionToken ? { "x-ms-session-token": sessionToken } : {};
+}
+
+function responseSessionToken(res: Response, current?: string): string | null {
+  return res.headers.get("x-ms-session-token") ?? current ?? null;
+}
+
 /** Insert one document into the engagements container. */
+export async function createDocumentWithSession(
+  cfg: CosmosConfig,
+  doc: object,
+  partitionKey: string,
+  sessionToken?: string,
+): Promise<string | null> {
+  const link = `dbs/${cfg.database}/colls/${cfg.container}`;
+  const res = await cosmosFetch(cfg, "POST", "docs", link, `/${link}/docs`, doc, {
+    "x-ms-documentdb-partitionkey": JSON.stringify([partitionKey]),
+    ...sessionHeaders(sessionToken),
+  });
+  if (!res.ok) {
+    throw new Error(`cosmos create failed: ${res.status} ${await res.text()}`);
+  }
+  return responseSessionToken(res, sessionToken);
+}
+
 export async function createDocument(
   cfg: CosmosConfig,
-  doc: Record<string, unknown>,
+  doc: object,
+  partitionKey: string,
+): Promise<void> {
+  await createDocumentWithSession(cfg, doc, partitionKey);
+}
+
+/** Insert or replace one document, keyed by its id + partition key. */
+export async function upsertDocument(
+  cfg: CosmosConfig,
+  doc: object,
   partitionKey: string,
 ): Promise<void> {
   const link = `dbs/${cfg.database}/colls/${cfg.container}`;
   const res = await cosmosFetch(cfg, "POST", "docs", link, `/${link}/docs`, doc, {
     "x-ms-documentdb-partitionkey": JSON.stringify([partitionKey]),
+    "x-ms-documentdb-is-upsert": "true",
   });
   if (!res.ok) {
-    throw new Error(`cosmos create failed: ${res.status} ${await res.text()}`);
+    throw new Error(`cosmos upsert failed: ${res.status} ${await res.text()}`);
   }
 }
 
-/** Query documents within a single partition (tool_id). */
-export async function queryDocuments<T>(
+/** Read one document by id within its logical partition. */
+export async function readDocumentWithSession<T>(
+  cfg: CosmosConfig,
+  id: string,
+  partitionKey: string,
+  sessionToken?: string,
+): Promise<CosmosSessionResult<T | null>> {
+  const link = `dbs/${cfg.database}/colls/${cfg.container}/docs/${encodeURIComponent(id)}`;
+  const res = await cosmosFetch(cfg, "GET", "docs", link, `/${link}`, undefined, {
+    "x-ms-documentdb-partitionkey": JSON.stringify([partitionKey]),
+    ...sessionHeaders(sessionToken),
+  });
+  const nextSessionToken = responseSessionToken(res, sessionToken);
+  if (res.status === 404) return { value: null, sessionToken: nextSessionToken };
+  if (!res.ok) {
+    throw new Error(`cosmos read failed: ${res.status} ${await res.text()}`);
+  }
+  return { value: (await res.json()) as T, sessionToken: nextSessionToken };
+}
+
+export async function readDocument<T>(
+  cfg: CosmosConfig,
+  id: string,
+  partitionKey: string,
+): Promise<T | null> {
+  return (await readDocumentWithSession<T>(cfg, id, partitionKey)).value;
+}
+
+/** Delete one document by id within its logical partition. */
+export async function deleteDocumentWithSession(
+  cfg: CosmosConfig,
+  id: string,
+  partitionKey: string,
+  sessionToken?: string,
+): Promise<string | null> {
+  const link = `dbs/${cfg.database}/colls/${cfg.container}/docs/${encodeURIComponent(id)}`;
+  const res = await cosmosFetch(cfg, "DELETE", "docs", link, `/${link}`, undefined, {
+    "x-ms-documentdb-partitionkey": JSON.stringify([partitionKey]),
+    ...sessionHeaders(sessionToken),
+  });
+  if (!res.ok && res.status !== 404) {
+    throw new Error(`cosmos delete failed: ${res.status} ${await res.text()}`);
+  }
+  return responseSessionToken(res, sessionToken);
+}
+
+export async function deleteDocument(
+  cfg: CosmosConfig,
+  id: string,
+  partitionKey: string,
+): Promise<void> {
+  await deleteDocumentWithSession(cfg, id, partitionKey);
+}
+
+/** Query documents within a single logical partition. */
+export async function queryDocumentsWithSession<T>(
   cfg: CosmosConfig,
   query: string,
-  parameters: { name: string; value: string | number }[],
+  parameters: { name: string; value: CosmosParameterValue }[],
   partitionKey: string,
-): Promise<T[]> {
+  sessionToken?: string,
+): Promise<CosmosSessionResult<T[]>> {
   const link = `dbs/${cfg.database}/colls/${cfg.container}`;
   const res = await cosmosFetch(
     cfg,
@@ -108,10 +210,50 @@ export async function queryDocuments<T>(
       "content-type": "application/query+json",
       "x-ms-documentdb-isquery": "true",
       "x-ms-documentdb-partitionkey": JSON.stringify([partitionKey]),
+      ...sessionHeaders(sessionToken),
     },
   );
   if (!res.ok) {
     throw new Error(`cosmos query failed: ${res.status} ${await res.text()}`);
+  }
+  const data = (await res.json()) as { Documents?: T[] };
+  return {
+    value: data.Documents ?? [],
+    sessionToken: responseSessionToken(res, sessionToken),
+  };
+}
+
+export async function queryDocuments<T>(
+  cfg: CosmosConfig,
+  query: string,
+  parameters: { name: string; value: CosmosParameterValue }[],
+  partitionKey: string,
+): Promise<T[]> {
+  return (await queryDocumentsWithSession<T>(cfg, query, parameters, partitionKey)).value;
+}
+
+/** Query across logical partitions. Use sparingly and always keep result sets bounded. */
+export async function queryDocumentsCrossPartition<T>(
+  cfg: CosmosConfig,
+  query: string,
+  parameters: { name: string; value: CosmosParameterValue }[],
+): Promise<T[]> {
+  const link = `dbs/${cfg.database}/colls/${cfg.container}`;
+  const res = await cosmosFetch(
+    cfg,
+    "POST",
+    "docs",
+    link,
+    `/${link}/docs`,
+    { query, parameters },
+    {
+      "content-type": "application/query+json",
+      "x-ms-documentdb-isquery": "true",
+      "x-ms-documentdb-query-enablecrosspartition": "true",
+    },
+  );
+  if (!res.ok) {
+    throw new Error(`cosmos cross-partition query failed: ${res.status} ${await res.text()}`);
   }
   const data = (await res.json()) as { Documents?: T[] };
   return data.Documents ?? [];

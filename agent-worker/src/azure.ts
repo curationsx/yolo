@@ -24,9 +24,8 @@ export async function chat(
   systemPrompt: string,
   userMessage: string,
 ): Promise<ChatResult> {
-  if (!/mini/i.test(cfg.deployment)) {
-    // Public gateway only ever speaks to the mini tier. Refuse anything else.
-    throw new Error("gateway restricted to mini-tier deployments");
+  if (cfg.deployment !== "gpt-5.4-mini") {
+    throw new Error("gateway restricted to the gpt-5.4-mini deployment");
   }
   const res = await fetch(`${cfg.endpoint}/openai/v1/chat/completions`, {
     method: "POST",
