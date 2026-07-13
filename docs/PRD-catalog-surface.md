@@ -74,7 +74,7 @@ curations.dev/
 │   └── CURATIONS Board (threads, tags, replies, scores)
 ├── /submit/                  Guided tool/company contribution form
 ├── /cookbooks/               Versioned prompts with Copilot and terminal lanes
-├── /copilot/{id}/{v}/{stack} Plain-text embedded prompt artifact
+├── /copilot/{id}/{v}/{stack}.txt  Plain-text embedded prompt artifact
 └── /methodology/             Trust, review, and terminology rules
 ```
 

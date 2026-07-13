@@ -184,7 +184,7 @@ test("Copilot run consumes the grant and sends one bounded request to the privat
   globalThis.fetch = async (url) => {
     if (
       String(url) ===
-      "https://curations.dev/copilot/pre-mortem/v1.2/cloudflare/"
+      "https://curations.dev/copilot/pre-mortem/v1.2/cloudflare.txt"
     ) {
       return new Response("Versioned cookbook prompt", {
         headers: { "content-type": "text/plain; charset=utf-8" },
@@ -204,7 +204,7 @@ test("Copilot run consumes the grant and sends one bounded request to the privat
           origin: "https://curations.dev",
         },
         body: JSON.stringify({
-          prompt_path: "/copilot/pre-mortem/v1.2/cloudflare/",
+          prompt_path: "/copilot/pre-mortem/v1.2/cloudflare.txt",
           instruction: "Stress-test rollback assumptions.",
           run_id: "123e4567-e89b-12d3-a456-426614174000",
         }),
@@ -236,7 +236,7 @@ test("Copilot run restores daily capacity when the one-run grant loses a race", 
   globalThis.fetch = async (url) => {
     if (
       String(url) ===
-      "https://curations.dev/copilot/pre-mortem/v1.2/cloudflare/"
+      "https://curations.dev/copilot/pre-mortem/v1.2/cloudflare.txt"
     ) {
       return new Response("Versioned cookbook prompt", {
         headers: { "content-type": "text/plain; charset=utf-8" },
@@ -256,7 +256,7 @@ test("Copilot run restores daily capacity when the one-run grant loses a race", 
           origin: "https://curations.dev",
         },
         body: JSON.stringify({
-          prompt_path: "/copilot/pre-mortem/v1.2/cloudflare/",
+          prompt_path: "/copilot/pre-mortem/v1.2/cloudflare.txt",
           instruction: "",
           run_id: "123e4567-e89b-12d3-a456-426614174000",
         }),

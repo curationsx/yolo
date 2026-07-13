@@ -275,7 +275,7 @@ export function buildEmbeddedPromptPath(
   stackId: StackId,
 ): string {
   const base = basePath.replace(/\/$/, '');
-  return `${base}/copilot/${cookbookId}/${versionLabel(version)}/${stackId}/`;
+  return `${base}/copilot/${cookbookId}/${versionLabel(version)}/${stackId}.txt`;
 }
 
 export function buildCopilotCommand(

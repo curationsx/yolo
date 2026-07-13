@@ -18,7 +18,7 @@ import {
 } from "./quota.ts";
 
 const EMBEDDED_PROMPT_PATTERN =
-  /^\/copilot\/[a-z0-9]+(?:-[a-z0-9]+)*\/v\d+\.\d+(?:\.\d+)?\/[a-z0-9]+(?:-[a-z0-9]+)*\/$/;
+  /^\/copilot\/[a-z0-9]+(?:-[a-z0-9]+)*\/v\d+\.\d+(?:\.\d+)?\/[a-z0-9]+(?:-[a-z0-9]+)*\.txt$/;
 const RUN_ID_PATTERN = /^[0-9a-f-]{36}$/;
 
 function json(

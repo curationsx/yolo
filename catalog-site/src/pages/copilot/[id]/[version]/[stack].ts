@@ -22,7 +22,7 @@ export const getStaticPaths = (async () => {
       params: {
         id: entry.data.id,
         version: versionLabel(entry.data.version),
-        stack: stack.id,
+        stack: `${stack.id}.txt`,
       },
       props: {
         cookbook: entry.data as CookbookData,
