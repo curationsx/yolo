@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Fixture certbot stand-in used only by scripts/azure/test/**. certificate.sh
+# never actually invokes this in --apply mode (it defers real issuance), so
+# this only needs to exist and be detectable via `command -v certbot`.
+echo "fixture certbot: not implemented" >&2
+exit 1

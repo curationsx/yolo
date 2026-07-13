@@ -1,0 +1,371 @@
+# scripts/azure — Operational tooling for the Yolo Azure migration
+
+Implements the "Azure operational scripts" lane of
+`.azure/deployment-plan.md`. Every script here is **default-safe**:
+
+- Dry run is the default everywhere. Nothing mutates Azure, Cloudflare, or a
+  certificate authority unless you pass the documented `--apply` (and, for
+  the highest-stakes tools, an exact `--confirm <phrase>`).
+- Nothing here prints a secret. `lib/common.sh` (bash) and
+  `lib/redaction.mjs` (Node) redact secret-shaped values as a backstop.
+- Every script refuses to run against an uncommitted git working tree where
+  that matters (source control is the deployment authority).
+- No script deletes a Cloudflare Worker script or Pages deployment. No
+  script invokes Owner-only bootstrap implicitly.
+
+## Layout
+
+```
+scripts/azure/
+  bootstrap.sh          Owner-only prerequisite/quota checks + one-time bootstrap invocation
+  build-images.sh       az acr build for gateway + Copilot runtime, immutable Git SHA tags
+  deploy.sh             Contributor-safe runtime deployment (Container Apps + SWA)
+  certificate.sh        ACME DNS-01 certificate prep (plan/generate-csr only by default)
+  verify.mjs            Read-only endpoint/TLS/header/redaction verification, any BASE URL
+  reconcile-scores.mjs  Vote/score reconciliation (fixture or real Cosmos, dry-run default)
+  cutover.mjs           Cloudflare DNS cutover + rollback tool (fixture or real, dry-run default)
+  lib/                  Shared bash + Node helpers (config, safety gates, redaction, HTTP, etc.)
+  test/                 Bash test harness + node:test suites, all fixture/mock-based
+```
+
+## Running the tests
+
+```bash
+cd scripts/azure
+npm test              # both suites
+npm run test:bash      # argument parsing, dry-run, confirmation gates (bash)
+npm run test:node      # verify/reconcile/cutover core logic + CLI smoke tests (Node)
+```
+
+Both suites are entirely offline: the bash suite stubs `az` and `gh` with
+fixture binaries and uses a throwaway git repository; the Node suite uses
+local JSON fixtures standing in for Cloudflare/Cosmos state and injectable
+fetch/TLS/verify implementations. No script in this directory touches a
+real Azure, Cloudflare, GitHub, or Cosmos account during tests (except one
+documented, read-only, human-verified smoke check of the real Cloudflare
+API — see `cutover.mjs` below).
+
+## Script reference
+
+### bootstrap.sh
+
+Owner-only, one-time bootstrap wrapper. Runs every prerequisite check
+(`az`/`azd`/`git`/`jq`/`gh` present, signed-in Owner role, required resource
+providers registered, ACR/Key Vault name availability, Container Apps
+consumption-core quota, GitHub environment branch policies — see below) and
+only invokes `az deployment sub create --template-file infra/bootstrap.bicep
+...` when given both `--apply` and `--confirm bootstrap-<resource-group>`.
+Refuses on a dirty git worktree. Never printed: any secret value.
+
+**GitHub environment branch policies (OIDC hardening):** an
+environment-scoped federated subject
+(`repo:curationsx/yolo:environment:<name>`) only narrows *which token* a
+workflow job can mint — it does **not** by itself restrict *which git ref*
+may use that environment. That restriction is a separate GitHub API
+resource: each environment's own deployment branch policy. Every run of
+`bootstrap.sh` (dry run or `--apply`) verifies, via `gh api`:
+
+- `production` has a **custom branch policy restricted to exactly `main`**
+  — any other branch, or a wildcard pattern, fails the check closed.
+- `azure-staging` has a custom branch policy that includes the **current
+  git branch** (and `main`, for when it merges) — a wildcard pattern also
+  fails closed.
+- `gh` is authenticated (`gh auth status`).
+
+`bootstrap.sh --configure-github-environments --confirm
+configure-github-environments [--staging-branches <comma,list>]` applies
+these policies for real (idempotent — safe to re-run as feature branches
+rotate through staging, and self-healing — it prunes any non-`main` branch
+it finds on `production`). This is a GitHub API resource, not an Azure one,
+so it is deliberately a separate action from `apply_bootstrap`'s Bicep
+deployment. Verify manually at any time with: `gh api
+repos/curationsx/yolo/environments/<name>/deployment-branch-policies`.
+Production remains `workflow_dispatch`/manual only at the workflow-trigger
+level (`.github/workflows/azure-deploy.yml`, outside this lane's scope) —
+the branch policy above is the second, independent layer of protection.
+
+### build-images.sh
+
+Builds the gateway and Copilot runtime images with `az acr build` (no local
+Docker). Tags are the current (or explicitly pinned) Git commit SHA —
+mutable tags like `latest` are rejected. Dry run prints the exact commands;
+`--apply` submits the remote builds.
+
+### deploy.sh
+
+Applies `infra/runtime.bicep`-scoped, Contributor-safe deployment only:
+updates the two Container Apps to caller-supplied **immutable** image refs
+and publishes the Astro `dist/` artifact to Static Web Apps. Structurally
+refuses to ever invoke Owner bootstrap. Dry run by default.
+
+### certificate.sh
+
+Prepares the temporary ACME DNS-01 certificate workflow for
+`api.curations.dev` only. Default `--plan` mode only prints the workflow steps.
+`--generate-csr` creates a private key + CSR in a `0700` directory (key file
+`0600`), auto-cleaned by an EXIT/INT/TERM trap unless `--keep-workdir` is
+passed — its file path is never printed to logs (only the non-sensitive CSR
+path is).
+
+`--apply --confirm issue-api-curations-dev` prefers an automated path when
+`CLOUDFLARE_API_TOKEN` is set in the environment (never a CLI flag, never
+logged): it creates an isolated Python venv and a `certbot-dns-cloudflare`
+credentials file (`dns_cloudflare_api_token = ...`, built directly from the
+env var) at `0600`, both inside the same private `0700` working directory
+as Certbot's forced `--config-dir`/`--work-dir`/`--logs-dir` (never the
+global Certbot paths). With this plugin, Certbot creates *and* removes the
+`_acme-challenge` TXT record itself — no manual DNS step. Without a
+Cloudflare token, it falls back to detecting a system-installed
+certbot/acme.sh and the previous manual-DNS-01 flow (operator creates the
+TXT record by hand). Either way — per this task's explicit instruction —
+`--apply` still does not run `pip install` or submit the real ACME order;
+it prints the exact remaining commands instead.
+
+`--convert-to-pfx --cert <path> --key <path> [--chain <path>] --out
+<path.pfx> [--password-file <path>]` is a real, independently usable
+subcommand: it exports a password-protected PFX via `openssl pkcs12
+-export -passout file:...` (never `pass:...`, which would otherwise expose
+the password in the process list). If `--password-file` isn't given, a
+random password is generated into its own `0600` file inside the same
+private working directory; that password value is never printed (only its
+storage path is, when useful for chaining). The full intended pipeline —
+generate/obtain the cert in the isolated directory → `--convert-to-pfx` →
+`az containerapp env certificate upload` → verify with `verify.mjs`'s TLS
+check → securely remove the entire temp directory (venv, credentials file,
+and all Certbot state together) and, in manual mode, the ACME
+`_acme-challenge` TXT record — is what `--apply`'s printed instructions
+walk through; upload and verification require a live Azure session this
+task does not have.
+
+The Azure-managed certificate for `api.curations.dev` cannot issue until
+the gateway's default-deny IP restriction is removed (DigiCert must reach
+the app), so this temporary certificate is what bridges TLS during
+`cutover.mjs`'s `cut-api` step. `curations.dev`/`www.curations.dev` don't
+need this workflow at all — see `cutover.mjs` below.
+
+**Never echoed, anywhere, under any mode:** the ACME TXT challenge value,
+the PFX export password, or the private key's file path.
+
+### verify.mjs
+
+Read-only verification against any configurable `--gateway-url`/`--site-url`
+(staging or production): `/api/live|ready|health`, public site routes, TLS
+certificate validity, required security headers, and a secret-leak scan of
+every response body. Only issues `GET`/`HEAD`/`OPTIONS`; there is no flag
+that allows a write. Exit code reflects overall pass/fail for CI use.
+
+`--check-www-redirect --www-url <url> --site-url <url>` additionally
+confirms production parity: `https://www.curations.dev/` must still return
+a `301` to `https://curations.dev/`, exactly as it does today on
+Cloudflare. Azure Static Web Apps provides this by marking `curations.dev`
+as the app's default custom domain (every other bound hostname, including
+`www` and the generated `*.azurestaticapps.net` hostname, then redirects to
+it automatically) — a manual Azure Portal action, since the Azure CLI has
+no documented command for it yet (see `cutover.mjs`'s `set-default-domain`
+step below). This check is the authoritative way to confirm that action
+took effect; it is deliberately never faked with host-matching rules in
+`staticwebapp.config.json`. It performs exactly one `GET` with redirect
+following disabled (`redirect: "manual"`) — still read-only.
+
+### reconcile-scores.mjs
+
+Rebuilds a target mirror's `scores` counts from authoritative `votes`
+partitions (see plan's "Azure State Model"). The same tool serves three
+procedural phases:
+
+1. **Pre-cutover backfill** — before Azure serves any traffic, backfill
+   Azure's score-metadata counts from existing vote documents. No timing
+   gate.
+2. **Post-cutover reconciliation** — after `api.curations.dev`'s DNS is cut
+   to Azure, Cloudflare's proxied DNS TTL (`300s`) means some
+   resolvers/clients keep reaching the legacy Cloudflare Worker for a
+   while, which can still write `votes` + the legacy `scores` container
+   *without* updating Azure's score metadata. Passing
+   `--cutover-manifest <path>` (a `cutover.mjs` rollback manifest — its
+   recorded `cut-api` step timestamp is used) or an explicit
+   `--since <iso-timestamp>` makes `--apply` **refuse to write** until at
+   least `--min-wait-seconds` (default `600` — one full old-DNS TTL, and
+   per explicit preference never less than 10 minutes) have elapsed since
+   the API was cut. Dry run is **never** gated by this — only `--apply` is,
+   so the diff is always visible for review. The reconciliation is
+   idempotent by construction (always "authoritative count now vs. mirror
+   count now", written as an upsert), so re-running it — including more
+   than once, if even later votes trickle in — safely absorbs whatever
+   landed during the race window without double-counting.
+3. **Pre-rollback reconciliation** — immediately before falling back to
+   Cloudflare, reconcile the legacy `scores` container from the
+   authoritative vote partitions so Cloudflare's compatibility store is
+   correct again. No timing gate.
+
+`--fixture <path>` mode is fully offline (reads/writes local JSON, used by
+this task and by the test suite). Real Cosmos mode requires
+`--cosmos-endpoint` and dynamically imports `@azure/cosmos` + `@azure/identity`
+only when actually connecting (**not installed by default** — install them
+before using real mode). Dry run always reports the diff; `--apply --confirm reconcile-scores` writes (subject to the post-cutover wait gate above).
+
+### cutover.mjs
+
+Snapshots Cloudflare's root/www CNAMEs and the `api.curations.dev` Worker
+Custom Domain, then — only with `--apply --confirm curations.dev` (or
+`--confirm rehearse-cutover` with `--rehearse`) — runs the plan in this
+order:
+
+1. **`validate-swa-root` / `validate-swa-www`** — prevalidates *both*
+   `curations.dev` and `www.curations.dev` as Azure Static Web Apps custom
+   hostnames using the `dns-txt-token` method (`az staticwebapp hostname set
+   --validation-method dns-txt-token` in real mode), while Cloudflare is
+   still serving production. Each publishes its own `_dnsauth.<hostname>`
+   validation TXT record in Cloudflare. This is purely additive — it never
+   touches the existing CNAMEs/proxying, so it cannot affect live traffic —
+   and the tool waits (bounded, injectable-delay poll) for Azure to report
+   each hostname `Ready` before continuing.
+2. **`cut-api`** — `api.curations.dev` is a Cloudflare **Worker Custom
+   Domain** (`/accounts/{account_id}/workers/domains/{domain_id}`), which
+   auto-manages a proxied placeholder `AAAA 100::` record. This step (a)
+   detaches the custom domain, (b) polls (bounded, injectable delay) until
+   that managed `AAAA` record has actually disappeared — Cloudflare's
+   removal isn't necessarily instantaneous, and creating the Azure CNAME
+   any earlier could collide with the still-present managed record — and
+   only then (c) creates a DNS-only (unproxied) CNAME to the Azure gateway
+   FQDN. TLS here is bridged by the temporary ACME certificate from
+   `certificate.sh` until the gateway's IP restriction is lifted and
+   Azure's managed certificate can issue. The old Cloudflare **Advanced
+   Certificate** for `api.curations.dev` is not auto-deleted by any of this
+   and this tool never deletes it either — it stays intact through the
+   full seven-day rollback window.
+3. **`cut-root` / `cut-www`** — now that both hostnames are already
+   `Ready`, Cloudflare CNAME-flattens the apex directly to the Azure Static
+   Web App hostname (no separate apex workaround needed), and `www` follows
+   the same way. Azure issues each hostname's managed certificate
+   automatically once the CNAME resolves to the Static Web App — no ACME
+   bridging is needed for `curations.dev`/`www.curations.dev`.
+4. **`set-default-domain`** (manual Portal gate) — production parity
+   requires `https://www.curations.dev/` to keep 301-redirecting to
+   `https://curations.dev/`, exactly as it does today on Cloudflare. Azure
+   Static Web Apps provides this by marking `curations.dev` as the app's
+   *default custom domain*, but the Azure CLI currently has no documented
+   command for it — this tool cannot automate it, and it deliberately does
+   **not** fake the redirect with host-matching rules in
+   `staticwebapp.config.json`. This step performs no mutation at all: it is
+   only marked complete when `--confirmed-manual-steps set-default-domain`
+   is passed, which should only happen after the operator has (a) set
+   `curations.dev` as the default domain in the Azure Portal, and (b)
+   independently confirmed the 301 with
+   `verify.mjs --check-www-redirect --www-url https://www.curations.dev/
+   --site-url https://curations.dev/`. Reaching this step without that flag
+   is **not treated as a failure** — every traffic-affecting DNS mutation
+   has already succeeded — the tool just stops cleanly, sets the manifest
+   status to `awaiting-manual-step`, and returns `requiresManualStep` with
+   the exact instructions, both in `--json` output and on the manifest.
+
+Every step is verified before the next one runs, and the rollback manifest
+is written to disk after each mutation (not just at the end) — including
+when a step *fails to apply* (e.g. the managed AAAA record never clears),
+not just when its post-mutation verification fails — so a crash mid-cutover
+always leaves a resumable/rollback-able trail.
+
+**Cloudflare client:** `--fixture <path>` uses a local JSON file standing
+in for both Cloudflare zone state — DNS records, the Worker Custom Domain
+binding, and the untouched Advanced Certificate — and Azure Static Web Apps
+hostname-validation state; no network access. Omitting `--fixture` uses a
+**real** `RealCloudflareClient` authenticated from `CLOUDFLARE_API_TOKEN` /
+`CLOUDFLARE_ACCOUNT_ID` read from the environment (never a CLI flag, never
+logged) — this has been verified read-only against the live
+`curationsdev` Cloudflare account (see "API assumptions" below). The
+`validate-swa-*` steps are **not implemented** in real mode (Azure Static
+Web Apps hostname validation needs Azure credentials, out of scope for a
+Cloudflare-only token) — use `--fixture` for those, or wait for a real
+Azure SWA client. All the same safety gates (dry run default, `--apply` +
+exact `--confirm`, one mutation at a time, verify-after-each, rollback
+manifest) apply identically in real mode.
+
+`--rollback <manifest>` reverses `cut-api` precisely: delete the Azure
+CNAME, reattach the Worker Custom Domain with
+`PUT /accounts/{account_id}/workers/domains` (hostname/service/environment/
+zone_id from the manifest — never a fabricated record with the old
+content), then poll until Cloudflare has recreated the managed `AAAA`
+record before declaring that step verified. Root/www CNAMEs are restored to
+their original Pages target. SWA hostname-validation records are left in
+place (harmless, reusable on a future re-cutover), and the Advanced
+Certificate is never touched by rollback either.
+
+Refuses immediately, before reading any Cloudflare state, if `--acceptance`
+(Azure gateway/static hostnames + temp certificate readiness) is missing or
+incomplete, unless `--rehearse` is used. Rollback manifests are written
+under `${YOLO_CUTOVER_STATE_DIR:-~/.curationsx-yolo/cutover}` — outside git
+by default.
+
+## API assumptions requiring later verification
+
+- `bootstrap.sh`'s GitHub environment branch-policy check/configure
+  functions target `GET/PUT repos/:owner/:repo/environments/:name` (for
+  `deployment_branch_policy.custom_branch_policies`) and
+  `GET/POST/DELETE repos/:owner/:repo/environments/:name/deployment-branch-policies[/:id]`
+  (for the branch pattern allow-list), per GitHub's published Environments
+  API. Exercised only against the fixture `gh` stand-in in this task —
+  re-verify field names and required scopes (`gh auth status` alone isn't a
+  guarantee of the `repo`/environment-admin permissions the PUT/POST/DELETE
+  calls need) against the real `curationsx/yolo` repository before relying
+  on `--configure-github-environments` for real.
+- `certificate.sh`'s Cloudflare-token path assumes `certbot-dns-cloudflare`
+  accepts a credentials file containing `dns_cloudflare_api_token = ...`
+  and a `--dns-cloudflare-credentials <path>` flag alongside
+  `--config-dir`/`--work-dir`/`--logs-dir` (per its published
+  documentation) — not exercised against a real `pip install` or `certbot
+  certonly` run in this task, since that step is still deferred.
+- `cutover.mjs`'s `set-default-domain` step assumes that, as of this
+  writing, the Azure CLI has **no documented command** for marking a
+  Static Web Apps custom domain as the default (the setting that makes
+  other bound hostnames, including `www` and the generated
+  `*.azurestaticapps.net` hostname, 301-redirect to it). Re-check the
+  current `az staticwebapp` command reference before every cutover — if
+  Azure has since shipped a CLI (or REST/Bicep) way to set this, automate
+  it here instead of leaving it as a manual Portal gate.
+- `cutover.mjs`'s real (non-fixture) Cloudflare client (`RealCloudflareClient`)
+  targets the Cloudflare DNS records API (`GET/POST/PUT/DELETE
+  /zones/:zone_id/dns_records[/:id]`, zone resolved via
+  `GET /zones?name=...` and cached) and the Workers Custom Domains API
+  (`GET/DELETE /accounts/:account_id/workers/domains[/:id]`,
+  `PUT /accounts/:account_id/workers/domains` to reattach). **Read-only
+  calls (`getDnsRecord`, `getWorkerCustomDomain`) were verified live**
+  against the real `curationsdev` Cloudflare account for `curations.dev`,
+  `www.curations.dev`, and `api.curations.dev` using the environment's
+  `CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID` — the responses matched
+  this tool's modeling exactly (apex/`www` proxied CNAMEs to
+  `curations-dev.pages.dev`; `api.curations.dev` as a proxied `AAAA
+  100::` record with a matching Worker Custom Domain binding). No write
+  method (`upsertDnsRecord`, `deleteDnsRecord`, `removeWorkerCustomDomain`,
+  `attachWorkerCustomDomain`) has been exercised against the live account —
+  those remain unverified until an explicit, authorized production cutover.
+  It also assumes the pre-existing Cloudflare Advanced Certificate for
+  `api.curations.dev` is unaffected by detaching/reattaching the custom
+  domain, and that AAAA add/remove timing is not necessarily instantaneous
+  (hence the bounded polls in `cut-api` and rollback's `restore-api`) —
+  neither of those has been exercised for real either.
+- `cutover.mjs`'s SWA prevalidation steps are designed against
+  `az staticwebapp hostname set --validation-method dns-txt-token` and
+  `az staticwebapp hostname show` (to poll status and read the returned
+  validation token), and assume the TXT record name Azure expects is
+  `_dnsauth.<hostname>` for both the apex and `www` (confirmed against
+  Azure's Static Web Apps custom-domain documentation, but not against a
+  live `az staticwebapp` resource in this task). Add a real
+  `AzureSwaHostnameClient` implementing the same
+  `requestSwaHostnameValidation`/`getSwaHostnameStatus` shape as
+  `FixtureCloudflareClient` before any production run.
+- `reconcile-scores.mjs`'s real Cosmos mode assumes `@azure/cosmos`'s
+  `CosmosClient` accepts an `aadCredentials` option backed by
+  `DefaultAzureCredential` from `@azure/identity`, and that `votes`/`scores`
+  containers expose `target`, `viewerId`, `direction`, and `count` fields as
+  described in the plan. Confirm field names against the eventual
+  `agent-worker/src/platform/azure/state.ts` implementation.
+- `reconcile-scores.mjs`'s post-cutover wait gate assumes Cloudflare's
+  proxied DNS TTL for `api.curations.dev` remains `300` seconds
+  (`CLOUDFLARE_DNS_TTL_SECONDS`); re-check the live Cloudflare DNS record's
+  TTL before relying on the default `--min-wait-seconds` (`600`).
+- `bootstrap.sh`'s quota check reads a usage entry named `"Consumption
+  Cores"` (falling back to `"Cores"`) from
+  `az containerapp env list-usages`; confirm the exact `name.value` string
+  Azure returns once a real Container Apps environment exists.
+- `deploy.sh` assumes the SWA publish path uses the `swa` CLI
+  (`@azure/static-web-apps-cli`) with a deployment token; confirm this
+  matches whatever `.github/workflows/azure-deploy.yml` ultimately uses.

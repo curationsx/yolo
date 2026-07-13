@@ -1,0 +1,14 @@
+{
+  "votes": [
+    { "target": "venue:the-wiltern", "viewerId": "user-1", "direction": 1 },
+    { "target": "venue:the-wiltern", "viewerId": "user-2", "direction": 1 },
+    { "target": "venue:the-wiltern", "viewerId": "user-3", "direction": -1 },
+    { "target": "venue:echoplex", "viewerId": "user-1", "direction": 1 },
+    { "target": "venue:echoplex", "viewerId": "user-4", "direction": 1 }
+  ],
+  "scores": [
+    { "target": "venue:the-wiltern", "count": 5 },
+    { "target": "venue:echoplex", "count": 2 },
+    { "target": "venue:stale-only-in-legacy", "count": 3 }
+  ]
+}

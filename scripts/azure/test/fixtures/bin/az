@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+# Fixture Azure CLI stand-in used only by scripts/azure/test/**.
+# Behavior is controlled entirely by environment variables set by the test
+# harness. Every invocation is appended to $AZ_LEDGER (if set) so tests can
+# assert dry-run scripts never call mutating commands.
+set -euo pipefail
+
+if [[ -n "${AZ_LEDGER:-}" ]]; then
+  printf '%s\n' "$*" >> "$AZ_LEDGER"
+fi
+
+fail() { echo "$1" >&2; exit 1; }
+
+case "$1 $2" in
+  "account show")
+    [[ "${AZ_LOGIN:-1}" == "1" ]] || fail "az: not logged in"
+    printf '{"id":"%s","name":"fixture-subscription"}\n' "${AZ_ACCOUNT_ID:-86d88839-c524-4816-8af4-3a30045271e1}"
+    ;;
+  "ad signed-in-user")
+    # az ad signed-in-user show --query id -o tsv
+    [[ "${AZ_LOGIN:-1}" == "1" ]] || fail "az: not logged in"
+    printf '%s\n' "${AZ_SIGNED_IN_USER_ID:-fixture-user-id}"
+    ;;
+  "role assignment")
+    if [[ "${AZ_OWNER_ROLE:-1}" == "1" ]]; then
+      printf 'Owner\n'
+    else
+      printf ''
+    fi
+    ;;
+  "provider show")
+    if [[ "${AZ_PROVIDERS_REGISTERED:-1}" == "1" ]]; then
+      printf 'Registered\n'
+    else
+      printf 'NotRegistered\n'
+    fi
+    ;;
+  "acr check-name")
+    if [[ "${AZ_ACR_AVAILABLE:-1}" == "1" ]]; then
+      printf 'true\n'
+    else
+      printf 'false\n'
+    fi
+    ;;
+  "acr show")
+    if [[ "${AZ_ACR_OWNED:-0}" == "1" ]]; then
+      if [[ "$*" == *"--query name"* ]]; then
+        printf '%s\n' "${AZ_ACR_NAME_ECHO:-yolocurationsprod}"
+      else
+        printf '{"name":"%s"}\n' "${AZ_ACR_NAME_ECHO:-yolocurationsprod}"
+      fi
+    else
+      exit 1
+    fi
+    ;;
+  "keyvault show")
+    if [[ "${AZ_KV_EXISTS:-0}" == "1" ]]; then
+      if [[ "$*" == *"resourceGroup"* ]]; then
+        printf '%s\n' "${AZ_KV_RG:-rg-yolo-prod}"
+      else
+        printf '%s\n' "Succeeded"
+      fi
+    else
+      exit 1
+    fi
+    ;;
+  "containerapp env")
+    if [[ "${AZ_ENV_EXISTS:-1}" == "1" ]]; then
+      printf '[{"name":{"value":"Consumption Cores"},"limit":%s,"currentValue":0}]\n' "${AZ_QUOTA_LIMIT:-10}"
+    else
+      exit 1
+    fi
+    ;;
+  "containerapp update")
+    printf 'fixture: containerapp update executed (mutating)\n'
+    ;;
+  "acr build")
+    printf 'fixture: acr build executed (mutating)\n'
+    ;;
+  "deployment sub")
+    printf 'fixture: deployment sub create executed (mutating)\n'
+    ;;
+  *)
+    fail "fixture az: unhandled invocation: $*"
+    ;;
+esac
