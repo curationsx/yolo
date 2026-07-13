@@ -81,8 +81,8 @@ param foundryDeploymentName string = 'gpt-5.4-mini'
 @description('Comma-separated software cookbook targets. Matches wrangler.toml\'s SOFTWARE_TARGETS exactly (order and values), required by agent-worker/src/platform/azure/config.ts.')
 param softwareTargets string = 'zotero,ollama,hugging-face,n8n,langfuse,obsidian,sqlite,git,vs-code,pandoc,github,discourse,cloudflare,supabase'
 
-@description('Vote storage backend. Matches wrangler.toml\'s VOTE_BACKEND; config.ts only accepts "kv" or "durable" and defaults to "durable" for anything else.')
-param voteBackend string = 'durable'
+@description('Vote storage backend. Temporary sequencing gate -- see infra/runtime.bicep\'s identical param for the full explanation (Cloudflare Worker vote-count fix must merge, deploy, and be verified live before any non-production environment may use "durable"). This module-level default mirrors runtime.bicep\'s so a direct invocation of this module is never accidentally more permissive than the top-level entry point.')
+param voteBackend string = environmentName == 'production' ? 'durable' : 'kv'
 
 @description('Copilot one-use grant connection TTL in seconds. Matches wrangler.toml\'s COPILOT_CONNECTION_TTL_SECONDS.')
 param copilotConnectionTtlSeconds string = '600'

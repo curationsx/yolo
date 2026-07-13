@@ -109,8 +109,8 @@ param cosmosDiscussionsContainerName string = 'discussions'
 @description('Comma-separated software cookbook targets. Matches wrangler.toml\'s SOFTWARE_TARGETS exactly.')
 param softwareTargets string = 'zotero,ollama,hugging-face,n8n,langfuse,obsidian,sqlite,git,vs-code,pandoc,github,discourse,cloudflare,supabase'
 
-@description('Vote storage backend. Matches wrangler.toml\'s VOTE_BACKEND.')
-param voteBackend string = 'durable'
+@description('Vote storage backend. Temporary sequencing gate: defaults to "kv" (legacy vote/scores path via managed-identity community binding) for every non-production environmentName, and "durable" only for production. Azure staging reuses the SAME live `votes` Cosmos container the production Cloudflare Worker reads today, and that Worker (as of this writing, confirmed via Cloudflare MCP) still runs an unfiltered `SELECT COUNT(1)` with no metadata-document exclusion predicate -- if azure-staging ran VOTE_BACKEND=durable, it would write co-located id:"score" metadata documents into that same container, and the still-unfixed Worker would miscount every vote query by counting those metadata docs as votes. Do not override this to "durable" for a non-production environmentName until ALL of: (1) PR #5 (the Worker fix) is merged, (2) the merged Worker is verified live in production with the exclusion predicate in place, and (3) any required metadata backfill has completed. Matches wrangler.toml\'s VOTE_BACKEND; config.ts only accepts "kv" or "durable".')
+param voteBackend string = environmentName == 'production' ? 'durable' : 'kv'
 
 @description('Copilot one-use grant connection TTL in seconds. Matches wrangler.toml\'s COPILOT_CONNECTION_TTL_SECONDS.')
 param copilotConnectionTtlSeconds string = '600'
