@@ -371,7 +371,19 @@ order:
    touches the existing CNAMEs/proxying, so it cannot affect live traffic —
    and the tool waits (bounded, injectable-delay poll) for Azure to report
    each hostname `Ready` before continuing.
-2. **`cut-api`** — `api.curations.dev` is a Cloudflare **Worker Custom
+2. **`verify-asuid-api`** — additive, and deliberately run *before*
+   `cut-api` ever touches the Worker Custom Domain: reads
+   `ca-yolo-gateway`'s non-secret `properties.customDomainVerificationId`
+   (`az containerapp show --query properties.customDomainVerificationId`
+   in real mode — only this single field, never the full resource) and
+   publishes it as the `asuid.api.curations.dev` TXT record Azure Container
+   Apps requires to prove hostname ownership before it will allow a bind
+   (plan's "API Certificate Cutover" step 5). Like the SWA validation
+   token, this value is not a secret — it's designed to be published
+   publicly — and it's fed through the exact same
+   `upsertDnsRecord(txtRecordName, { type: "TXT", content: ... })` path the
+   `validate-swa-*` steps already use.
+3. **`cut-api`** — `api.curations.dev` is a Cloudflare **Worker Custom
    Domain** (`/accounts/{account_id}/workers/domains/{domain_id}`), which
    auto-manages a proxied placeholder `AAAA 100::` record. This step (a)
    detaches the custom domain, (b) polls (bounded, injectable delay) until
@@ -385,13 +397,23 @@ order:
    Certificate** for `api.curations.dev` is not auto-deleted by any of this
    and this tool never deletes it either — it stays intact through the
    full seven-day rollback window.
-3. **`cut-root` / `cut-www`** — now that both hostnames are already
+4. **`bind-api-hostname`** — a separate, explicitly verified step
+   immediately after `cut-api`'s CNAME is created: binds
+   `api.curations.dev` + the already-uploaded temporary certificate
+   (`certificate.sh --apply`'s exact `--certificate-name`, supplied via the
+   acceptance file's `apiCertificateName` field or `--staging-api-certificate-name`
+   for `--rehearse`) to the gateway via `az containerapp hostname bind
+   --certificate <name>`. Kept distinct from `cut-api` itself so a
+   DNS-only success (CNAME created, but the bind rejected for any reason)
+   shows up as its own failed/pending manifest step, never silently folded
+   into "cut-api succeeded".
+5. **`cut-root` / `cut-www`** — now that both hostnames are already
    `Ready`, Cloudflare CNAME-flattens the apex directly to the Azure Static
    Web App hostname (no separate apex workaround needed), and `www` follows
    the same way. Azure issues each hostname's managed certificate
    automatically once the CNAME resolves to the Static Web App — no ACME
    bridging is needed for `curations.dev`/`www.curations.dev`.
-4. **`set-default-domain`** (manual Portal gate) — production parity
+6. **`set-default-domain`** (manual Portal gate) — production parity
    requires `https://www.curations.dev/` to keep 301-redirecting to
    `https://curations.dev/`, exactly as it does today on Cloudflare. Azure
    Static Web Apps provides this by marking `curations.dev` as the app's
@@ -410,6 +432,12 @@ order:
    status to `awaiting-manual-step`, and returns `requiresManualStep` with
    the exact instructions, both in `--json` output and on the manifest.
 
+`--acceptance <path>`'s JSON now requires `apiCertificateName` alongside
+`apiHostname`/`staticWebAppHostname`/`tempCertReady` — the exact
+`--certificate-name` `certificate.sh --apply` uploaded, needed for
+`bind-api-hostname`. `--rehearse` takes the equivalent
+`--staging-api-certificate-name` flag.
+
 Every step is verified before the next one runs, and the rollback manifest
 is written to disk after each mutation (not just at the end) — including
 when a step *fails to apply* (e.g. the managed AAAA record never clears),
@@ -420,7 +448,7 @@ always leaves a resumable/rollback-able trail.
 in for both Cloudflare zone state — DNS records, the Worker Custom Domain
 binding, and the untouched Advanced Certificate — and Azure Static Web Apps
 hostname-validation state; no network access. Omitting `--fixture` uses
-`loadCloudflareClient`'s real-mode `ComposedRealClient`, which pairs two
+`loadCloudflareClient`'s real-mode `ComposedRealClient`, which pairs three
 independent real clients behind one facade so callers never special-case
 which one handles a given method:
 
@@ -441,6 +469,17 @@ which one handles a given method:
   ever logging the token itself. Overridable via `YOLO_STATIC_WEB_APP`/
   `YOLO_RESOURCE_GROUP` env vars (matching `lib/config.sh`'s bash-side
   defaults: `stapp-yolo-prod`/`rg-yolo-prod`).
+- `RealAzureGatewayClient` — the `verify-asuid-api` and `bind-api-hostname`
+  steps, also backed by the `az` CLI. `getCustomDomainVerificationId()`
+  runs `az containerapp show --query properties.customDomainVerificationId`
+  (that one non-secret field only, via `--query` — never the full resource
+  JSON); `bindApiHostname()` runs `az containerapp hostname bind --hostname
+  <h> --certificate <name>`; `getApiHostnameBindingStatus()` runs
+  `az containerapp hostname list` and reports `"Bound"` only for a matching
+  hostname with a non-`"Disabled"` `bindingType`. Overridable via
+  `YOLO_GATEWAY_APP`/`YOLO_RESOURCE_GROUP`/`YOLO_CONTAINERAPPS_ENV` env
+  vars (matching `lib/config.sh`'s defaults: `ca-yolo-gateway`/
+  `rg-yolo-prod`/`cae-yolo-prod`).
 
 All the same safety gates (dry run default, `--apply` + exact `--confirm`,
 one mutation at a time, verify-after-each, rollback manifest) apply
@@ -553,6 +592,22 @@ by default.
   literal string `"Ready"`) is likewise assumed, not confirmed live.
   Re-verify all of the above once a real `stapp-yolo-prod` Static Web App
   resource exists.
+- `cutover.mjs`'s `RealAzureGatewayClient` targets `az containerapp show
+  --query properties.customDomainVerificationId`, `az containerapp
+  hostname bind --hostname <h> --certificate <name>`, and
+  `az containerapp hostname list`, and assumes the TXT record name Azure
+  Container Apps expects is `asuid.<hostname>` (confirmed against Azure's
+  Container Apps custom-domain documentation, but not against a live
+  `ca-yolo-gateway` resource in this task). `hostname list`'s response
+  shape (`[{name, bindingType, ...}]`, with `bindingType` something other
+  than `"Disabled"` once bound) and `hostname bind`'s exact required flag
+  set are likewise assumed from Azure CLI's published reference, not
+  confirmed live. `bindApiHostname` requires the exact `--certificate-name`
+  `certificate.sh --apply` uploaded (plumbed through the acceptance file's
+  new `apiCertificateName` field, or `--staging-api-certificate-name` for
+  `--rehearse`) — the two scripts' coordination on this exact string is
+  unverified end-to-end against a live Azure account. Re-verify all of the
+  above once `ca-yolo-gateway` and a real uploaded certificate exist.
 - `reconcile-scores.mjs`'s real Cosmos mode assumes `@azure/cosmos`'s
   `CosmosClient` accepts an `aadCredentials` option backed by a
   `TokenCredential` from `@azure/identity` (either

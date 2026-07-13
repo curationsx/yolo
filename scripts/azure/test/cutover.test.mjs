@@ -11,6 +11,7 @@ import {
   FixtureCloudflareClient,
   RealCloudflareClient,
   RealAzureSwaHostnameClient,
+  RealAzureGatewayClient,
   ComposedRealClient,
   extractSwaValidationTokenValue,
   CloudflareApiError,
@@ -19,6 +20,7 @@ import {
   runCutover,
   runRollback,
   swaValidationRecordName,
+  asuidRecordName,
   PRODUCTION_CONFIRM_PHRASE,
   REHEARSAL_CONFIRM_PHRASE,
   SET_DEFAULT_DOMAIN_STEP,
@@ -74,30 +76,39 @@ test("loadAcceptance succeeds and returns parsed data for a valid file", () => {
 
 // --- computeCutoverPlan ---------------------------------------------------
 
-test("computeCutoverPlan prevalidates SWA hostnames first, then cuts API, then root, then www, then gates on the manual default-domain step", () => {
+test("computeCutoverPlan prevalidates SWA hostnames first, verifies asuid before cut-api, cuts API, binds the hostname, then root, then www, then gates on the manual default-domain step", () => {
   const plan = computeCutoverPlan({
     hostnames: HOSTNAMES,
-    azureTargets: { apiHostname: "gw.example", staticWebAppHostname: "site.example" },
+    azureTargets: { apiHostname: "gw.example", staticWebAppHostname: "site.example", apiCertificateName: "fixture-cert" },
   });
   assert.deepEqual(plan.map((s) => s.name), [
     "validate-swa-root",
     "validate-swa-www",
+    "verify-asuid-api",
     "cut-api",
+    "bind-api-hostname",
     "cut-root",
     "cut-www",
     "set-default-domain",
   ]);
   assert.equal(plan[0].kind, "validate");
-  assert.equal(plan[2].kind, "cut");
-  assert.equal(plan[5].kind, "manual-gate");
-  assert.equal(plan[5].name, SET_DEFAULT_DOMAIN_STEP);
-  assert.match(plan[5].instructions, /verify\.mjs/);
-  assert.match(plan[5].instructions, /--check-www-redirect/);
+  assert.equal(plan[2].kind, "asuid-verify");
+  assert.equal(plan[3].kind, "cut");
+  assert.equal(plan[4].kind, "bind");
+  assert.equal(plan[4].certificateName, "fixture-cert");
+  assert.equal(plan[7].kind, "manual-gate");
+  assert.equal(plan[7].name, SET_DEFAULT_DOMAIN_STEP);
+  assert.match(plan[7].instructions, /verify\.mjs/);
+  assert.match(plan[7].instructions, /--check-www-redirect/);
 });
 
 test("swaValidationRecordName computes _dnsauth.<hostname> for both apex and subdomain hostnames", () => {
   assert.equal(swaValidationRecordName("curations.dev"), "_dnsauth.curations.dev");
   assert.equal(swaValidationRecordName("www.curations.dev"), "_dnsauth.www.curations.dev");
+});
+
+test("asuidRecordName computes asuid.<hostname> for the API hostname", () => {
+  assert.equal(asuidRecordName("api.curations.dev"), "asuid.api.curations.dev");
 });
 
 // --- FixtureCloudflareClient: SWA hostname prevalidation ------------------
@@ -214,6 +225,7 @@ test("runCutover rehearsal mode does not require --acceptance", async () => {
       rehearse: true,
       stagingApiHostname: "staging-gw.example",
       stagingStaticHostname: "staging-site.example",
+      stagingApiCertificateName: "fixture-cert",
     },
     { client }
   );
@@ -242,7 +254,7 @@ test("runCutover apply cuts API, root, and www in order, verifying and manifesti
   assert.equal(report.applied, true);
   assert.equal(
     report.steps.map((s) => s.name).join(","),
-    "validate-swa-root,validate-swa-www,cut-api,cut-root,cut-www,set-default-domain"
+    "validate-swa-root,validate-swa-www,verify-asuid-api,cut-api,bind-api-hostname,cut-root,cut-www,set-default-domain"
   );
   assert.ok(report.steps.every((s) => s.verification.ok));
 
@@ -279,14 +291,27 @@ test("runCutover apply cuts API, root, and www in order, verifying and manifesti
     finalState.swaHostnames["www.curations.dev"].validationToken
   );
 
+  // The asuid.api.curations.dev TXT record must be published (additively,
+  // before the Worker Custom Domain was ever touched) with the gateway's
+  // customDomainVerificationId, and the hostname+certificate bind must
+  // have completed afterward.
+  assert.equal(finalState.records["asuid.api.curations.dev"].type, "TXT");
+  assert.equal(finalState.records["asuid.api.curations.dev"].content, finalState.gatewayVerificationId);
+  assert.equal(finalState.apiHostnameBinding.hostname, "api.curations.dev");
+  assert.equal(finalState.apiHostnameBinding.certificateName, "fixture-cert-api-curations-dev");
+
   assert.ok(fs.existsSync(report.manifestPath), "rollback manifest must be written to disk");
   const manifest = JSON.parse(fs.readFileSync(report.manifestPath, "utf8"));
   assert.equal(manifest.status, "complete");
   assert.equal(manifest.snapshot.root.content, "curations-dev.pages.dev");
   assert.equal(manifest.snapshot.api.type, "AAAA", "the pre-cutover snapshot must capture Cloudflare's managed AAAA record");
   assert.equal(manifest.plan[0].kind, "validate");
-  assert.equal(manifest.plan[5].kind, "manual-gate");
-  assert.equal(manifest.plan[5].name, SET_DEFAULT_DOMAIN_STEP);
+  assert.equal(manifest.plan[2].kind, "asuid-verify");
+  assert.equal(manifest.plan[2].name, "verify-asuid-api");
+  assert.equal(manifest.plan[4].kind, "bind");
+  assert.equal(manifest.plan[4].name, "bind-api-hostname");
+  assert.equal(manifest.plan[7].kind, "manual-gate");
+  assert.equal(manifest.plan[7].name, SET_DEFAULT_DOMAIN_STEP);
 });
 
 test("runCutover stops cleanly (not as a failure) at the manual default-domain gate when it is not yet confirmed", async () => {
@@ -396,6 +421,302 @@ test("runCutover apply never calls a Worker-script-delete, Pages-project-delete,
   );
 });
 
+// --- asuid.api verification: must happen before Worker detachment --------
+
+test("verify-asuid-api publishes the asuid.api.curations.dev TXT record with the gateway's customDomainVerificationId, strictly BEFORE the Worker Custom Domain is ever touched", async () => {
+  const fixture = freshZoneFixture("asuid-ordering.json");
+  const client = new FixtureCloudflareClient(fixture);
+  const calls = [];
+  const originalGetVerificationId = client.getCustomDomainVerificationId.bind(client);
+  client.getCustomDomainVerificationId = async () => {
+    calls.push("getCustomDomainVerificationId");
+    return originalGetVerificationId();
+  };
+  const originalUpsert = client.upsertDnsRecord.bind(client);
+  client.upsertDnsRecord = async (hostname, opts) => {
+    if (hostname === asuidRecordName("api.curations.dev")) calls.push("upsertDnsRecord:asuid");
+    return originalUpsert(hostname, opts);
+  };
+  const originalRemove = client.removeWorkerCustomDomain.bind(client);
+  client.removeWorkerCustomDomain = async (hostname) => {
+    calls.push("removeWorkerCustomDomain");
+    return originalRemove(hostname);
+  };
+
+  const manifestDir = path.join(SCRATCH, "manifests-asuid-ordering");
+  await runCutover(
+    { hostnames: HOSTNAMES, acceptancePath: ACCEPTANCE_READY, apply: true, confirm: PRODUCTION_CONFIRM_PHRASE, manifestDir },
+    { client }
+  );
+
+  const verificationIdIndex = calls.indexOf("getCustomDomainVerificationId");
+  const upsertAsuidIndex = calls.indexOf("upsertDnsRecord:asuid");
+  const removeWorkerIndex = calls.indexOf("removeWorkerCustomDomain");
+  assert.ok(verificationIdIndex !== -1, "getCustomDomainVerificationId must be called");
+  assert.ok(upsertAsuidIndex !== -1, "the asuid TXT record must be upserted");
+  assert.ok(removeWorkerIndex !== -1, "the Worker Custom Domain must be detached");
+  assert.ok(
+    verificationIdIndex < removeWorkerIndex && upsertAsuidIndex < removeWorkerIndex,
+    "both reading the verification ID and publishing the asuid TXT record must happen before Worker detachment"
+  );
+
+  const finalState = JSON.parse(fs.readFileSync(fixture, "utf8"));
+  assert.equal(finalState.records["asuid.api.curations.dev"].content, finalState.gatewayVerificationId);
+  assert.equal(finalState.records["asuid.api.curations.dev"].type, "TXT");
+});
+
+test("bind-api-hostname only runs (and only can succeed) after cut-api's CNAME already exists", async () => {
+  const fixture = freshZoneFixture("bind-after-cnam.json");
+  const client = new FixtureCloudflareClient(fixture);
+  const calls = [];
+  const originalUpsert = client.upsertDnsRecord.bind(client);
+  client.upsertDnsRecord = async (hostname, opts) => {
+    if (hostname === "api.curations.dev" && opts.type === "CNAME") calls.push("cnameCreated");
+    return originalUpsert(hostname, opts);
+  };
+  const originalBind = client.bindApiHostname.bind(client);
+  client.bindApiHostname = async (hostname, certificateName) => {
+    calls.push("bindApiHostname");
+    return originalBind(hostname, certificateName);
+  };
+
+  const manifestDir = path.join(SCRATCH, "manifests-bind-after-cname");
+  const report = await runCutover(
+    { hostnames: HOSTNAMES, acceptancePath: ACCEPTANCE_READY, apply: true, confirm: PRODUCTION_CONFIRM_PHRASE, manifestDir },
+    { client }
+  );
+
+  assert.deepEqual(calls, ["cnameCreated", "bindApiHostname"], "the CNAME must be created before the hostname+certificate bind is attempted");
+  const bindStep = report.steps.find((s) => s.name === "bind-api-hostname");
+  assert.ok(bindStep.verification.ok, "bind-api-hostname must be independently verified, not just assumed from cut-api's success");
+  assert.equal(bindStep.verification.status, "Bound");
+});
+
+// --- Rollback: asuid.api TXT record prior-state handling ------------------
+
+test("runRollback removes the asuid.api.curations.dev TXT record entirely when it had no prior content (the typical case)", async () => {
+  const fixture = freshZoneFixture("rollback-asuid-no-prior.json");
+  const client = new FixtureCloudflareClient(fixture);
+  const manifestDir = path.join(SCRATCH, "manifests-rollback-asuid-no-prior");
+  await runCutover(
+    {
+      hostnames: HOSTNAMES,
+      acceptancePath: ACCEPTANCE_READY,
+      apply: true,
+      confirm: PRODUCTION_CONFIRM_PHRASE,
+      manifestDir,
+      confirmedManualSteps: [SET_DEFAULT_DOMAIN_STEP],
+    },
+    { client }
+  );
+  const manifestPath = fs.readdirSync(manifestDir).map((f) => path.join(manifestDir, f)).find((p) => p.includes("cutover"));
+  assert.ok(manifestPath, "a cutover manifest must have been written");
+  assert.equal(
+    JSON.parse(fs.readFileSync(manifestPath, "utf8")).snapshot.asuidApi,
+    null,
+    "the pre-cutover snapshot must record that asuid.api.curations.dev did not exist yet"
+  );
+
+  await runRollback({ manifestPath, apply: true, confirm: PRODUCTION_CONFIRM_PHRASE }, { client });
+
+  const finalState = JSON.parse(fs.readFileSync(fixture, "utf8"));
+  assert.equal(finalState.records["asuid.api.curations.dev"], undefined, "rollback must delete the asuid TXT record this tool itself created");
+});
+
+test("runRollback restores the asuid.api.curations.dev TXT record's prior content when one already existed before cutover", async () => {
+  const zoneWithPriorAsuid = path.join(SCRATCH, `zone-prior-asuid-${process.pid}.json`);
+  const seed = JSON.parse(fs.readFileSync(ZONE_FIXTURE, "utf8"));
+  seed.records["asuid.api.curations.dev"] = {
+    id: "rec-asuid-preexisting",
+    type: "TXT",
+    name: "asuid.api.curations.dev",
+    content: "pre-existing-unrelated-verification-id",
+    proxied: false,
+  };
+  fs.writeFileSync(zoneWithPriorAsuid, JSON.stringify(seed));
+  const client = new FixtureCloudflareClient(zoneWithPriorAsuid);
+  const manifestDir = path.join(SCRATCH, "manifests-rollback-asuid-prior");
+  await runCutover(
+    {
+      hostnames: HOSTNAMES,
+      acceptancePath: ACCEPTANCE_READY,
+      apply: true,
+      confirm: PRODUCTION_CONFIRM_PHRASE,
+      manifestDir,
+      confirmedManualSteps: [SET_DEFAULT_DOMAIN_STEP],
+    },
+    { client }
+  );
+  const manifestPath = fs.readdirSync(manifestDir).map((f) => path.join(manifestDir, f)).find((p) => p.includes("cutover"));
+  const priorSnapshot = JSON.parse(fs.readFileSync(manifestPath, "utf8")).snapshot.asuidApi;
+  assert.equal(priorSnapshot.content, "pre-existing-unrelated-verification-id");
+
+  await runRollback({ manifestPath, apply: true, confirm: PRODUCTION_CONFIRM_PHRASE }, { client });
+
+  const finalState = JSON.parse(fs.readFileSync(zoneWithPriorAsuid, "utf8"));
+  assert.equal(
+    finalState.records["asuid.api.curations.dev"].content,
+    "pre-existing-unrelated-verification-id",
+    "rollback must restore the exact prior content, not just delete it, when the record already existed before cutover"
+  );
+});
+
+// --- RealAzureGatewayClient: `az containerapp show`/`hostname bind`/`hostname list`-backed gateway operations ---
+
+/** Fake execFileImpl matching promisify(child_process.execFile)'s shape,
+ * dispatching on the `az containerapp` subcommand. */
+function fakeAzGatewayExecFile({ onShow, onBind, onHostnameList } = {}) {
+  return async (cmd, args) => {
+    assert.equal(cmd, "az");
+    assert.equal(args[0], "containerapp");
+    if (args[1] === "show") {
+      const result = onShow ? await onShow(args) : "";
+      return { stdout: result, stderr: "" };
+    }
+    if (args[1] === "hostname" && args[2] === "bind") {
+      if (onBind) await onBind(args);
+      return { stdout: "", stderr: "" };
+    }
+    if (args[1] === "hostname" && args[2] === "list") {
+      const result = onHostnameList ? await onHostnameList(args) : [];
+      return { stdout: JSON.stringify(result), stderr: "" };
+    }
+    throw new Error(`fakeAzGatewayExecFile: unexpected invocation: ${cmd} ${args.join(" ")}`);
+  };
+}
+
+test("RealAzureGatewayClient.getCustomDomainVerificationId reads only properties.customDomainVerificationId via --query, never the full resource", async () => {
+  let showArgs = null;
+  const execFileImpl = fakeAzGatewayExecFile({
+    onShow: (args) => {
+      showArgs = args;
+      return "11111111-2222-3333-4444-555555555555\n";
+    },
+  });
+  const client = new RealAzureGatewayClient({ appName: "ca-yolo-gateway", resourceGroup: "rg-yolo-prod", execFileImpl });
+  const verificationId = await client.getCustomDomainVerificationId();
+  assert.equal(verificationId, "11111111-2222-3333-4444-555555555555");
+  assert.ok(showArgs.includes("--query"));
+  const queryIndex = showArgs.indexOf("--query");
+  assert.equal(showArgs[queryIndex + 1], "properties.customDomainVerificationId", "must query only the single non-secret field it needs");
+  assert.ok(showArgs.includes("ca-yolo-gateway"));
+  assert.ok(showArgs.includes("rg-yolo-prod"));
+});
+
+test("RealAzureGatewayClient.getCustomDomainVerificationId throws a clear error on an empty result", async () => {
+  const execFileImpl = fakeAzGatewayExecFile({ onShow: () => "\n" });
+  const client = new RealAzureGatewayClient({ execFileImpl });
+  await assert.rejects(() => client.getCustomDomainVerificationId(), /empty customDomainVerificationId/);
+});
+
+test("RealAzureGatewayClient.bindApiHostname passes --hostname and --certificate through to 'az containerapp hostname bind'", async () => {
+  let bindArgs = null;
+  const execFileImpl = fakeAzGatewayExecFile({
+    onBind: (args) => {
+      bindArgs = args;
+    },
+  });
+  const client = new RealAzureGatewayClient({
+    appName: "ca-yolo-gateway",
+    resourceGroup: "rg-yolo-prod",
+    environment: "cae-yolo-prod",
+    execFileImpl,
+  });
+  await client.bindApiHostname("api.curations.dev", "cert-api-curations-dev-20260101t000000z");
+  assert.ok(bindArgs.includes("--hostname"));
+  assert.equal(bindArgs[bindArgs.indexOf("--hostname") + 1], "api.curations.dev");
+  assert.ok(bindArgs.includes("--certificate"));
+  assert.equal(bindArgs[bindArgs.indexOf("--certificate") + 1], "cert-api-curations-dev-20260101t000000z");
+  assert.ok(bindArgs.includes("--environment"));
+  assert.equal(bindArgs[bindArgs.indexOf("--environment") + 1], "cae-yolo-prod");
+});
+
+test("RealAzureGatewayClient.bindApiHostname refuses without a certificateName", async () => {
+  const client = new RealAzureGatewayClient({ execFileImpl: fakeAzGatewayExecFile() });
+  await assert.rejects(() => client.bindApiHostname("api.curations.dev", ""), /requires a certificateName/);
+});
+
+test("RealAzureGatewayClient.getApiHostnameBindingStatus reports 'NotBound' when the hostname is absent or disabled, 'Bound' once a real bindingType is present", async () => {
+  const notFoundExecFile = fakeAzGatewayExecFile({ onHostnameList: () => [] });
+  const notFoundClient = new RealAzureGatewayClient({ execFileImpl: notFoundExecFile });
+  assert.equal(await notFoundClient.getApiHostnameBindingStatus("api.curations.dev"), "NotBound");
+
+  const disabledExecFile = fakeAzGatewayExecFile({
+    onHostnameList: () => [{ name: "api.curations.dev", bindingType: "Disabled" }],
+  });
+  const disabledClient = new RealAzureGatewayClient({ execFileImpl: disabledExecFile });
+  assert.equal(await disabledClient.getApiHostnameBindingStatus("api.curations.dev"), "NotBound");
+
+  const boundExecFile = fakeAzGatewayExecFile({
+    onHostnameList: () => [{ name: "api.curations.dev", bindingType: "SniEnabled" }],
+  });
+  const boundClient = new RealAzureGatewayClient({ execFileImpl: boundExecFile });
+  assert.equal(await boundClient.getApiHostnameBindingStatus("api.curations.dev"), "Bound");
+});
+
+test("ComposedRealClient routes gateway-concern methods (verification id, hostname bind, binding status) to the gateway client", async () => {
+  const gatewayCalls = [];
+  const gatewayClient = {
+    getCustomDomainVerificationId: async () => {
+      gatewayCalls.push("getCustomDomainVerificationId");
+      return "fixture-verification-id";
+    },
+    bindApiHostname: async (hostname, certificateName) => {
+      gatewayCalls.push(`bindApiHostname:${hostname}:${certificateName}`);
+    },
+    getApiHostnameBindingStatus: async (hostname) => {
+      gatewayCalls.push(`getApiHostnameBindingStatus:${hostname}`);
+      return "Bound";
+    },
+  };
+  const composed = new ComposedRealClient({}, {}, gatewayClient);
+  assert.equal(await composed.getCustomDomainVerificationId(), "fixture-verification-id");
+  await composed.bindApiHostname("api.curations.dev", "cert-name");
+  assert.equal(await composed.getApiHostnameBindingStatus("api.curations.dev"), "Bound");
+  assert.deepEqual(gatewayCalls, [
+    "getCustomDomainVerificationId",
+    "bindApiHostname:api.curations.dev:cert-name",
+    "getApiHostnameBindingStatus:api.curations.dev",
+  ]);
+});
+
+test("loadCloudflareClient in real mode also wires a RealAzureGatewayClient, overridable via YOLO_GATEWAY_APP/YOLO_CONTAINERAPPS_ENV", () => {
+  const defaultClient = loadCloudflareClient({}, { CLOUDFLARE_API_TOKEN: "t", CLOUDFLARE_ACCOUNT_ID: "a" });
+  assert.ok(defaultClient.gatewayClient instanceof RealAzureGatewayClient);
+  assert.equal(defaultClient.gatewayClient.appName, "ca-yolo-gateway");
+  assert.equal(defaultClient.gatewayClient.resourceGroup, "rg-yolo-prod");
+  assert.equal(defaultClient.gatewayClient.environment, "cae-yolo-prod");
+
+  const overriddenClient = loadCloudflareClient(
+    {},
+    {
+      CLOUDFLARE_API_TOKEN: "t",
+      CLOUDFLARE_ACCOUNT_ID: "a",
+      YOLO_GATEWAY_APP: "ca-custom-gateway",
+      YOLO_RESOURCE_GROUP: "rg-custom",
+      YOLO_CONTAINERAPPS_ENV: "cae-custom",
+    }
+  );
+  assert.equal(overriddenClient.gatewayClient.appName, "ca-custom-gateway");
+  assert.equal(overriddenClient.gatewayClient.resourceGroup, "rg-custom");
+  assert.equal(overriddenClient.gatewayClient.environment, "cae-custom");
+});
+
+// --- Acceptance schema: apiCertificateName is required --------------------
+
+test("loadAcceptance refuses when apiCertificateName is missing", () => {
+  const acceptanceMissingCertName = path.join(SCRATCH, "acceptance-missing-cert-name.json");
+  fs.writeFileSync(
+    acceptanceMissingCertName,
+    JSON.stringify({
+      apiHostname: "ca-yolo-gateway.example.eastus2.azurecontainerapps.io",
+      staticWebAppHostname: "stapp-yolo-prod.azurestaticapps.net",
+      tempCertReady: true,
+    })
+  );
+  assert.throws(() => loadAcceptance(acceptanceMissingCertName), /apiCertificateName/);
+});
+
 test("cut-api confirms the managed AAAA record has disappeared (even if not instantaneous) before creating the Azure CNAME", async () => {
   const fixture = freshZoneFixture("aaaa-delayed.json");
   const client = new FixtureCloudflareClient(fixture);
@@ -438,11 +759,16 @@ test("cut-api refuses to create the Azure CNAME if the managed AAAA record never
     if (hostname === "api.curations.dev") upsertCalledForApi = true;
     return originalUpsert(hostname, opts);
   };
+  const originalGetDnsRecord = client.getDnsRecord.bind(client);
   client.getDnsRecord = async (hostname) => {
     if (hostname === "api.curations.dev") {
       return { id: "rec-managed-aaaa-api", type: "AAAA", name: hostname, content: "100::", proxied: true, managedByWorker: true };
     }
-    return { id: `rec-${hostname}`, type: "CNAME", name: hostname, content: "curations-dev.pages.dev", proxied: true };
+    // Every other hostname (including asuid.api.curations.dev, the
+    // verify-asuid-api step's record) keeps the real fixture behavior, so
+    // that unrelated step still passes cleanly and only cut-api's own
+    // managed-AAAA-never-clears scenario is exercised.
+    return originalGetDnsRecord(hostname);
   };
 
   const manifestDir = path.join(SCRATCH, "manifests-aaaa-never-removed");
@@ -477,8 +803,8 @@ test("runCutover apply stops and reports a failing step without applying later s
   );
   assert.equal(
     calls,
-    3,
-    "must verify both SWA prevalidation steps and cut-api, but must not proceed to cut-root/cut-www after cut-api verification fails"
+    4,
+    "must verify both SWA prevalidation steps, verify-asuid-api, and cut-api, but must not proceed to bind-api-hostname/cut-root/cut-www after cut-api verification fails"
   );
   const finalState = JSON.parse(fs.readFileSync(fixture, "utf8"));
   assert.equal(finalState.records["curations.dev"].content, "curations-dev.pages.dev", "root must remain untouched after an earlier step fails verification");

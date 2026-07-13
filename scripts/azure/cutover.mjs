@@ -409,10 +409,128 @@ export class RealAzureSwaHostnameClient {
  * actually serves a given method (the same reason FixtureCloudflareClient
  * combines both into one JSON file for local/offline convenience).
  */
+/**
+ * Real Azure Container Apps client for the gateway's custom-domain
+ * verification + hostname/certificate binding operations cutover.mjs
+ * needs -- a third, distinct Azure resource concern from Cloudflare
+ * DNS/Workers (RealCloudflareClient) and Static Web Apps hostname
+ * validation (RealAzureSwaHostnameClient). Backed by the
+ * already-authenticated `az` CLI. Never reads, logs, or throws with a
+ * secret: `customDomainVerificationId` is a non-secret, per-Container-App
+ * GUID Azure itself documents as the value to publish in a public
+ * `asuid.<hostname>` DNS TXT record to prove domain ownership (plan's
+ * "API Certificate Cutover" step 5) -- functionally the same kind of
+ * "public-by-design" value as the SWA `dns-txt-token`.
+ */
+export class RealAzureGatewayClient {
+  constructor({
+    appName = "ca-yolo-gateway",
+    resourceGroup = "rg-yolo-prod",
+    environment = "cae-yolo-prod",
+    execFileImpl = execFileAsync,
+  } = {}) {
+    this.appName = appName;
+    this.resourceGroup = resourceGroup;
+    this.environment = environment;
+    this._execFile = execFileImpl;
+  }
+
+  // `az containerapp show --query properties.customDomainVerificationId`:
+  // reads only the single non-secret field this tool needs -- never logs
+  // or returns the full resource JSON, so no unrelated Container App
+  // configuration data is ever surfaced by this method.
+  async getCustomDomainVerificationId() {
+    const { stdout } = await this._execFile("az", [
+      "containerapp",
+      "show",
+      "--name",
+      this.appName,
+      "--resource-group",
+      this.resourceGroup,
+      "--query",
+      "properties.customDomainVerificationId",
+      "--output",
+      "tsv",
+    ]);
+    const verificationId = stdout.trim();
+    if (!verificationId) {
+      throw new Error(
+        `az containerapp show returned an empty customDomainVerificationId for '${this.appName}'; cannot publish the asuid TXT record without it.`
+      );
+    }
+    return verificationId;
+  }
+
+  // Binds the hostname to this Container App using an already-uploaded
+  // certificate resource (by name -- see certificate.sh's
+  // --certificate-name). Requires the asuid TXT record and the DNS CNAME
+  // to already be in place (Azure validates both before allowing a bind).
+  async bindApiHostname(hostname, certificateName) {
+    if (!certificateName) {
+      throw new Error(`bindApiHostname requires a certificateName for '${hostname}' (the exact --certificate-name certificate.sh uploaded).`);
+    }
+    await this._execFile("az", [
+      "containerapp",
+      "hostname",
+      "bind",
+      "--name",
+      this.appName,
+      "--resource-group",
+      this.resourceGroup,
+      "--environment",
+      this.environment,
+      "--hostname",
+      hostname,
+      "--certificate",
+      certificateName,
+    ]);
+  }
+
+  // Reports whether `hostname` is currently bound with a certificate
+  // (bindingType other than "Disabled"), by consulting
+  // `az containerapp hostname list` -- never logs the full hostname list,
+  // only returns this one hostname's binding state.
+  async getApiHostnameBindingStatus(hostname) {
+    let hostnames;
+    try {
+      const { stdout } = await this._execFile("az", [
+        "containerapp",
+        "hostname",
+        "list",
+        "--name",
+        this.appName,
+        "--resource-group",
+        this.resourceGroup,
+        "--output",
+        "json",
+      ]);
+      hostnames = JSON.parse(stdout);
+    } catch {
+      return "NotBound";
+    }
+    const entry = Array.isArray(hostnames) ? hostnames.find((h) => h.name === hostname) : null;
+    if (!entry) return "NotBound";
+    return entry.bindingType && entry.bindingType !== "Disabled" ? "Bound" : "NotBound";
+  }
+}
+
+/**
+ * Composes RealCloudflareClient (Cloudflare DNS/Workers),
+ * RealAzureSwaHostnameClient (Azure Static Web Apps hostname validation),
+ * and RealAzureGatewayClient (Azure Container Apps custom-domain
+ * verification + hostname/certificate binding) into one object
+ * implementing the full client interface runCutover/runRollback expect.
+ * These are three genuinely distinct Azure/Cloudflare resource concerns in
+ * production -- this facade exists purely so call sites never need to
+ * know or care which underlying client actually serves a given method
+ * (the same reason FixtureCloudflareClient combines all three into one
+ * JSON file for local/offline convenience).
+ */
 export class ComposedRealClient {
-  constructor(cloudflareClient, swaClient) {
+  constructor(cloudflareClient, swaClient, gatewayClient) {
     this.cloudflareClient = cloudflareClient;
     this.swaClient = swaClient;
+    this.gatewayClient = gatewayClient;
   }
   preflight() {
     return this.cloudflareClient.preflight();
@@ -441,6 +559,15 @@ export class ComposedRealClient {
   getSwaHostnameStatus(hostname) {
     return this.swaClient.getSwaHostnameStatus(hostname);
   }
+  getCustomDomainVerificationId() {
+    return this.gatewayClient.getCustomDomainVerificationId();
+  }
+  bindApiHostname(hostname, certificateName) {
+    return this.gatewayClient.bindApiHostname(hostname, certificateName);
+  }
+  getApiHostnameBindingStatus(hostname) {
+    return this.gatewayClient.getApiHostnameBindingStatus(hostname);
+  }
 }
 
 export const PRODUCTION_CONFIRM_PHRASE = "curations.dev";
@@ -456,6 +583,7 @@ const ARG_SPEC = {
   "manifest-dir": { type: "string", default: "" },
   "staging-api-hostname": { type: "string", default: "" },
   "staging-static-hostname": { type: "string", default: "" },
+  "staging-api-certificate-name": { type: "string", default: "" },
   "confirmed-manual-steps": { type: "string", default: "" },
   json: { type: "boolean", default: false },
   help: { type: "boolean", default: false },
@@ -496,14 +624,18 @@ export class ConfirmationError extends Error {
 export function loadAcceptance(acceptancePath) {
   if (!acceptancePath) {
     throw new AcceptanceError(
-      "Missing --acceptance <path>. Azure acceptance inputs (verified gateway/static hostnames, temp certificate readiness) are required before a production cutover."
+      "Missing --acceptance <path>. Azure acceptance inputs (verified gateway/static hostnames, temp certificate readiness, uploaded certificate name) are required before a production cutover."
     );
   }
   if (!fs.existsSync(acceptancePath)) {
     throw new AcceptanceError(`Acceptance file not found: ${acceptancePath}`);
   }
   const data = JSON.parse(fs.readFileSync(acceptancePath, "utf8"));
-  const required = ["apiHostname", "staticWebAppHostname", "tempCertReady"];
+  // apiCertificateName is the exact --certificate-name certificate.sh's
+  // real --apply flow uploaded to the Container Apps environment (a
+  // resource name, never a secret) -- required so the bind-api-hostname
+  // step below can bind that exact certificate rather than guessing.
+  const required = ["apiHostname", "staticWebAppHostname", "tempCertReady", "apiCertificateName"];
   const missing = required.filter((key) => data[key] === undefined || data[key] === null || data[key] === "");
   if (missing.length > 0) {
     throw new AcceptanceError(`Acceptance file is missing required field(s): ${missing.join(", ")}`);
@@ -529,6 +661,20 @@ export function swaValidationRecordName(hostname) {
 }
 
 /**
+ * Computes the Cloudflare TXT record name Azure Container Apps expects for
+ * custom-domain ownership verification: `asuid.<hostname>`
+ * (`asuid.api.curations.dev` for `api.curations.dev`), per the plan's "API
+ * Certificate Cutover" step 5 ("Add asuid.api TXT before cutover") and
+ * Azure Container Apps' custom-domain documentation. This is a DIFFERENT
+ * TXT record, with a different value source (the Container App's own
+ * `customDomainVerificationId`, not an SWA validation token), from
+ * `swaValidationRecordName` above -- never conflate the two.
+ */
+export function asuidRecordName(hostname) {
+  return `asuid.${hostname}`;
+}
+
+/**
  * In-memory + on-disk fixture Cloudflare client. Represents Cloudflare zone
  * state as a plain JSON object so tests (and this task, which forbids real
  * production mutation) can exercise the full cutover/rollback mutation
@@ -549,6 +695,10 @@ export class FixtureCloudflareClient {
     }
     this.state = JSON.parse(fs.readFileSync(fixturePath, "utf8"));
     if (!this.state.swaHostnames) this.state.swaHostnames = {};
+    // Fixed, non-secret fixture value standing in for
+    // ca-yolo-gateway's real properties.customDomainVerificationId.
+    if (!this.state.gatewayVerificationId) this.state.gatewayVerificationId = "fixture-verification-id-00000000";
+    if (!this.state.apiHostnameBinding) this.state.apiHostnameBinding = null;
   }
 
   _persist() {
@@ -670,16 +820,44 @@ export class FixtureCloudflareClient {
     this._persist();
     return { ...binding };
   }
+
+  // Returns the fixed, non-secret fixture value standing in for
+  // ca-yolo-gateway's real properties.customDomainVerificationId.
+  async getCustomDomainVerificationId() {
+    return this.state.gatewayVerificationId;
+  }
+
+  // Records that `hostname` is now bound to `certificateName` -- modeled
+  // as an immediate, deterministic side effect (no polling needed in the
+  // fixture, unlike the real Azure CLI's eventual-consistency behavior).
+  async bindApiHostname(hostname, certificateName) {
+    if (!certificateName) {
+      throw new Error(`bindApiHostname requires a certificateName for '${hostname}'.`);
+    }
+    this.state.apiHostnameBinding = { hostname, certificateName };
+    this._persist();
+  }
+
+  // Reports "Bound" only once bindApiHostname has recorded a binding for
+  // this exact hostname.
+  async getApiHostnameBindingStatus(hostname) {
+    const binding = this.state.apiHostnameBinding;
+    return binding && binding.hostname === hostname ? "Bound" : "NotBound";
+  }
 }
 
 async function snapshotState(client, hostnames) {
-  const [root, www, api, workerDomain] = await Promise.all([
+  const [root, www, api, workerDomain, asuidApi] = await Promise.all([
     client.getDnsRecord(hostnames.root),
     client.getDnsRecord(hostnames.www),
     client.getDnsRecord(hostnames.api),
     client.getWorkerCustomDomain(hostnames.api),
+    // Prior state of the asuid.api TXT record, if any, so rollback can
+    // restore it exactly (or, in the typical case where it never existed
+    // before this tool created it, remove it again).
+    client.getDnsRecord(asuidRecordName(hostnames.api)),
   ]);
-  return { root, www, api, workerDomain, capturedAt: new Date().toISOString() };
+  return { root, www, api, workerDomain, asuidApi, capturedAt: new Date().toISOString() };
 }
 
 /**
@@ -700,12 +878,25 @@ export const SET_DEFAULT_DOMAIN_STEP = "set-default-domain";
  *   1. Prevalidate both curations.dev and www.curations.dev as SWA custom
  *      hostnames (dns-txt-token) -- additive, non-traffic-affecting, and
  *      done first, while Cloudflare is still serving production.
- *   2. Cut API first, then apex, then www -- matching the plan's explicit
+ *   2. `verify-asuid-api` -- additive, non-traffic-affecting: publish the
+ *      `asuid.api.curations.dev` TXT record (Container Apps' custom-domain
+ *      ownership proof, plan's "API Certificate Cutover" step 5) BEFORE
+ *      the Worker Custom Domain is ever touched, so Azure can validate
+ *      ownership at bind time without any traffic-affecting mutation
+ *      having happened yet.
+ *   3. Cut API first, then apex, then www -- matching the plan's explicit
  *      "Cut API first, then frontend" mutation order. By the time these
  *      traffic-affecting steps run, both SWA hostnames are already Ready,
  *      so the apex/www CNAME flips complete without waiting on further
  *      DNS-validation propagation mid-cutover.
- *   3. `set-default-domain` -- a manual Azure Portal gate. Production
+ *   4. `bind-api-hostname` -- immediately after cut-api's CNAME is created:
+ *      an explicit, separately verified step that binds
+ *      api.curations.dev + the already-uploaded temporary certificate
+ *      (certificate.sh's --apply output) to ca-yolo-gateway. Kept distinct
+ *      from cut-api itself so a DNS-only success (CNAME created, but the
+ *      bind rejected for any reason) is visible as its own failed/pending
+ *      step in the manifest, not silently folded into "cut-api succeeded".
+ *   5. `set-default-domain` -- a manual Azure Portal gate. Production
  *      parity requires `https://www.curations.dev/` to keep 301-redirecting
  *      to `https://curations.dev/`, which Azure Static Web Apps provides by
  *      marking curations.dev as the app's *default custom domain* (every
@@ -735,11 +926,24 @@ export function computeCutoverPlan({ hostnames, azureTargets }) {
       description: "Prevalidate www.curations.dev as an SWA custom hostname (dns-txt-token) while Cloudflare still serves production",
     },
     {
+      name: "verify-asuid-api",
+      kind: "asuid-verify",
+      hostname: hostnames.api,
+      description: "Publish the asuid.api.curations.dev TXT record (Container Apps custom-domain ownership proof) before the Worker Custom Domain is touched",
+    },
+    {
       name: "cut-api",
       kind: "cut",
       hostname: hostnames.api,
       description: "Detach Worker custom domain, point api.curations.dev at the Azure gateway",
       targetContent: azureTargets.apiHostname,
+    },
+    {
+      name: "bind-api-hostname",
+      kind: "bind",
+      hostname: hostnames.api,
+      description: "Bind api.curations.dev + the pre-uploaded temporary certificate to the gateway Container App",
+      certificateName: azureTargets.apiCertificateName,
     },
     {
       name: "cut-root",
@@ -783,6 +987,14 @@ async function defaultVerifyStep(step, client) {
     const status = await client.getSwaHostnameStatus(step.hostname);
     return { ok: status === "Ready", status };
   }
+  if (step.kind === "asuid-verify") {
+    // Confirms the published TXT record's content actually matches the
+    // gateway's own customDomainVerificationId -- re-reads both rather
+    // than trusting the write succeeded.
+    const verificationId = await client.getCustomDomainVerificationId();
+    const record = await client.getDnsRecord(asuidRecordName(step.hostname));
+    return { ok: !!record && record.type === "TXT" && record.content === verificationId };
+  }
   if (step.name === "cut-api") {
     const domain = await client.getWorkerCustomDomain(step.hostname);
     const record = await client.getDnsRecord(step.hostname);
@@ -795,6 +1007,10 @@ async function defaultVerifyStep(step, client) {
         record.content === step.targetContent,
     };
   }
+  if (step.kind === "bind") {
+    const status = await client.getApiHostnameBindingStatus(step.hostname);
+    return { ok: status === "Bound", status };
+  }
   if (step.name === "restore-api") {
     const domain = await client.getWorkerCustomDomain(step.hostname);
     const record = await client.getDnsRecord(step.hostname);
@@ -806,6 +1022,15 @@ async function defaultVerifyStep(step, client) {
     // There was no Worker Custom Domain before cutover (unusual, but
     // possible for a rehearsal fixture) -- rollback just means the Azure
     // record is gone.
+    return { ok: !record };
+  }
+  if (step.name === "restore-asuid-api") {
+    const record = await client.getDnsRecord(step.hostname);
+    if (step.targetContent) {
+      return { ok: !!record && record.content === step.targetContent };
+    }
+    // Typical case: the asuid TXT record never existed before cutover, so
+    // rollback deletes it entirely -- verified means it is now absent.
     return { ok: !record };
   }
   const record = await client.getDnsRecord(step.hostname);
@@ -916,12 +1141,25 @@ export async function runCutover(options, deps) {
   }
 
   const azureTargets = acceptance
-    ? { apiHostname: acceptance.apiHostname, staticWebAppHostname: acceptance.staticWebAppHostname }
-    : { apiHostname: options.stagingApiHostname, staticWebAppHostname: options.stagingStaticHostname };
+    ? {
+        apiHostname: acceptance.apiHostname,
+        staticWebAppHostname: acceptance.staticWebAppHostname,
+        apiCertificateName: acceptance.apiCertificateName,
+      }
+    : {
+        apiHostname: options.stagingApiHostname,
+        staticWebAppHostname: options.stagingStaticHostname,
+        apiCertificateName: options.stagingApiCertificateName,
+      };
 
   if (!azureTargets.apiHostname || !azureTargets.staticWebAppHostname) {
     throw new AcceptanceError(
       "Missing Azure target hostnames. Provide --acceptance for production, or --staging-api-hostname/--staging-static-hostname for --rehearse."
+    );
+  }
+  if (!azureTargets.apiCertificateName) {
+    throw new AcceptanceError(
+      "Missing the uploaded API certificate's name. Provide --acceptance (apiCertificateName field) for production, or --staging-api-certificate-name for --rehearse -- required for the bind-api-hostname step."
     );
   }
 
@@ -984,8 +1222,25 @@ export async function runCutover(options, deps) {
         const { validationToken, txtRecordName } = await client.requestSwaHostnameValidation(step.hostname);
         await client.upsertDnsRecord(txtRecordName, { type: "TXT", content: validationToken, proxied: false });
         await waitForSwaHostnameReady(client, step.hostname, deps.swaPollOptions);
+      } else if (step.kind === "asuid-verify") {
+        // Non-traffic-affecting, additive, and deliberately run BEFORE
+        // cut-api touches the Worker Custom Domain at all: publish the
+        // asuid.<hostname> TXT record Azure Container Apps requires to
+        // prove ownership before it will allow binding this hostname.
+        // Only the single customDomainVerificationId field is read (never
+        // logged) -- no other Container App configuration is queried or
+        // surfaced here.
+        const verificationId = await client.getCustomDomainVerificationId();
+        await client.upsertDnsRecord(asuidRecordName(step.hostname), { type: "TXT", content: verificationId, proxied: false });
       } else if (step.name === "cut-api") {
         await applyCutApiStep(client, hostnames.api, step.targetContent, workerBinding, deps.aaaaPollOptions);
+      } else if (step.kind === "bind") {
+        // Explicit, separately verified step: bind the hostname + the
+        // already-uploaded temporary certificate to the gateway Container
+        // App. Requires the asuid TXT record (verify-asuid-api) and the
+        // DNS CNAME (cut-api) to already be in place -- Azure validates
+        // both before allowing this bind to succeed.
+        await client.bindApiHostname(step.hostname, step.certificateName);
       } else {
         await client.upsertDnsRecord(step.hostname, { content: step.targetContent, proxied: false });
       }
@@ -1066,6 +1321,11 @@ export async function runRollback(options, deps) {
     { name: "restore-root", hostname: hostnames.root, targetContent: snapshot.root ? snapshot.root.content : null },
     { name: "restore-www", hostname: hostnames.www, targetContent: snapshot.www ? snapshot.www.content : null },
     { name: "restore-api", hostname: hostnames.api, targetContent: null, workerDomain: snapshot.workerDomain || null },
+    {
+      name: "restore-asuid-api",
+      hostname: asuidRecordName(hostnames.api),
+      targetContent: snapshot.asuidApi ? snapshot.asuidApi.content : null,
+    },
   ];
 
   if (!(apply && confirm === PRODUCTION_CONFIRM_PHRASE)) {
@@ -1082,6 +1342,18 @@ export async function runRollback(options, deps) {
     if (step.name === "restore-root" || step.name === "restore-www") {
       if (step.targetContent) {
         await client.upsertDnsRecord(step.hostname, { content: step.targetContent, proxied: true });
+      }
+    } else if (step.name === "restore-asuid-api") {
+      // The asuid.api TXT record only exists because verify-asuid-api
+      // created it -- if it had no prior content (the typical case),
+      // rollback removes it entirely, since it is meaningless once
+      // api.curations.dev is back on the Worker Custom Domain. If it
+      // somehow already had different content before cutover (unusual),
+      // restore that instead of deleting it.
+      if (step.targetContent) {
+        await client.upsertDnsRecord(step.hostname, { content: step.targetContent, proxied: false, type: "TXT" });
+      } else {
+        await client.deleteDnsRecord(step.hostname);
       }
     } else {
       // restore-api: delete the Azure CNAME, reattach the Worker Custom
@@ -1128,14 +1400,20 @@ export function loadCloudflareClient(values, env = process.env) {
   const accountId = env.CLOUDFLARE_ACCOUNT_ID;
   if (apiToken && accountId) {
     const cloudflareClient = new RealCloudflareClient({ apiToken, accountId });
-    // Matches lib/config.sh's YOLO_STATIC_WEB_APP/YOLO_RESOURCE_GROUP
-    // defaults exactly, and is overridable the same way for consistency
-    // across this lane's bash and Node tooling.
+    // Matches lib/config.sh's YOLO_STATIC_WEB_APP/YOLO_RESOURCE_GROUP/
+    // YOLO_GATEWAY_APP/YOLO_CONTAINERAPPS_ENV defaults exactly, and is
+    // overridable the same way for consistency across this lane's bash
+    // and Node tooling.
     const swaClient = new RealAzureSwaHostnameClient({
       staticWebAppName: env.YOLO_STATIC_WEB_APP || "stapp-yolo-prod",
       resourceGroup: env.YOLO_RESOURCE_GROUP || "rg-yolo-prod",
     });
-    return new ComposedRealClient(cloudflareClient, swaClient);
+    const gatewayClient = new RealAzureGatewayClient({
+      appName: env.YOLO_GATEWAY_APP || "ca-yolo-gateway",
+      resourceGroup: env.YOLO_RESOURCE_GROUP || "rg-yolo-prod",
+      environment: env.YOLO_CONTAINERAPPS_ENV || "cae-yolo-prod",
+    });
+    return new ComposedRealClient(cloudflareClient, swaClient, gatewayClient);
   }
   throw new Error(
     "Either --fixture <path>, or both CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID environment variables, are required."
@@ -1181,6 +1459,7 @@ async function main() {
           acceptancePath: values.acceptance || "",
           stagingApiHostname: values["staging-api-hostname"] || "",
           stagingStaticHostname: values["staging-static-hostname"] || "",
+          stagingApiCertificateName: values["staging-api-certificate-name"] || "",
           manifestDir,
           confirmedManualSteps: values["confirmed-manual-steps"]
             ? values["confirmed-manual-steps"].split(",").map((s) => s.trim()).filter(Boolean)

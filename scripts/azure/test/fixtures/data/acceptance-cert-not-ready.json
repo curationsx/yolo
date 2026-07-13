@@ -2,5 +2,6 @@
   "apiHostname": "ca-yolo-gateway.whitecliff-123456.eastus2.azurecontainerapps.io",
   "staticWebAppHostname": "stapp-yolo-prod.azurestaticapps.net",
   "tempCertReady": false,
+  "apiCertificateName": "fixture-cert-api-curations-dev",
   "verification": { "ok": true }
 }
