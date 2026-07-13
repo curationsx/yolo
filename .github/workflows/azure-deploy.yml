@@ -287,17 +287,21 @@ jobs:
             echo "catalog-site/ not present — skipping Astro build."
           fi
 
-      - name: Retrieve Static Web Apps deployment token (ephemeral, masked, never persisted)
-        # Azure/static-web-apps-deploy@v1 and the `swa` CLI both still take a
-        # deployment token as input — GitHub OIDC authenticates *this job* to
-        # Azure, it does not replace that SWA-specific input. Rather than
-        # store a long-lived SWA token as a GitHub secret, fetch it fresh
-        # from the already-provisioned Static Web App on every run, mask it
-        # immediately so it never appears in logs, and hand it to
-        # scripts/azure/deploy.sh only as a job-scoped env var. Nothing is
-        # written back to GitHub secrets or persisted beyond this job.
-        id: swa_token
+      - name: Deploy images + Astro output to Static Web Apps
+        # Token retrieval, masking, and use are combined into this single
+        # step so the raw value never crosses a step boundary via
+        # $GITHUB_OUTPUT (which persists in job output state even when the
+        # rendered log text is masked) or $GITHUB_ENV. It exists only as a
+        # local shell variable for the lifetime of this one step, is passed
+        # to scripts/azure/deploy.sh as a single-command environment prefix
+        # (scoped to that one child process only, never exported to this
+        # step's own shell environment), and is explicitly unset
+        # immediately after. Coordinated with the current
+        # scripts/azure/deploy.sh interface: --swa-deployment-token-env
+        # defaults to SWA_DEPLOYMENT_TOKEN as of this writing; update the
+        # variable name below if that default changes.
         run: |
+          set -euo pipefail
           TOKEN="$(az staticwebapp secrets list \
             --name stapp-yolo-prod \
             --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
@@ -307,14 +311,8 @@ jobs:
             exit 1
           fi
           echo "::add-mask::$TOKEN"
-          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
-
-      - name: Deploy images + Astro output to Static Web Apps
-        env:
-          SWA_DEPLOYMENT_TOKEN: ${{ steps.swa_token.outputs.token }}
-        run: |
           if [ -x scripts/azure/deploy.sh ]; then
-            scripts/azure/deploy.sh --apply \
+            SWA_DEPLOYMENT_TOKEN="$TOKEN" scripts/azure/deploy.sh --apply \
               --gateway-image "${{ steps.build_images.outputs.gateway_image }}" \
               --copilot-image "${{ steps.build_images.outputs.copilot_image }}" \
               --sha "${{ github.sha }}" \
@@ -323,6 +321,7 @@ jobs:
           else
             echo "scripts/azure/deploy.sh not present yet (separate lane) — skipping."
           fi
+          unset TOKEN
 
       - name: Post-deploy verification (site only, read-only)
         # Only the public Static Web App is externally verified from this
@@ -472,12 +471,13 @@ jobs:
             echo "catalog-site/ not present — skipping Astro build."
           fi
 
-      - name: Retrieve Static Web Apps deployment token (ephemeral, masked, never persisted)
-        # See the staging job's identical step for why this is fetched fresh
-        # via `az staticwebapp secrets list` and masked, rather than read
-        # from a long-lived GitHub secret.
-        id: swa_token
+      - name: Deploy images + Astro output to Static Web Apps (production)
+        # See the staging job's identical step for why token retrieval,
+        # masking, and use are combined into this single step (never
+        # written to $GITHUB_OUTPUT/$GITHUB_ENV; single-command env prefix
+        # only; explicit unset).
         run: |
+          set -euo pipefail
           TOKEN="$(az staticwebapp secrets list \
             --name stapp-yolo-prod \
             --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
@@ -487,14 +487,8 @@ jobs:
             exit 1
           fi
           echo "::add-mask::$TOKEN"
-          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
-
-      - name: Deploy images + Astro output to Static Web Apps (production)
-        env:
-          SWA_DEPLOYMENT_TOKEN: ${{ steps.swa_token.outputs.token }}
-        run: |
           if [ -x scripts/azure/deploy.sh ]; then
-            scripts/azure/deploy.sh --apply \
+            SWA_DEPLOYMENT_TOKEN="$TOKEN" scripts/azure/deploy.sh --apply \
               --gateway-image "${{ steps.build_images.outputs.gateway_image }}" \
               --copilot-image "${{ steps.build_images.outputs.copilot_image }}" \
               --sha "${{ github.sha }}" \
@@ -503,6 +497,7 @@ jobs:
           else
             echo "scripts/azure/deploy.sh not present yet (separate lane) — skipping."
           fi
+          unset TOKEN
 
       - name: Post-deploy verification (production, read-only)
         # Production's gateway has no IP restriction
