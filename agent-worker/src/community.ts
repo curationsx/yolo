@@ -7,7 +7,11 @@
  * original CURATIONS work.
  */
 
-import { getSession, type AuthSession } from "./auth";
+import {
+  getSession,
+  resolvedAllowedOrigin,
+  type AuthSession,
+} from "./auth";
 import { chat, type AzureConfig, type ChatResult } from "./azure";
 import {
   createDocument,
@@ -120,8 +124,7 @@ class CapacityError extends Error {
 }
 
 export function corsHeaders(origin: string, env: Env): Record<string, string> {
-  const allowed = env.ALLOWED_ORIGINS.split(",").map((value) => value.trim());
-  const allow = allowed.includes(origin) ? origin : allowed[0];
+  const allow = resolvedAllowedOrigin(origin, env.ALLOWED_ORIGINS);
   return {
     "access-control-allow-origin": allow,
     "access-control-allow-methods": "GET, POST, OPTIONS",

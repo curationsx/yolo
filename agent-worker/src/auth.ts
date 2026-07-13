@@ -39,6 +39,53 @@ const SESSION_TOKEN_PATTERN = /^[A-Za-z0-9_-]{40,80}$/;
 const OAUTH_STATE_PATTERN = /^[A-Za-z0-9_-]{40,80}$/;
 const OAUTH_COOKIE_NAME = "__Host-curations_oauth_state";
 
+export function parseAllowedOrigins(raw: string): string[] {
+  const origins: string[] = [];
+  for (const value of raw.split(",")) {
+    try {
+      const origin = new URL(value.trim()).origin;
+      if (!origins.includes(origin)) origins.push(origin);
+    } catch {
+      // Invalid configured origins are ignored rather than reflected to clients.
+    }
+  }
+  return origins;
+}
+
+export function isAllowedOrigin(origin: string, configured: string): boolean {
+  let candidate: URL;
+  try {
+    candidate = new URL(origin);
+  } catch {
+    return false;
+  }
+  if (candidate.origin !== origin) return false;
+
+  for (const allowedOrigin of parseAllowedOrigins(configured)) {
+    const allowed = new URL(allowedOrigin);
+    if (candidate.origin === allowed.origin) return true;
+    if (
+      allowed.protocol === "https:" &&
+      allowed.hostname.endsWith(".pages.dev") &&
+      candidate.protocol === allowed.protocol &&
+      candidate.port === allowed.port &&
+      candidate.hostname.endsWith(`.${allowed.hostname}`)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function resolvedAllowedOrigin(
+  origin: string,
+  configured: string,
+  fallback = "https://curations.dev",
+): string {
+  if (isAllowedOrigin(origin, configured)) return origin;
+  return parseAllowedOrigins(configured)[0] ?? fallback;
+}
+
 function randomToken(byteLength = 32): string {
   const bytes = crypto.getRandomValues(new Uint8Array(byteLength));
   let binary = "";
@@ -53,17 +100,15 @@ async function sha256Base64Url(value: string): Promise<string> {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-function allowedOrigins(env: AuthEnv): string[] {
-  return env.ALLOWED_ORIGINS.split(",").map((origin) => origin.trim()).filter(Boolean);
-}
-
 function safeReturnTo(raw: string | null, env: AuthEnv): string {
-  const origins = allowedOrigins(env);
+  const origins = parseAllowedOrigins(env.ALLOWED_ORIGINS);
   const fallback = `${origins[0] ?? "https://curations.dev"}/`;
   if (!raw) return fallback;
   try {
     const url = new URL(raw);
-    return origins.includes(url.origin) ? url.toString() : fallback;
+    return isAllowedOrigin(url.origin, env.ALLOWED_ORIGINS)
+      ? url.toString()
+      : fallback;
   } catch {
     return fallback;
   }

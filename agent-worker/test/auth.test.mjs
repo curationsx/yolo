@@ -32,7 +32,8 @@ function authEnv(rate = new MemoryKv()) {
   return {
     GITHUB_CLIENT_ID: "client-id",
     GITHUB_CLIENT_SECRET: "client-secret",
-    ALLOWED_ORIGINS: "http://localhost:4321,https://curations.dev",
+    ALLOWED_ORIGINS:
+      "http://localhost:4321,https://curations.dev,https://curations-dev.pages.dev",
     RATE: rate,
   };
 }
@@ -89,6 +90,23 @@ test("GitHub OAuth uses PKCE, read:user, and a safe return URL", async () => {
     response.headers.get("set-cookie"),
     /^__Host-curations_oauth_state=.*HttpOnly; Secure; SameSite=Lax$/,
   );
+});
+
+test("GitHub OAuth accepts Cloudflare Pages branch return URLs", async () => {
+  const rate = new MemoryKv();
+  const returnTo =
+    "https://feat-catalog-site.curations-dev.pages.dev/software/cloudflare/";
+  const response = await beginGithubAuth(
+    new Request(
+      `https://api.curations.dev/api/auth/github/start?return_to=${encodeURIComponent(returnTo)}`,
+    ),
+    authEnv(rate),
+  );
+
+  const location = new URL(response.headers.get("location"));
+  const state = location.searchParams.get("state");
+  const saved = JSON.parse(rate.values.get(`oauth:${state}`));
+  assert.equal(saved.return_to, returnTo);
 });
 
 test("expired sessions are deleted and rejected", async () => {

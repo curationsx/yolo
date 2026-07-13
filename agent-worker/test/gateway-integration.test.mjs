@@ -246,7 +246,8 @@ test(
       COSMOS_VOTES_CONTAINER: "votes",
       COSMOS_SCORES_CONTAINER: "scores",
       COSMOS_DISCUSSIONS_CONTAINER: "discussions",
-      ALLOWED_ORIGINS: "http://localhost:4321",
+      ALLOWED_ORIGINS:
+        "https://curations.dev,https://curations-dev.pages.dev,http://localhost:4321",
       MAX_QUESTION_CHARS: "4000",
       MAX_OUTPUT_TOKENS: "512",
       PER_IP_DAILY_LIMIT: "10",
@@ -278,6 +279,17 @@ test(
       "content-type": "application/json",
       origin: "http://localhost:4321",
     };
+
+    const previewOrigin =
+      "https://feat-catalog-site.curations-dev.pages.dev";
+    const previewConfig = await fetch(`${base}/api/auth/config`, {
+      headers: { origin: previewOrigin },
+    });
+    assert.equal(previewConfig.status, 200);
+    assert.equal(
+      previewConfig.headers.get("access-control-allow-origin"),
+      previewOrigin,
+    );
 
     const invalidVotes = await repeatRequests(
       200,
