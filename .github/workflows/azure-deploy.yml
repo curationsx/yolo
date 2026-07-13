@@ -370,6 +370,27 @@ jobs:
             echo "catalog-site/ not present — skipping Astro build."
           fi
 
+      - name: Install scripts/azure dependencies (lockfile-pinned SWA CLI + Cosmos SDK)
+        # Same install verify already runs (npm ci --prefix scripts/azure
+        # under the Node 24 set up above), placed here in the deploy path
+        # too so the Static Web Apps deploy below resolves the SWA CLI from
+        # scripts/azure/package-lock.json's exact pinned version rather
+        # than a live npx registry resolution at deploy time -- deploy.sh
+        # currently invokes it via `npx --yes <pkg>@<version>` (see its own
+        # SWA_CLI_PACKAGE comment); once that is switched to resolve from
+        # this install instead (ops-owned, scripts/azure/**), this step is
+        # what makes the lockfile the actual source of truth rather than
+        # npm's registry at the moment of the call. Harmless no-op either
+        # way in the meantime: it is the same install already required
+        # before any real (non---fixture) Cosmos reconciliation in this
+        # lane.
+        run: |
+          if [ -f scripts/azure/package.json ]; then
+            npm ci --prefix scripts/azure
+          else
+            echo "scripts/azure/package.json not present yet (separate lane) — skipping."
+          fi
+
       - name: Deploy images + Astro output to Static Web Apps
         # Token retrieval, masking, and use are combined into this single
         # step so the raw value never crosses a step boundary via
@@ -574,6 +595,19 @@ jobs:
             (cd catalog-site && npm ci && PUBLIC_AGENT_API="https://api.curations.dev" npm run build)
           else
             echo "catalog-site/ not present — skipping Astro build."
+          fi
+
+      - name: Install scripts/azure dependencies (lockfile-pinned SWA CLI + Cosmos SDK)
+        # See the staging job's identical step for rationale: makes the
+        # Static Web Apps deploy below resolve the SWA CLI from
+        # scripts/azure/package-lock.json's exact pinned version once
+        # deploy.sh is switched to consume it (ops-owned), rather than
+        # live npx registry resolution at deploy time.
+        run: |
+          if [ -f scripts/azure/package.json ]; then
+            npm ci --prefix scripts/azure
+          else
+            echo "scripts/azure/package.json not present yet (separate lane) — skipping."
           fi
 
       - name: Deploy images + Astro output to Static Web Apps (production)
