@@ -116,7 +116,17 @@ var copilotTargetPort = 8080
 // deploymentRevision itself contains, so the suffix is always valid no
 // matter the input, while still changing whenever deploymentRevision does
 // (which is all that is required to force a fresh revision).
-var sanitizedRevisionSuffix = 'r${uniqueString(deploymentRevision)}'
+//
+// environmentName is folded into the hash input too (not just
+// deploymentRevision alone), as defense in depth: the calling workflow
+// already passes an environment-suffixed marker
+// (DEPLOYMENT_REVISION_MARKER: <run_id>-<run_attempt>-azure-staging vs.
+// ...-production), but this module must not silently depend on that
+// discipline. If deploymentRevision were ever identical across a staging
+// and a production call in the same workflow run -- a caller bug, not
+// today's actual behavior -- hashing environmentName alongside it still
+// guarantees the two apps' revisionSuffix values can never collide.
+var sanitizedRevisionSuffix = 'r${uniqueString('${environmentName}:${deploymentRevision}')}'
 
 var stagingIpRestrictions = enableStagingIpRestriction ? [
   {
