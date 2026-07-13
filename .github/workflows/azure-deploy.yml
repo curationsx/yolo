@@ -1,0 +1,419 @@
+name: AZURE DEPLOY
+
+# Delivery lane for the Yolo Azure migration (infra/**, azure.yaml). This
+# workflow never applies infra/bootstrap.bicep — that file is Owner-only and
+# is applied out-of-band by a human with subscription Owner / User Access
+# Administrator rights, via scripts/azure/bootstrap.sh. Every job here uses
+# the Contributor-scoped id-yolo-github OIDC identity, federated only to the
+# `azure-staging` and `production` GitHub environments (never a branch
+# wildcard), and never a long-lived Azure credential (no client secret, no
+# publish profile).
+#
+# OIDC hardening note: an environment-scoped federated subject
+# (repo:curationsx/yolo:environment:<name>) only narrows *which token* a job
+# can mint — it does not by itself restrict *which git ref* may use that
+# environment. That restriction is enforced separately by each GitHub
+# environment's own deployment branch policy, configured out-of-band (not
+# expressible in Bicep, since it is a GitHub API resource, not an Azure one):
+#   - `production`     -> custom branch policy, "main" only.
+#   - `azure-staging`   -> custom branch policy, "main" + the current feature
+#                          branch (feat/catalog-site as of this writing; add
+#                          later feature branches here as needed, remove them
+#                          once merged).
+# Verify with: gh api repos/curationsx/yolo/environments/<name>/deployment-branch-policies
+# Neither environment is left callable from an arbitrary branch.
+#
+# Production is intentionally workflow_dispatch/manual only -- there is no
+# push-to-main auto-trigger for the production job. A human must explicitly
+# choose target_environment=production, and the environment's own branch
+# policy (main only) plus any reviewer/wait-timer protection rules configured
+# on it are the actual gate, matching .azure/deployment-plan.md's Stage 4/5
+# "separate explicit confirmation" requirement.
+#
+# Image builds and per-deploy image rollout delegate to the existing
+# scripts/azure/build-images.sh and scripts/azure/deploy.sh (ACR remote
+# builds, immutable Git-SHA tags, Static Web Apps publish). infra/runtime.bicep
+# is applied directly by this workflow whenever infra-level configuration
+# (scale, ingress, secrets, environment variables) needs to change, using
+# the same image references build-images.sh produced.
+
+on:
+  pull_request:
+    paths:
+      - "infra/**"
+      - "azure.yaml"
+      - ".github/workflows/azure-deploy.yml"
+  workflow_dispatch:
+    inputs:
+      target_environment:
+        # Both values are real, deliberate destinations, gated two ways:
+        #   1. This job-level `if:` below only runs the matching job.
+        #   2. Each GitHub environment's own deployment branch policy (see
+        #      header comment) independently restricts which branch may
+        #      actually use it, regardless of what a caller requests here.
+        # azure-staging always builds the Astro site against the generated
+        # Azure gateway hostname; production always rebuilds the same
+        # committed SHA against https://api.curations.dev. Do not change
+        # either job's build URL without re-reading the header comment.
+        description: "GitHub environment to deploy against"
+        required: true
+        default: "azure-staging"
+        type: choice
+        options:
+          - azure-staging
+          - production
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: azure-deploy-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  AZURE_RESOURCE_GROUP: rg-yolo-prod
+  AZURE_CONTAINER_REGISTRY: yolocurationsprod
+
+jobs:
+  # ── PR verification: syntax + read-only what-if. Never mutates Azure. ──
+  verify:
+    name: Verify Bicep (no mutation)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: azure-staging
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Log in to Azure (OIDC, azure-staging environment)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_GITHUB_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Install Bicep CLI
+        run: az bicep install
+
+      - name: az bicep build (syntax) — every template
+        run: |
+          set -eu
+          for f in infra/bootstrap.bicep infra/runtime.bicep infra/modules/*.bicep; do
+            echo "::group::bicep build $f"
+            az bicep build --file "$f" --stdout > /dev/null
+            echo "::endgroup::"
+          done
+
+      - name: az deployment group what-if — infra/runtime.bicep (read-only)
+        # infra/bootstrap.bicep is intentionally never what-if'd or deployed
+        # here: it is subscription-scoped and Owner-only, applied only via
+        # scripts/azure/bootstrap.sh by a human. This job's OIDC identity
+        # holds only Contributor on rg-yolo-prod, which is exactly enough to
+        # preview infra/runtime.bicep and nothing more.
+        #
+        # The image tags below are what-if-only placeholders (never applied,
+        # never built, never pushed) so this preview does not depend on a
+        # real ACR build having already run for this PR's commit.
+        run: |
+          az deployment group what-if \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --template-file infra/runtime.bicep \
+            --parameters infra/runtime.parameters.json \
+            --parameters environmentName=azure-staging \
+            --parameters gatewayImageTag="${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/yolo/gateway:0000000whatifonly" \
+            --parameters copilotImageTag="${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/yolo/copilot-runtime:0000000whatifonly" \
+            --result-format FullResourcePayloads
+
+      - name: Verify script smoke check (module present, --help only)
+        # Full endpoint verification (scripts/azure/verify.mjs --gateway-url
+        # ... --site-url ...) only makes sense against real deployed
+        # hostnames, which do not exist for an unmerged PR. This step only
+        # confirms the read-only verifier is present and its CLI still
+        # parses, matching "verify on PR without Azure mutation".
+        run: |
+          if [ -f scripts/azure/verify.mjs ]; then
+            node scripts/azure/verify.mjs --help
+          else
+            echo "scripts/azure/verify.mjs not present yet (separate lane) — skipping."
+          fi
+
+  # ── Provision + deploy generated (azure-staging) endpoints on demand. ──
+  # Always builds against the generated Azure gateway hostname, never
+  # api.curations.dev -- see the workflow_dispatch input comment above.
+  provision-and-deploy:
+    name: Provision + deploy (azure-staging, generated endpoints)
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.target_environment == 'azure-staging'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: azure-staging
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Log in to Azure (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_GITHUB_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Install Bicep CLI
+        run: az bicep install
+
+      - name: Build gateway + Copilot runtime images (ACR remote build, immutable Git-SHA tags)
+        id: build_images
+        env:
+          # Computed deterministically from build-images.sh's own naming
+          # convention (repo yolo/gateway + yolo/copilot-runtime, tag =
+          # full Git SHA), rather than parsed from the script's stdout: az
+          # acr build streams live build-log output to stdout, which would
+          # otherwise pollute the command-substitution capture inside
+          # build-images.sh's own build_one() helper. Computing the refs
+          # here keeps this workflow correct regardless of that script's
+          # internal output shape.
+          GATEWAY_IMAGE: ${{ format('{0}.azurecr.io/yolo/gateway:{1}', 'yolocurationsprod', github.sha) }}
+          COPILOT_IMAGE: ${{ format('{0}.azurecr.io/yolo/copilot-runtime:{1}', 'yolocurationsprod', github.sha) }}
+        run: |
+          if [ ! -x scripts/azure/build-images.sh ]; then
+            echo "scripts/azure/build-images.sh not present yet (separate lane) — cannot build images." >&2
+            exit 1
+          fi
+          scripts/azure/build-images.sh --apply --sha "${{ github.sha }}"
+          echo "gateway_image=${GATEWAY_IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "copilot_image=${COPILOT_IMAGE}" >> "$GITHUB_OUTPUT"
+
+      - name: az deployment group what-if (pre-apply preview)
+        run: |
+          az deployment group what-if \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --template-file infra/runtime.bicep \
+            --parameters infra/runtime.parameters.json \
+            --parameters environmentName=azure-staging \
+            --parameters gatewayImageTag="${{ steps.build_images.outputs.gateway_image }}" \
+            --parameters copilotImageTag="${{ steps.build_images.outputs.copilot_image }}" \
+            --parameters wyattStagingIpCidr="${{ vars.WYATT_STAGING_IP_CIDR }}" \
+            --parameters enableStagingIpRestriction=true
+
+      - name: az deployment group create — infra/runtime.bicep
+        id: deploy_infra
+        run: |
+          az deployment group create \
+            --name "yolo-runtime-azure-staging-${{ github.run_id }}" \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --template-file infra/runtime.bicep \
+            --parameters infra/runtime.parameters.json \
+            --parameters environmentName=azure-staging \
+            --parameters gatewayImageTag="${{ steps.build_images.outputs.gateway_image }}" \
+            --parameters copilotImageTag="${{ steps.build_images.outputs.copilot_image }}" \
+            --parameters wyattStagingIpCidr="${{ vars.WYATT_STAGING_IP_CIDR }}" \
+            --parameters enableStagingIpRestriction=true \
+            --query "properties.outputs" -o json | tee deploy-outputs.json
+          echo "gateway_fqdn=$(jq -r '.gatewayFqdn.value' deploy-outputs.json)" >> "$GITHUB_OUTPUT"
+          echo "static_site_hostname=$(jq -r '.staticWebAppDefaultHostname.value // empty' deploy-outputs.json)" >> "$GITHUB_OUTPUT"
+          rm -f deploy-outputs.json
+
+      - name: Build Astro site (generated Azure gateway hostname — never api.curations.dev pre-cutover)
+        # api.curations.dev still resolves to Cloudflare until Stage 5 of
+        # .azure/deployment-plan.md. Building this pre-cutover azure-staging
+        # site against that hostname would silently exercise the OLD
+        # Cloudflare Worker instead of the new Azure gateway, defeating the
+        # entire point of staging validation (Stage 2/3). Always use the
+        # just-deployed generated gateway FQDN instead.
+        run: |
+          if [ -d catalog-site ]; then
+            (cd catalog-site && npm ci && PUBLIC_AGENT_API="https://${{ steps.deploy_infra.outputs.gateway_fqdn }}" npm run build)
+          else
+            echo "catalog-site/ not present — skipping Astro build."
+          fi
+
+      - name: Retrieve Static Web Apps deployment token (ephemeral, masked, never persisted)
+        # Azure/static-web-apps-deploy@v1 and the `swa` CLI both still take a
+        # deployment token as input — GitHub OIDC authenticates *this job* to
+        # Azure, it does not replace that SWA-specific input. Rather than
+        # store a long-lived SWA token as a GitHub secret, fetch it fresh
+        # from the already-provisioned Static Web App on every run, mask it
+        # immediately so it never appears in logs, and hand it to
+        # scripts/azure/deploy.sh only as a job-scoped env var. Nothing is
+        # written back to GitHub secrets or persisted beyond this job.
+        id: swa_token
+        run: |
+          TOKEN="$(az staticwebapp secrets list \
+            --name stapp-yolo-prod \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --query "properties.apiKey" -o tsv)"
+          if [ -z "$TOKEN" ]; then
+            echo "Failed to retrieve the Static Web Apps deployment token." >&2
+            exit 1
+          fi
+          echo "::add-mask::$TOKEN"
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy images + Astro output to Static Web Apps
+        env:
+          SWA_DEPLOYMENT_TOKEN: ${{ steps.swa_token.outputs.token }}
+        run: |
+          if [ -x scripts/azure/deploy.sh ]; then
+            scripts/azure/deploy.sh --apply \
+              --gateway-image "${{ steps.build_images.outputs.gateway_image }}" \
+              --copilot-image "${{ steps.build_images.outputs.copilot_image }}" \
+              --sha "${{ github.sha }}" \
+              --environment azure-staging
+          else
+            echo "scripts/azure/deploy.sh not present yet (separate lane) — skipping."
+          fi
+
+      - name: Post-deploy verification (read-only)
+        run: |
+          if [ -f scripts/azure/verify.mjs ]; then
+            node scripts/azure/verify.mjs \
+              --gateway-url "https://${{ steps.deploy_infra.outputs.gateway_fqdn }}" \
+              --site-url "https://${{ steps.deploy_infra.outputs.static_site_hostname }}"
+          else
+            echo "scripts/azure/verify.mjs not present yet (separate lane) — skipping."
+          fi
+
+  # ── Production cutover deploy: workflow_dispatch/manual only, gated by ──
+  # ── the GitHub `production` environment's branch policy (main only) ──
+  # ── plus any reviewer/wait-timer protection rules configured on it. ──
+  deploy-production:
+    name: Deploy production
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.target_environment == 'production'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Refuse anything but the main branch (defense in depth)
+        # The `production` GitHub environment's own deployment branch policy
+        # (custom, "main" only) is the real, GitHub-enforced gate -- this is
+        # a belt-and-suspenders check so a misconfigured or removed branch
+        # policy fails loudly here instead of silently deploying production
+        # from an arbitrary ref.
+        run: |
+          if [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "::error::deploy-production must run from refs/heads/main (got '${{ github.ref }}')." >&2
+            exit 1
+          fi
+
+      - name: Log in to Azure (OIDC, production environment)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_GITHUB_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Install Bicep CLI
+        run: az bicep install
+
+      - name: Build gateway + Copilot runtime images (ACR remote build, immutable Git-SHA tags)
+        id: build_images
+        env:
+          # See the staging job's identical step for why these are computed
+          # deterministically rather than parsed from build-images.sh output.
+          GATEWAY_IMAGE: ${{ format('{0}.azurecr.io/yolo/gateway:{1}', 'yolocurationsprod', github.sha) }}
+          COPILOT_IMAGE: ${{ format('{0}.azurecr.io/yolo/copilot-runtime:{1}', 'yolocurationsprod', github.sha) }}
+        run: |
+          if [ ! -x scripts/azure/build-images.sh ]; then
+            echo "scripts/azure/build-images.sh not present yet (separate lane) — cannot build images." >&2
+            exit 1
+          fi
+          scripts/azure/build-images.sh --apply --sha "${{ github.sha }}"
+          echo "gateway_image=${GATEWAY_IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "copilot_image=${COPILOT_IMAGE}" >> "$GITHUB_OUTPUT"
+
+      - name: az deployment group what-if (pre-apply preview)
+        run: |
+          az deployment group what-if \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --template-file infra/runtime.bicep \
+            --parameters infra/runtime.parameters.json \
+            --parameters environmentName=production \
+            --parameters gatewayImageTag="${{ steps.build_images.outputs.gateway_image }}" \
+            --parameters copilotImageTag="${{ steps.build_images.outputs.copilot_image }}" \
+            --parameters enableStagingIpRestriction=false
+
+      - name: az deployment group create — infra/runtime.bicep (production)
+        id: deploy_infra
+        # enableStagingIpRestriction is only ever set to false here, in the
+        # environment explicitly gated by GitHub's `production` protection
+        # rules, and only after every prior acceptance check has passed per
+        # .azure/deployment-plan.md Stage 5.
+        run: |
+          az deployment group create \
+            --name "yolo-runtime-production-${{ github.run_id }}" \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --template-file infra/runtime.bicep \
+            --parameters infra/runtime.parameters.json \
+            --parameters environmentName=production \
+            --parameters gatewayImageTag="${{ steps.build_images.outputs.gateway_image }}" \
+            --parameters copilotImageTag="${{ steps.build_images.outputs.copilot_image }}" \
+            --parameters enableStagingIpRestriction=false \
+            --query "properties.outputs" -o json | tee deploy-outputs.json
+          echo "gateway_fqdn=$(jq -r '.gatewayFqdn.value' deploy-outputs.json)" >> "$GITHUB_OUTPUT"
+          echo "static_site_hostname=$(jq -r '.staticWebAppDefaultHostname.value // empty' deploy-outputs.json)" >> "$GITHUB_OUTPUT"
+          rm -f deploy-outputs.json
+
+      - name: Build Astro site (rebuild same committed SHA against api.curations.dev)
+        # This is the Stage 4/5 rebuild: same source commit (github.sha)
+        # already validated in azure-staging against the generated gateway
+        # hostname, now rebuilt with the production API origin baked in.
+        # Trigger this job manually (workflow_dispatch, target_environment=
+        # production) only immediately before DNS cutover, per
+        # .azure/deployment-plan.md Stage 5 -- api.curations.dev must already
+        # be verified reachable (temporary ACME cert / Azure managed cert)
+        # before this output is published, or the site will publish with a
+        # production origin that isn't cut over yet.
+        run: |
+          if [ -d catalog-site ]; then
+            (cd catalog-site && npm ci && PUBLIC_AGENT_API="https://api.curations.dev" npm run build)
+          else
+            echo "catalog-site/ not present — skipping Astro build."
+          fi
+
+      - name: Retrieve Static Web Apps deployment token (ephemeral, masked, never persisted)
+        # See the staging job's identical step for why this is fetched fresh
+        # via `az staticwebapp secrets list` and masked, rather than read
+        # from a long-lived GitHub secret.
+        id: swa_token
+        run: |
+          TOKEN="$(az staticwebapp secrets list \
+            --name stapp-yolo-prod \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --query "properties.apiKey" -o tsv)"
+          if [ -z "$TOKEN" ]; then
+            echo "Failed to retrieve the Static Web Apps deployment token." >&2
+            exit 1
+          fi
+          echo "::add-mask::$TOKEN"
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy images + Astro output to Static Web Apps (production)
+        env:
+          SWA_DEPLOYMENT_TOKEN: ${{ steps.swa_token.outputs.token }}
+        run: |
+          if [ -x scripts/azure/deploy.sh ]; then
+            scripts/azure/deploy.sh --apply \
+              --gateway-image "${{ steps.build_images.outputs.gateway_image }}" \
+              --copilot-image "${{ steps.build_images.outputs.copilot_image }}" \
+              --sha "${{ github.sha }}" \
+              --environment production
+          else
+            echo "scripts/azure/deploy.sh not present yet (separate lane) — skipping."
+          fi
+
+      - name: Post-deploy verification (production, read-only)
+        run: |
+          if [ -f scripts/azure/verify.mjs ]; then
+            node scripts/azure/verify.mjs \
+              --gateway-url "https://${{ steps.deploy_infra.outputs.gateway_fqdn }}" \
+              --site-url "https://${{ steps.deploy_infra.outputs.static_site_hostname }}"
+          else
+            echo "scripts/azure/verify.mjs not present yet (separate lane) — skipping."
+          fi

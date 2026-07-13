@@ -1,0 +1,55 @@
+# azure.yaml
+#
+# Azure Developer CLI (azd) entry point for curationsx/yolo.
+#
+# Scope: infrastructure orchestration only. This file does not define a
+# `services` block, because building and publishing the gateway/Copilot
+# runtime images and the Astro static site is owned by
+# .github/workflows/azure-deploy.yml (ACR remote builds + Static Web Apps
+# publish) and by scripts/azure/* (a separate lane — see
+# .azure/deployment-plan.md). Wiring azd's built-in service deploy would
+# require touching agent-worker/** and catalog-site/** build definitions,
+# which are out of scope for this change.
+#
+# `azd provision` / `azd up` target infra/runtime.bicep ONLY — the
+# repeatable, Contributor-safe entry point. infra/bootstrap.bicep
+# (identities, GitHub OIDC federation, cross-resource RBAC) is Owner-only
+# and is never invoked through azd or routine CI. Run it directly with
+# `az deployment sub create --template-file infra/bootstrap.bicep` under an
+# Owner-authenticated session — see the header comment in that file.
+#
+# No operator GitHub Copilot token is injected anywhere in this file or its
+# hooks. "Use My Copilot" and "Run in My Terminal" both use end-user
+# delegated authorization (see AGENTS.md §4); this project intentionally
+# does not copy the common azd template `get-github-token` predeploy hook
+# pattern, because there is no operator-owned Copilot credential to fetch.
+
+name: yolo
+metadata:
+  template: yolo-azure-infra@1.0.0
+
+infra:
+  provider: bicep
+  path: infra
+  module: runtime
+
+# Deliberately no `services:` block — see header comment. Container image
+# builds (`az acr build`) and Static Web App content publish are performed by
+# .github/workflows/azure-deploy.yml, not by `azd deploy`.
+
+hooks:
+  # Read-only guardrail: confirm a human is not accidentally about to run
+  # `azd provision` / `azd up` against a dirty working tree, matching the
+  # deployment plan's "never deploy an uncommitted working tree" rule.
+  preprovision:
+    shell: sh
+    continueOnError: false
+    run: |
+      set -eu
+      if [ -n "$(git status --porcelain)" ]; then
+        echo "Refusing to provision: working tree has uncommitted changes." >&2
+        echo "Commit or stash changes, then re-run azd provision." >&2
+        exit 1
+      fi
+      echo "Working tree is clean. Reminder: this provisions infra/runtime.bicep only."
+      echo "infra/bootstrap.bicep is Owner-only and is never applied by azd."
