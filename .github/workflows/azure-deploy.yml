@@ -237,6 +237,19 @@ jobs:
       - name: Install Bicep CLI
         run: az bicep install
 
+      - name: Install az containerapp extension (pinned, noninteractive)
+        # scripts/azure/deploy.sh calls `az containerapp update`, `az
+        # containerapp job start`, and `az containerapp job execution show`.
+        # `containerapp` is an az CLI *extension*, not a core command group
+        # (unlike `az staticwebapp`, confirmed core) -- GitHub-hosted
+        # runners do not guarantee it preinstalled, and az CLI's
+        # interactive dynamic-install prompt would hang/fail in this
+        # non-interactive shell rather than silently succeeding. Pinned to
+        # the version validated locally in this session (1.3.0b4), which
+        # supports all three commands above; --yes makes the install itself
+        # noninteractive regardless of the dynamic-install config.
+        run: az extension add --name containerapp --version 1.3.0b4 --yes
+
       - name: Build gateway + Copilot runtime images (ACR remote build, immutable Git-SHA tags)
         id: build_images
         env:
@@ -430,6 +443,10 @@ jobs:
 
       - name: Install Bicep CLI
         run: az bicep install
+
+      - name: Install az containerapp extension (pinned, noninteractive)
+        # See the staging job's identical step for the full rationale.
+        run: az extension add --name containerapp --version 1.3.0b4 --yes
 
       - name: Build gateway + Copilot runtime images (ACR remote build, immutable Git-SHA tags)
         id: build_images
