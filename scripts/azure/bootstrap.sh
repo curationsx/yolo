@@ -521,6 +521,76 @@ budget_contact_emails_json() {
   printf '%s\n' "${emails[@]}" | jq -R . | jq -s -c .
 }
 
+# Azure only accepts the current monthly time-grain period when a budget is
+# first created. On rerun, preserve the deployed budget's original anchor so
+# bootstrap remains idempotent instead of silently shifting its schedule.
+BUDGET_LOOKUP_EXISTS=0
+BUDGET_LOOKUP_START=""
+lookup_budget_start_date() {
+  local budget_name="$1" lookup_output
+  BUDGET_LOOKUP_EXISTS=0
+  BUDGET_LOOKUP_START=""
+  if lookup_output="$(az consumption budget show \
+    --only-show-errors \
+    --subscription "$SUBSCRIPTION" \
+    --resource-group "" \
+    --budget-name "$budget_name" \
+    --query timePeriod.startDate \
+    --output tsv 2>&1)"; then
+    if [[ ! "$lookup_output" =~ ^[0-9]{4}-[0-9]{2}-01T00:00:00([.][0-9]+)?(Z|\+00:00)$ ]]; then
+      die "Existing Azure budget '$budget_name' returned an invalid monthly start date; refusing to shift or replace it."
+    fi
+    BUDGET_LOOKUP_EXISTS=1
+    BUDGET_LOOKUP_START="$lookup_output"
+    return
+  fi
+
+  if [[ "$lookup_output" != *"No budget found matching budgetName: $budget_name"* ]]; then
+    die "Could not determine whether Azure budget '$budget_name' already exists; refusing to deploy with an unverified schedule anchor."
+  fi
+}
+
+resolve_budget_start_date() {
+  local budget_mode prod_exists prod_start foundry_budget foundry_exists foundry_start
+  budget_mode="$(jq -r 'if .parameters | has("budgetUseUnifiedFilter") then .parameters.budgetUseUnifiedFilter.value else true end' "${REPO_ROOT}/infra/main.parameters.json")"
+  if [[ "$budget_mode" != "true" && "$budget_mode" != "false" ]]; then
+    die "infra/main.parameters.json has an invalid budgetUseUnifiedFilter value; expected true or false."
+  fi
+
+  lookup_budget_start_date "$YOLO_BUDGET"
+  prod_exists="$BUDGET_LOOKUP_EXISTS"
+  prod_start="$BUDGET_LOOKUP_START"
+
+  if [[ "$budget_mode" == "true" ]]; then
+    if [[ "$prod_exists" == "1" ]]; then
+      log_info "Preserving existing Azure budget schedule anchor: $prod_start" >&2
+      printf '%s\n' "$prod_start"
+    else
+      date -u '+%Y-%m-01T00:00:00Z'
+    fi
+    return
+  fi
+
+  foundry_budget="${YOLO_BUDGET%-prod}-foundry"
+  lookup_budget_start_date "$foundry_budget"
+  foundry_exists="$BUDGET_LOOKUP_EXISTS"
+  foundry_start="$BUDGET_LOOKUP_START"
+
+  if [[ "$prod_exists" != "$foundry_exists" ]]; then
+    die "Split-budget mode found only one of '$YOLO_BUDGET' and '$foundry_budget'; refusing to shift the existing schedule or create the missing budget with a stale anchor."
+  fi
+  if [[ "$prod_exists" == "1" ]]; then
+    if [[ "$prod_start" != "$foundry_start" ]]; then
+      die "Split-budget mode found mismatched schedule anchors; refusing to rewrite either existing budget."
+    fi
+    log_info "Preserving existing split-budget schedule anchor: $prod_start" >&2
+    printf '%s\n' "$prod_start"
+    return
+  fi
+
+  date -u '+%Y-%m-01T00:00:00Z'
+}
+
 # Validates every mandatory non-secret output before any post-deployment
 # mutation begins. The Bicep contract always emits both values; a missing or
 # malformed value means the deployment result is incomplete and must fail
@@ -672,10 +742,11 @@ apply_bootstrap() {
     die "No budget contact email configured; pass --budget-contact-email <email> or set \$YOLO_BUDGET_CONTACT_EMAIL before --apply."
   fi
 
-  local budget_emails_json
+  local budget_emails_json budget_start_date
   budget_emails_json="$(budget_contact_emails_json "$BUDGET_CONTACT_EMAIL")"
+  budget_start_date="$(resolve_budget_start_date)"
 
-  log_info "Invoking: az deployment sub create --location $LOCATION --template-file $BICEP_ENTRY_POINT --parameters @${REPO_ROOT}/infra/main.parameters.json --parameters budgetContactEmails=<redacted: configured>"
+  log_info "Invoking: az deployment sub create --location $LOCATION --template-file $BICEP_ENTRY_POINT --parameters @${REPO_ROOT}/infra/main.parameters.json --parameters budgetContactEmails=<redacted: configured> budgetStartDate=$budget_start_date"
   # Bicep never outputs secrets to begin with (no @secure() param is ever
   # surfaced as an output in infra/bootstrap.bicep) -- --query
   # properties.outputs captures only that already-non-secret set into a
@@ -688,6 +759,7 @@ apply_bootstrap() {
     --parameters "@${REPO_ROOT}/infra/main.parameters.json" \
     --parameters resourceGroupName="$YOLO_RESOURCE_GROUP" \
     --parameters budgetContactEmails="$budget_emails_json" \
+    --parameters budgetStartDate="$budget_start_date" \
     --query properties.outputs \
     --output json)"
 

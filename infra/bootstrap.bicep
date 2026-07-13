@@ -103,8 +103,8 @@ param budgetUseUnifiedFilter bool = true
 @description('Contact emails for budget alert notifications at 50/80/100%. Leave empty to skip creating any budget (e.g. for a syntax-only what-if run) rather than deploy an alert nobody receives.')
 param budgetContactEmails array = []
 
-@description('Budget schedule start date (must be the first day of a month, UTC midnight). Defaults to a fixed anchor so repeat bootstrap runs do not shift the recurrence window.')
-param budgetStartDate string = '2026-01-01T00:00:00Z'
+@description('Budget schedule start date (must be the first day of the current month for first creation, or the existing budget anchor on rerun). bootstrap.sh resolves and passes the stable value; the dynamic default keeps direct first-time Bicep deployments valid.')
+param budgetStartDate string = utcNow('yyyy-MM-01T00:00:00Z')
 
 @description('Entra object ID of the human/service principal running this bootstrap deployment, granted Key Vault Secrets Officer at kv-yolo-prod-curations. This is required because the vault uses RBAC authorization: subscription Owner alone does not imply Key Vault data-plane access, so `az keyvault secret set` would otherwise fail for the Owner running Stage 1/3/4 of the deployment plan. Every runtime/CI identity stays Key Vault Secrets User (read-only). Defaults to the deployer\'s own object ID — discovered automatically via the deployer() function, not hard-coded to any specific person — so this only needs to be overridden if bootstrap is run on behalf of a different operator (equivalent to `az ad signed-in-user show --query id -o tsv` for whoever authenticates the `az deployment sub create` call).')
 param bootstrapOperatorPrincipalId string = deployer().objectId

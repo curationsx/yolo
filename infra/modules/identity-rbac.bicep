@@ -84,6 +84,9 @@ resource githubIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-1
 // .github/workflows/azure-deploy.yml. Live `what-if` stays exclusively
 // behind workflow_dispatch + an explicitly human-approved, branch-policy
 // -restricted GitHub environment (azure-staging or production).
+// Azure rejects concurrent federated-credential writes beneath one managed
+// identity, so this loop must remain serialized.
+@batchSize(1)
 resource githubFederatedCredentials 'Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials@2024-11-30' = [for envName in githubEnvironments: {
   parent: githubIdentity
   name: 'gh-${envName}'

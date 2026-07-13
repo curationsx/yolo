@@ -149,6 +149,49 @@ case "$1 $2" in
   "acr build")
     printf 'fixture: acr build executed (mutating)\n'
     ;;
+  "consumption budget")
+    case "${3:-}" in
+      show)
+        if [[ "${AZ_BUDGET_LOOKUP_FAIL:-0}" == "1" ]]; then
+          fail "fixture az: simulated budget lookup failure"
+        fi
+
+        budget_name=""
+        subscription_scope=0
+        previous=""
+        for arg in "$@"; do
+          if [[ "$previous" == "--budget-name" ]]; then budget_name="$arg"; fi
+          if [[ "$previous" == "--resource-group" && -z "$arg" ]]; then subscription_scope=1; fi
+          previous="$arg"
+        done
+        [[ -n "$budget_name" ]] || fail "fixture az: budget show missing --budget-name"
+
+        if [[ -n "${AZURE_DEFAULTS_GROUP:-}" && "$subscription_scope" != "1" ]]; then
+          fail "ERROR: (404) No budget found matching budgetName: $budget_name, under resource group ${AZURE_DEFAULTS_GROUP}"
+        fi
+
+        budget_exists="${AZ_BUDGET_EXISTS:-0}"
+        budget_start="${AZ_BUDGET_START_DATE:-2026-01-01T00:00:00Z}"
+        if [[ "$budget_name" == "budget-yolo-prod" ]]; then
+          budget_exists="${AZ_PROD_BUDGET_EXISTS:-$budget_exists}"
+          budget_start="${AZ_PROD_BUDGET_START_DATE:-$budget_start}"
+        elif [[ "$budget_name" == "budget-yolo-foundry" ]]; then
+          budget_exists="${AZ_FOUNDRY_BUDGET_EXISTS:-$budget_exists}"
+          budget_start="${AZ_FOUNDRY_BUDGET_START_DATE:-$budget_start}"
+        fi
+
+        if [[ "$budget_exists" == "1" ]]; then
+          printf '%s\n' "$budget_start"
+        else
+          fail "ERROR: (404) No budget found matching budgetName: $budget_name
+Code: 404"
+        fi
+        ;;
+      *)
+        fail "fixture az: unhandled consumption budget subcommand: $*"
+        ;;
+    esac
+    ;;
   "deployment sub")
     if [[ "${AZ_DEPLOY_SUB_FAIL:-0}" == "1" ]]; then
       fail "fixture az: simulated deployment sub create failure"

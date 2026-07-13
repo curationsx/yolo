@@ -64,6 +64,18 @@ assert_file_mode() {
   if [[ "$actual_mode" == "$expected_mode" ]]; then ok "$desc (mode=$actual_mode)"; else bad "$desc (expected mode=$expected_mode, got=$actual_mode)"; fi
 }
 
+# --- live Bicep contract regressions --------------------------------------
+
+SOURCE_ROOT="$(cd -- "${AZURE_DIR}/../.." >/dev/null 2>&1 && pwd -P)"
+identity_rbac_bicep="$(cat "${SOURCE_ROOT}/infra/modules/identity-rbac.bicep")"
+bootstrap_bicep="$(cat "${SOURCE_ROOT}/infra/bootstrap.bicep")"
+assert_contains "GitHub federated credentials deploy serially beneath one managed identity" \
+  "$identity_rbac_bicep" $'@batchSize(1)\nresource githubFederatedCredentials'
+assert_contains "first-time budget start defaults to the current UTC month" \
+  "$bootstrap_bicep" "param budgetStartDate string = utcNow('yyyy-MM-01T00:00:00Z')"
+assert_not_contains "budget start date is not pinned to a stale calendar month" \
+  "$bootstrap_bicep" "param budgetStartDate string = '2026-01-01T00:00:00Z'"
+
 # --- fixture git repo -----------------------------------------------------
 
 make_fixture_repo() {
@@ -135,6 +147,14 @@ make_unconfigured_gh_state() {
   cat > "$1" <<'EOF'
 {"environments":{"production":{"customBranchPolicies":false,"branches":[]},"azure-staging":{"customBranchPolicies":false,"branches":[]}}}
 EOF
+}
+
+set_fixture_budget_mode() {
+  local mode="$1"
+  printf '{"$schema":"https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#","contentVersion":"1.0.0.0","parameters":{"budgetUseUnifiedFilter":{"value":%s}}}\n' \
+    "$mode" > "${FIXTURE_REPO}/infra/main.parameters.json"
+  git -C "$FIXTURE_REPO" add infra/main.parameters.json
+  git -C "$FIXTURE_REPO" commit -q -m "fixture: set budget mode ${mode}"
 }
 
 echo "-- dry run passes all checks and performs no mutation --"
@@ -249,7 +269,58 @@ code=$?
 assert_exit_code "bootstrap --apply with a budget contact email succeeds" 0 "$code"
 assert_contains "bootstrap --apply invokes 'deployment sub create'" "$(cat "$ledger")" "deployment sub"
 assert_contains "bootstrap --apply passes budgetContactEmails inline to az" "$(cat "$ledger")" "budgetContactEmails="
+assert_contains "bootstrap --apply gives a new budget the current monthly anchor" "$(cat "$ledger")" \
+  "budgetStartDate=$(date -u '+%Y-%m-01T00:00:00Z')"
 assert_not_contains "bootstrap --apply never echoes the budget contact email to its own stdout/stderr" "$out" "ops-budget-alerts@example.test"
+
+echo "-- budget schedule: reruns preserve the existing anchor and lookup failures stop before deployment --"
+ledger="${SCRATCH}/bootstrap-budget-existing-anchor.ledger"
+: > "$ledger"
+gh_state="${GH_STATE_DIR}/budget-existing-anchor.json"
+make_compliant_gh_state "$gh_state"
+out="$(AZ_LOGIN=1 AZ_OWNER_ROLE=1 AZ_PROVIDERS_REGISTERED=1 AZ_ACR_AVAILABLE=1 AZ_KV_EXISTS=0 AZ_ENV_EXISTS=0 \
+  AZ_BUDGET_EXISTS=1 AZ_BUDGET_START_DATE="2026-01-01T00:00:00Z" AZURE_DEFAULTS_GROUP="rg-wrong-default" \
+  GH_AUTHENTICATED=1 GH_FIXTURE_STATE_FILE="$gh_state" \
+  run_script "$ledger" "${AZURE_DIR}/bootstrap.sh" \
+  --budget-contact-email "ops-budget-alerts@example.test" \
+  --apply --confirm "bootstrap-rg-yolo-prod" --json 2>&1)"
+code=$?
+assert_exit_code "bootstrap --apply rerun with an existing budget succeeds" 0 "$code"
+assert_contains "bootstrap --apply rerun preserves the existing budget anchor" "$(cat "$ledger")" \
+  "budgetStartDate=2026-01-01T00:00:00Z"
+assert_contains "bootstrap budget lookup explicitly clears any default resource-group scope" "$(cat "$ledger")" \
+  "consumption budget show --only-show-errors --subscription"
+
+ledger="${SCRATCH}/bootstrap-budget-lookup-failure.ledger"
+: > "$ledger"
+gh_state="${GH_STATE_DIR}/budget-lookup-failure.json"
+make_compliant_gh_state "$gh_state"
+out="$(AZ_LOGIN=1 AZ_OWNER_ROLE=1 AZ_PROVIDERS_REGISTERED=1 AZ_ACR_AVAILABLE=1 AZ_KV_EXISTS=0 AZ_ENV_EXISTS=0 \
+  AZ_BUDGET_LOOKUP_FAIL=1 GH_AUTHENTICATED=1 GH_FIXTURE_STATE_FILE="$gh_state" \
+  run_script "$ledger" "${AZURE_DIR}/bootstrap.sh" \
+  --budget-contact-email "ops-budget-alerts@example.test" \
+  --apply --confirm "bootstrap-rg-yolo-prod" --json 2>&1)"
+code=$?
+assert_exit_code "bootstrap --apply refuses when budget existence cannot be verified" 1 "$code"
+assert_contains "bootstrap explains the fail-closed budget lookup" "$out" "Could not determine whether Azure budget"
+assert_not_contains "bootstrap budget lookup failure performs no deployment" "$(cat "$ledger")" "deployment sub"
+
+set_fixture_budget_mode false
+ledger="${SCRATCH}/bootstrap-budget-split-mixed.ledger"
+: > "$ledger"
+gh_state="${GH_STATE_DIR}/budget-split-mixed.json"
+make_compliant_gh_state "$gh_state"
+out="$(AZ_LOGIN=1 AZ_OWNER_ROLE=1 AZ_PROVIDERS_REGISTERED=1 AZ_ACR_AVAILABLE=1 AZ_KV_EXISTS=0 AZ_ENV_EXISTS=0 \
+  AZ_PROD_BUDGET_EXISTS=1 AZ_FOUNDRY_BUDGET_EXISTS=0 \
+  GH_AUTHENTICATED=1 GH_FIXTURE_STATE_FILE="$gh_state" \
+  run_script "$ledger" "${AZURE_DIR}/bootstrap.sh" \
+  --budget-contact-email "ops-budget-alerts@example.test" \
+  --apply --confirm "bootstrap-rg-yolo-prod" --json 2>&1)"
+code=$?
+assert_exit_code "bootstrap split-budget mode refuses a mixed existence state" 1 "$code"
+assert_contains "bootstrap explains the split-budget mixed-state refusal" "$out" "Split-budget mode found only one"
+assert_not_contains "bootstrap split-budget mixed state performs no deployment" "$(cat "$ledger")" "deployment sub"
+set_fixture_budget_mode true
 
 echo "-- post-apply automation: sets non-secret GitHub repo variables and generates+stores both Key Vault runtime secrets, never echoing any value, and never advising 'az keyvault secret show' --"
 ledger="${SCRATCH}/bootstrap-postapply-ok.ledger"
