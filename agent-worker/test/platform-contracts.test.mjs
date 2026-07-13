@@ -179,33 +179,36 @@ test("Cloudflare readiness probe reports every configuration flag", async () => 
   assert.equal(result.checks.github, "error");
 });
 
-test("Cloudflare vote store delegates to the durable VoteGuard Durable Object and Cosmos REST", async () => {
-  const { VoteGuard } = await import("../src/vote-guard.ts");
-
-  class MemoryDoStorage {
-    values = new Map();
-    async get(keyOrKeys) {
-      if (Array.isArray(keyOrKeys)) {
-        const result = new Map();
-        for (const key of keyOrKeys) if (this.values.has(key)) result.set(key, this.values.get(key));
-        return result;
-      }
-      return this.values.get(keyOrKeys);
-    }
-    async put(keyOrEntries, value) {
-      if (typeof keyOrEntries === "string") this.values.set(keyOrEntries, value);
-      else for (const [key, entryValue] of Object.entries(keyOrEntries)) this.values.set(key, entryValue);
-    }
-    async delete(key) {
-      this.values.delete(key);
-    }
-    async list({ prefix } = {}) {
+class MemoryDoStorage {
+  values = new Map();
+  async get(keyOrKeys) {
+    if (Array.isArray(keyOrKeys)) {
       const result = new Map();
-      for (const [key, value] of this.values) if (!prefix || key.startsWith(prefix)) result.set(key, value);
+      for (const key of keyOrKeys) if (this.values.has(key)) result.set(key, this.values.get(key));
       return result;
     }
+    return this.values.get(keyOrKeys);
   }
+  async put(keyOrEntries, value) {
+    if (typeof keyOrEntries === "string") this.values.set(keyOrEntries, value);
+    else for (const [key, entryValue] of Object.entries(keyOrEntries)) this.values.set(key, entryValue);
+  }
+  async delete(key) {
+    this.values.delete(key);
+  }
+  async list({ prefix } = {}) {
+    const result = new Map();
+    for (const [key, value] of this.values) if (!prefix || key.startsWith(prefix)) result.set(key, value);
+    return result;
+  }
+}
 
+/** Builds a VoteGuard Durable Object backed by an in-memory fake of the
+ * master-key Cosmos REST client, installing `globalThis.fetch` for the
+ * duration of the harness. Callers must call `restore()` (e.g. in a
+ * `finally` block) to uninstall the fetch mock. */
+async function createVoteGuardHarness() {
+  const { VoteGuard } = await import("../src/vote-guard.ts");
   const documents = new Map();
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url, init) => {
@@ -215,7 +218,16 @@ test("Cloudflare vote store delegates to the durable VoteGuard Durable Object an
       const body = JSON.parse(init.body);
       const partitionKey = JSON.parse(init.headers["x-ms-documentdb-partitionkey"])[0];
       const scoped = [...documents.values()].filter((doc) => doc.__partition === partitionKey);
-      if (body.query.includes("COUNT(1)")) return Response.json({ Documents: [scoped.length] });
+      if (body.query.includes("COUNT(1)")) {
+        // Simulate real Cosmos SQL's IS_DEFINED semantics so this mock
+        // actually proves the vote-only count predicate, rather than
+        // trivially counting every document in the partition.
+        const isVoteOnlyCount = body.query.includes("IS_DEFINED");
+        const countable = isVoteOnlyCount
+          ? scoped.filter((doc) => doc.id !== "score" && (!Object.hasOwn(doc, "doc_type") || doc.doc_type === "vote"))
+          : scoped;
+        return Response.json({ Documents: [countable.length] });
+      }
       return Response.json({ Documents: scoped });
     }
     if (init.method === "POST") {
@@ -239,43 +251,91 @@ test("Cloudflare vote store delegates to the durable VoteGuard Durable Object an
     return Response.json({ error: "unsupported" }, { status: 400 });
   };
 
-  try {
-    const voteGuardEnv = {
-      RATE: new MemoryKv(),
-      COSMOS_ENDPOINT: "https://yolo-curations-feed.documents.azure.com",
-      COSMOS_KEY: Buffer.from("test-key").toString("base64"),
-      COSMOS_DATABASE: "curations",
-      COSMOS_VOTES_CONTAINER: "votes",
-      COSMOS_SCORES_CONTAINER: "scores",
-    };
-    const instances = new Map();
-    const namespace = {
-      idFromName: (name) => name,
-      get: (id) => {
-        let instance = instances.get(id);
-        if (!instance) {
-          instance = new VoteGuard({ storage: new MemoryDoStorage() }, voteGuardEnv);
-          instances.set(id, instance);
-        }
-        return { fetch: (url, init) => instance.fetch(new Request(url, init)) };
-      },
-    };
-    const store = createCloudflareVoteStore({ ...voteGuardEnv, VOTE_GUARD: namespace });
+  const voteGuardEnv = {
+    RATE: new MemoryKv(),
+    COSMOS_ENDPOINT: "https://yolo-curations-feed.documents.azure.com",
+    COSMOS_KEY: Buffer.from("test-key").toString("base64"),
+    COSMOS_DATABASE: "curations",
+    COSMOS_VOTES_CONTAINER: "votes",
+    COSMOS_SCORES_CONTAINER: "scores",
+  };
+  const instances = new Map();
+  const namespace = {
+    idFromName: (name) => name,
+    get: (id) => {
+      let instance = instances.get(id);
+      if (!instance) {
+        instance = new VoteGuard({ storage: new MemoryDoStorage() }, voteGuardEnv);
+        instances.set(id, instance);
+      }
+      return { fetch: (url, init) => instance.fetch(new Request(url, init)) };
+    },
+  };
+  const store = createCloudflareVoteStore({ ...voteGuardEnv, VOTE_GUARD: namespace });
 
-    const first = await store.setVote("software:cloudflare", "123", true);
+  return {
+    documents,
+    store,
+    restore: () => {
+      globalThis.fetch = originalFetch;
+    },
+  };
+}
+
+test("Cloudflare vote store delegates to the durable VoteGuard Durable Object and Cosmos REST", async () => {
+  const harness = await createVoteGuardHarness();
+  try {
+    const first = await harness.store.setVote("software:cloudflare", "123", true);
     assert.deepEqual(first, { target_id: "software:cloudflare", voted: true, count: 1 });
-    assert.deepEqual(await store.getViewerVotes("123", ["software:cloudflare"]), ["software:cloudflare"]);
+    assert.deepEqual(await harness.store.getViewerVotes("123", ["software:cloudflare"]), ["software:cloudflare"]);
 
     // getCounts must read the same legacy `scores` container the durable
     // VoteGuard's mutate() already keeps current on every vote — no
     // behavior change for Cloudflare.
-    assert.deepEqual(await store.getCounts(["software:cloudflare"]), { "software:cloudflare": 1 });
+    assert.deepEqual(await harness.store.getCounts(["software:cloudflare"]), { "software:cloudflare": 1 });
 
-    const removed = await store.setVote("software:cloudflare", "123", false);
+    const removed = await harness.store.setVote("software:cloudflare", "123", false);
     assert.deepEqual(removed, { target_id: "software:cloudflare", voted: false, count: 0 });
-    assert.deepEqual(await store.getCounts(["software:cloudflare"]), { "software:cloudflare": 0 });
+    assert.deepEqual(await harness.store.getCounts(["software:cloudflare"]), { "software:cloudflare": 0 });
   } finally {
-    globalThis.fetch = originalFetch;
+    harness.restore();
+  }
+});
+
+test("legacy Cloudflare vote counting excludes a same-partition Azure score metadata document", async () => {
+  // Regression test for the dual-cloud race: once a pre-cutover backfill
+  // (or Azure vote traffic) creates the same-partition score metadata
+  // document (`id: "score"`, `doc_type: "score"`) in the votes container,
+  // the legacy Cloudflare Worker's own count query must not treat it as an
+  // extra vote during the 300s DNS TTL overlap or the rollback window.
+  const harness = await createVoteGuardHarness();
+  try {
+    // Simulate the score metadata document already existing in this
+    // target's partition (as a pre-cutover backfill or Azure vote would
+    // leave behind), with a corroborating Azure-native vote document.
+    harness.documents.set("software:cloudflare::score", {
+      id: "score",
+      doc_type: "score",
+      target_id: "software:cloudflare",
+      count: 1,
+      __partition: "software:cloudflare",
+    });
+    harness.documents.set("software:cloudflare::github-1", {
+      id: "github-1",
+      doc_type: "vote",
+      target_id: "software:cloudflare",
+      user_id: "1",
+      created_at: new Date().toISOString(),
+      __partition: "software:cloudflare",
+    });
+
+    // A late Worker vote from a different viewer during the overlap
+    // window must count only the two real votes (the pre-existing Azure
+    // one plus this new one) — never the score metadata row.
+    const result = await harness.store.setVote("software:cloudflare", "999", true);
+    assert.deepEqual(result, { target_id: "software:cloudflare", voted: true, count: 2 });
+  } finally {
+    harness.restore();
   }
 });
 

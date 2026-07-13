@@ -252,10 +252,21 @@ export class VoteGuard {
       await this.rememberCosmosSession(sessionToken ?? null);
     }
 
+    // Count only true vote documents, never the same-partition Azure score
+    // metadata document (`id: "score"`, `doc_type: "score"`) that a
+    // pre-cutover backfill or reconciliation run may have already created
+    // in this partition. Legacy Cloudflare vote docs have no `doc_type`
+    // field at all; Azure-native vote docs set `doc_type: "vote"`. Without
+    // this filter, a late Worker vote during the dual-cloud DNS TTL
+    // overlap (or during the rollback window) would count that metadata
+    // row as an extra vote.
     const countResult = await queryDocumentsWithSession<number>(
       votes,
-      "SELECT VALUE COUNT(1) FROM c",
-      [],
+      "SELECT VALUE COUNT(1) FROM c WHERE (NOT IS_DEFINED(c.doc_type) OR c.doc_type = @type) AND c.id != @scoreId",
+      [
+        { name: "@type", value: "vote" },
+        { name: "@scoreId", value: "score" },
+      ],
       body.target_id,
       sessionToken,
     );

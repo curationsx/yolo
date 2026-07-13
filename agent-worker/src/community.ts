@@ -400,10 +400,17 @@ async function setLegacyVote(
     await env.community.deleteDocument(env.COSMOS_VOTES_CONTAINER, voteId, targetId);
   }
 
+  // Count only true vote documents, never a same-partition Azure score
+  // metadata document (`id: "score"`, `doc_type: "score"`) that a
+  // pre-cutover backfill/reconciliation may have already created here —
+  // see vote-guard.ts's mutate() for the identical fix on the durable path.
   const countResult = await env.community.queryDocuments<number>(
     env.COSMOS_VOTES_CONTAINER,
-    "SELECT VALUE COUNT(1) FROM c",
-    [],
+    "SELECT VALUE COUNT(1) FROM c WHERE (NOT IS_DEFINED(c.doc_type) OR c.doc_type = @type) AND c.id != @scoreId",
+    [
+      { name: "@type", value: "vote" },
+      { name: "@scoreId", value: "score" },
+    ],
     targetId,
   );
   const count = countResult[0] ?? 0;
