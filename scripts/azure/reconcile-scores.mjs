@@ -303,7 +303,31 @@ async function runCosmosMode(values) {
       // idempotent (re-running converges on the same authoritative count,
       // whether it's the first backfill, a post-cutover late-vote
       // absorption pass, or a repeat of either).
-      await scoresContainer.items.upsert({ id: diff.target, target: diff.target, count: diff.authoritativeCount });
+      //
+      // Document shape and partition key MUST match the real legacy
+      // scores container exactly (agent-worker/src/community.ts's
+      // `ScoreDoc`; identical shape written by
+      // agent-worker/src/vote-guard.ts:272-280 and by
+      // agent-worker/src/platform/azure/community.ts's
+      // `reconcileLegacyScoresContainer`): `id` is the target id itself,
+      // `scope: "global"` is the (only) partition key value the
+      // container uses, `target_id` duplicates `id` as a queryable
+      // field, and `updated_at` is a plain ISO timestamp. Omitting
+      // `scope`/`target_id` here previously wrote a document the SDK
+      // could not partition correctly and that the rest of the codebase
+      // could never read back — this is the exact shape read by
+      // `SELECT c.target_id AS target, c.count FROM c` above, so a
+      // repeat reconciliation run converges instead of drifting.
+      await scoresContainer.items.upsert(
+        {
+          id: diff.target,
+          scope: "global",
+          target_id: diff.target,
+          count: diff.authoritativeCount,
+          updated_at: new Date().toISOString(),
+        },
+        { partitionKey: "global" }
+      );
     }
     report.applied = true;
   }

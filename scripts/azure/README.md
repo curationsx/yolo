@@ -395,10 +395,30 @@ by default.
   `FixtureCloudflareClient` before any production run.
 - `reconcile-scores.mjs`'s real Cosmos mode assumes `@azure/cosmos`'s
   `CosmosClient` accepts an `aadCredentials` option backed by
-  `DefaultAzureCredential` from `@azure/identity`, and that `votes`/`scores`
-  containers expose `target`, `viewerId`, `direction`, and `count` fields as
-  described in the plan. Confirm field names against the eventual
-  `agent-worker/src/platform/azure/state.ts` implementation.
+  `DefaultAzureCredential` from `@azure/identity`. The container field
+  schema itself is **confirmed** (not assumed) against the actual
+  persisted shapes in `agent-worker/src/community.ts` (`VoteDoc`,
+  `ScoreDoc`), `agent-worker/src/vote-guard.ts`, and
+  `agent-worker/src/platform/azure/community.ts`: the `votes` container's
+  real fields are `id`/`target_id`/`user_id`/`created_at` (plus optional
+  `doc_type: "vote"`; legacy Cloudflare-Worker-written vote docs have no
+  `doc_type` at all — a vote document's mere existence is the vote, there
+  is no downvote/`direction` concept in this schema), and the legacy
+  `scores` container's real fields are `id`/`scope: "global"`/`target_id`/
+  `count`/`updated_at`, partitioned on `scope`. `target`/`viewerId`/
+  `direction` are this tool's own internal, in-memory diff-computation
+  names (`computeReconciliation`'s parameter shape) — they are translated
+  to/from the real field names at the query/upsert boundary in
+  `runCosmosMode` and never appear in a persisted document. An earlier
+  revision of the write-back path incorrectly persisted `{id, target,
+  count}` instead of `{id, scope: "global", target_id, count,
+  updated_at}`, which would have broken the container's partition-key
+  routing and made repeat reconciliation runs unable to read their own
+  prior writes back correctly — this has been corrected to match the
+  confirmed real shape exactly; still unexercised against a live Cosmos
+  account (`@azure/cosmos` is an intentional optional dependency, not
+  installed by default — see above), so re-verify field behavior against
+  a real container once `@azure/cosmos` is available.
 - `reconcile-scores.mjs`'s post-cutover wait gate assumes Cloudflare's
   proxied DNS TTL for `api.curations.dev` remains `300` seconds
   (`CLOUDFLARE_DNS_TTL_SECONDS`); re-check the live Cloudflare DNS record's
