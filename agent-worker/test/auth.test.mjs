@@ -42,36 +42,36 @@ function authEnv(rate = new MemoryKv()) {
   };
 }
 
-class MemoryGrantNamespace {
+class MemoryCopilotGrantStore {
   values = new Map();
 
-  idFromName(name) {
-    return name;
+  async put(sessionToken, grant) {
+    this.values.set(sessionToken, grant);
   }
 
-  get(id) {
-    return {
-      fetch: async (url, init = {}) => {
-        const path = new URL(url).pathname;
-        if (path === "/put") {
-          const grant = JSON.parse(init.body);
-          this.values.set(id, grant);
-          return Response.json({ ok: true });
-        }
-        if (path === "/revoke") {
-          this.values.delete(id);
-          return Response.json({ ok: true });
-        }
-        return Response.json({ error: "not found" }, { status: 404 });
-      },
-    };
+  async consume(sessionToken) {
+    const grant = this.values.get(sessionToken);
+    if (!grant) return null;
+    this.values.delete(sessionToken);
+    return grant;
+  }
+
+  async status(sessionToken) {
+    const grant = this.values.get(sessionToken);
+    return grant
+      ? { connected: true, expires_at: grant.expires_at }
+      : { connected: false, expires_at: null };
+  }
+
+  async revoke(sessionToken) {
+    this.values.delete(sessionToken);
   }
 }
 
-function copilotEnv(rate = new MemoryKv(), grants = new MemoryGrantNamespace()) {
+function copilotEnv(rate = new MemoryKv(), grants = new MemoryCopilotGrantStore()) {
   return {
     ...authEnv(rate),
-    COPILOT_GRANT: grants,
+    copilotGrants: grants,
     COPILOT_CONNECTION_TTL_SECONDS: "600",
     COPILOT_TOKEN_ENCRYPTION_KEY: Buffer.alloc(32, 9).toString("base64url"),
   };
@@ -298,7 +298,7 @@ test("Use My Copilot issues a session-bound OAuth flow", async () => {
 
 test("Copilot OAuth callback stores one encrypted grant without replacing identity", async () => {
   const rate = new MemoryKv();
-  const grants = new MemoryGrantNamespace();
+  const grants = new MemoryCopilotGrantStore();
   const env = copilotEnv(rate, grants);
   const sessionToken = "D".repeat(48);
   const state = "P".repeat(48);

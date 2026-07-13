@@ -5,15 +5,20 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
+    "start:azure": "node --experimental-strip-types --disable-warning=ExperimentalWarning src/platform/azure/server.ts",
     "check": "tsc --noEmit",
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=\"src/platform/**/*.ts\" --test-coverage-exclude=\"src/platform/azure/cosmos-types.ts\" --test-coverage-lines=100 --test-coverage-branches=95 --test-coverage-functions=99 test/*.test.mjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260712.1",
+    "@types/node": "^26.1.1",
     "typescript": "^5.9.0",
     "wrangler": "^4.110.0"
   },
   "dependencies": {
+    "@azure/cosmos": "^4.9.3",
+    "@azure/identity": "^4.13.1",
     "@cloudflare/containers": "0.3.7"
   }
 }

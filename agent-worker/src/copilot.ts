@@ -4,18 +4,9 @@ import {
   getSession,
   isAllowedOrigin,
 } from "./auth.ts";
-import {
-  consumeCopilotGrant,
-  decryptCopilotToken,
-  getCopilotGrantStatus,
-  revokeCopilotGrant,
-} from "./copilot-grant.ts";
+import { decryptCopilotToken } from "./copilot-grant.ts";
 import type { Env } from "./env.ts";
-import {
-  releaseDailyQuota,
-  reserveDailyQuota,
-  type QuotaRule,
-} from "./quota.ts";
+import type { QuotaRule } from "./platform/contracts.ts";
 
 const EMBEDDED_PROMPT_PATTERN =
   /^\/copilot\/[a-z0-9]+(?:-[a-z0-9]+)*\/v\d+\.\d+(?:\.\d+)?\/[a-z0-9]+(?:-[a-z0-9]+)*\.txt$/;
@@ -78,7 +69,7 @@ async function copilotCapacityRules(
   env: Env,
   userId: string,
 ): Promise<QuotaRule[]> {
-  const ip = req.headers.get("cf-connecting-ip") ?? "unknown";
+  const ip = env.requestMetadata.clientIp(req);
   const digest = await crypto.subtle.digest(
     "SHA-256",
     new TextEncoder().encode(ip),
@@ -108,7 +99,7 @@ async function restoreCopilotCapacity(
   rules: QuotaRule[],
 ): Promise<void> {
   try {
-    await releaseDailyQuota(env, rules);
+    await env.quota.release(rules);
   } catch (error) {
     console.error(
       "Copilot quota release failed",
@@ -138,10 +129,7 @@ export async function handleCopilotStatus(
   if (!copilotAuthConfigured(env)) {
     return json({ configured: false, connected: false, expires_at: null }, 200, cors);
   }
-  const status = await getCopilotGrantStatus(
-    { COPILOT_GRANT: env.COPILOT_GRANT },
-    sessionToken,
-  );
+  const status = await env.copilotGrants.status(sessionToken);
   return json(
     {
       configured: true,
@@ -164,7 +152,7 @@ export async function handleCopilotDisconnect(
   if (!session || !sessionToken) {
     return json({ error: "GitHub sign-in required." }, 401, cors);
   }
-  await revokeCopilotGrant({ COPILOT_GRANT: env.COPILOT_GRANT }, sessionToken);
+  await env.copilotGrants.revoke(sessionToken);
   return json({ ok: true }, 200, cors);
 }
 
@@ -198,10 +186,7 @@ export async function handleCopilotRun(
     return json({ error: "invalid cookbook run" }, 400, cors);
   }
 
-  const grantStatus = await getCopilotGrantStatus(
-    { COPILOT_GRANT: env.COPILOT_GRANT },
-    sessionToken,
-  );
+  const grantStatus = await env.copilotGrants.status(sessionToken);
   if (!grantStatus.connected) {
     return json(
       { error: "Connect your GitHub Copilot plan before running.", code: "connection_required" },
@@ -229,7 +214,7 @@ export async function handleCopilotRun(
   }
 
   const capacityRules = await copilotCapacityRules(req, env, session.user.id);
-  const capacity = await reserveDailyQuota(env, capacityRules);
+  const capacity = await env.quota.reserve(capacityRules);
   if (!capacity.allowed) {
     return json(
       {
@@ -243,10 +228,7 @@ export async function handleCopilotRun(
     );
   }
 
-  const grant = await consumeCopilotGrant(
-    { COPILOT_GRANT: env.COPILOT_GRANT },
-    sessionToken,
-  );
+  const grant = await env.copilotGrants.consume(sessionToken);
   if (!grant || grant.user_id !== session.user.id) {
     await restoreCopilotCapacity(env, capacityRules);
     return json(
@@ -271,24 +253,16 @@ export async function handleCopilotRun(
     );
   }
 
-  const runtimeId = env.COPILOT_RUNTIME.idFromName("shared-v1");
-  const runtime = env.COPILOT_RUNTIME.get(runtimeId);
-  let response: Response;
+  const runtimePayload = {
+    gitHubToken,
+    prompt,
+    runId,
+    model: env.COPILOT_MODEL,
+    maxAiCredits: positiveInteger(env.COPILOT_MAX_AI_CREDITS, 10),
+  };
+  let result: { status: number; ok: boolean; body: { content?: unknown; error?: unknown; code?: unknown; model?: unknown } | null };
   try {
-    response = await runtime.fetch(
-      new Request("http://copilot-runtime/run", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          gitHubToken,
-          prompt,
-          runId,
-          model: env.COPILOT_MODEL,
-          maxAiCredits: positiveInteger(env.COPILOT_MAX_AI_CREDITS, 10),
-        }),
-        signal: AbortSignal.timeout(150_000),
-      }),
-    );
+    result = await env.copilotRuntime.run(runtimePayload, 150_000);
   } catch (error) {
     console.error(
       "Copilot container request failed",
@@ -305,33 +279,30 @@ export async function handleCopilotRun(
     );
   }
 
-  let result: { content?: unknown; error?: unknown; code?: unknown; model?: unknown };
-  try {
-    result = (await response.json()) as typeof result;
-  } catch {
+  if (!result.body) {
     return json({ error: "GitHub Copilot returned an invalid response." }, 502, cors);
   }
-  if (!response.ok || typeof result.content !== "string") {
+  if (!result.ok || typeof result.body.content !== "string") {
     return json(
       {
         error:
-          typeof result.error === "string"
-            ? result.error
+          typeof result.body.error === "string"
+            ? result.body.error
             : "GitHub Copilot could not complete this run.",
-        code: typeof result.code === "string" ? result.code : "copilot_unavailable",
+        code: typeof result.body.code === "string" ? result.body.code : "copilot_unavailable",
       },
-      response.status >= 400 && response.status <= 599 ? response.status : 502,
+      result.status >= 400 && result.status <= 599 ? result.status : 502,
       cors,
     );
   }
   const maxResponseChars = positiveInteger(env.COPILOT_MAX_RESPONSE_CHARS, 40_000);
-  if (result.content.length > maxResponseChars) {
+  if (result.body.content.length > maxResponseChars) {
     return json({ error: "GitHub Copilot response exceeded the display limit." }, 502, cors);
   }
   return json(
     {
-      content: result.content,
-      model: typeof result.model === "string" ? result.model : env.COPILOT_MODEL,
+      content: result.body.content,
+      model: typeof result.body.model === "string" ? result.body.model : env.COPILOT_MODEL,
       billing: "github-copilot-user",
       max_ai_credits: positiveInteger(env.COPILOT_MAX_AI_CREDITS, 10),
       connection_consumed: true,

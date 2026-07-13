@@ -1,17 +1,32 @@
 # CURATIONS agent gateway
 
-Cloudflare Worker for `api.curations.dev`.
+Cloudflare Worker for `api.curations.dev`, with an equivalent Node/Azure
+gateway (`ca-yolo-gateway`) for the Azure migration described in
+`.azure/deployment-plan.md`.
+
+Both entrypoints reuse the same platform-agnostic route logic
+(`src/router.ts`) through a project-owned `Env` contract
+(`src/platform/contracts.ts`) — shared handlers never import Cloudflare's
+`KVNamespace`, `DurableObjectNamespace`, or `Fetcher` types, or an Azure SDK
+type directly. Two adapter layers implement the contract:
+
+- `src/platform/cloudflare.ts` — KV, Durable Objects, the Cloudflare
+  Container runtime, and master-key Cosmos REST (`src/cosmos.ts`).
+- `src/platform/azure/*` — the Cosmos SDK with managed identity, Foundry with
+  a managed-identity bearer token, and an internal HTTPS call to the Copilot
+  runtime Container App.
 
 It is the only write gateway for the static Astro site and owns:
 
 - GitHub OAuth identity (`read:user` only),
 - explicit one-run GitHub Copilot delegation,
-- a private Cloudflare Container running the official Copilot SDK with zero tools,
+- a private Container running the official Copilot SDK with zero tools,
 - Azure OpenAI persona calls,
 - server-side model/rate limits,
 - Cosmos DB discussions and votes,
 - read-only public GitHub repository marker checks,
-- opaque CURATIONS sessions in KV.
+- opaque CURATIONS sessions in KV (Cloudflare) or Cosmos `gateway-state`
+  (Azure).
 
 ## Secrets
 
@@ -62,15 +77,42 @@ atomically consumes it once. The Container exposes no repository, filesystem,
 shell, MCP, skill, plugin, or external tool access. GitHub charges the user's
 Copilot plan; the gateway never falls back to Azure.
 
+## Running the Node/Azure gateway locally
+
+```bash
+npm ci
+export ALLOWED_ORIGINS=http://localhost:4321
+export COSMOS_ENDPOINT=... COSMOS_DATABASE=curations
+export COSMOS_CONTAINER=engagements COSMOS_VOTES_CONTAINER=votes
+export COSMOS_SCORES_CONTAINER=scores COSMOS_DISCUSSIONS_CONTAINER=discussions
+export AZURE_OPENAI_ENDPOINT=... AZURE_OPENAI_DEPLOYMENT=gpt-5.4-mini
+export COPILOT_RUNTIME_URL=http://127.0.0.1:8081 COPILOT_RUNTIME_SHARED_SECRET=...
+export SOFTWARE_TARGETS=cloudflare,supabase
+npm run start:azure
+```
+
+Configuration is validated all at once at startup (`src/platform/azure/config.ts`)
+— a broken revision throws before it starts listening, so Container Apps never
+routes traffic to it. Locally, `DefaultAzureCredential` is used; when
+`AZURE_CLIENT_ID` is set (the Container Apps production configuration),
+`ManagedIdentityCredential` is used instead — no Cosmos or Foundry API key ever
+exists in the Azure path.
+
+`/api/live` reports process liveness; `/api/ready` runs bounded, non-billable
+Cosmos and Foundry checks; `/api/health` keeps the existing public-compatible
+response.
+
 ## Local checks
 
 ```bash
 npm ci
 npm run check
 npm test
+npm run test:coverage
 npm --prefix copilot-runtime ci
 npm --prefix copilot-runtime test
 ```
 
 The Azure deployment must remain mini-tier and pay-as-you-go. Do not add PTU,
 reserved model capacity, or a prepaid monthly token package.
+

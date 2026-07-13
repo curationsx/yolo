@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { timingSafeEqual } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import { CopilotClient } from "@github/copilot-sdk";
@@ -212,7 +213,33 @@ function sendJson(response, status, body) {
   response.end(JSON.stringify(body));
 }
 
-export function createRequestHandler(run = runCopilot) {
+/** Constant-time comparison so the shared-secret check does not leak
+ * timing information about how many leading bytes matched. */
+function timingSafeEqualStrings(a, b) {
+  const left = Buffer.from(String(a ?? ""), "utf8");
+  const right = Buffer.from(String(b ?? ""), "utf8");
+  if (left.length !== right.length) {
+    // Compare against a same-length buffer so the failure path still takes
+    // constant time relative to the secret's length.
+    timingSafeEqual(left, Buffer.alloc(left.length));
+    return false;
+  }
+  return timingSafeEqual(left, right);
+}
+
+/** Internal runtime authorization. When `COPILOT_RUNTIME_SHARED_SECRET` is
+ * configured, every `/run` request must present a matching
+ * `x-copilot-runtime-secret` header — this is what stops a misdirected
+ * request inside the Container Apps environment from spending a user's
+ * Copilot entitlement. Unconfigured (Cloudflare Container / local dry-run)
+ * behavior is unchanged: no header is required. */
+export function isRuntimeRequestAuthorized(request, sharedSecret) {
+  if (!sharedSecret) return true;
+  const provided = request.headers["x-copilot-runtime-secret"];
+  return typeof provided === "string" && timingSafeEqualStrings(provided, sharedSecret);
+}
+
+export function createRequestHandler(run = runCopilot, sharedSecret = process.env.COPILOT_RUNTIME_SHARED_SECRET) {
   return async (request, response) => {
     const url = new URL(request.url ?? "/", "http://copilot-runtime");
     if (request.method === "GET" && url.pathname === "/health") {
@@ -221,6 +248,10 @@ export function createRequestHandler(run = runCopilot) {
     }
     if (request.method !== "POST" || url.pathname !== "/run") {
       sendJson(response, 404, { error: "not found" });
+      return;
+    }
+    if (!isRuntimeRequestAuthorized(request, sharedSecret)) {
+      sendJson(response, 401, { error: "unauthorized", code: "runtime_unauthorized" });
       return;
     }
 

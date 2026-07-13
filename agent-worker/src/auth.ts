@@ -6,21 +6,17 @@
  * in an atomic Durable Object, and expires it quickly.
  */
 
-import {
-  copilotEncryptionConfigured,
-  encryptCopilotToken,
-  revokeCopilotGrant,
-  storeCopilotGrant,
-} from "./copilot-grant.ts";
+import { copilotEncryptionConfigured, encryptCopilotToken } from "./copilot-grant.ts";
+import type { CopilotGrantStore, KeyValueStore } from "./platform/contracts.ts";
 
 export interface AuthEnv {
   GITHUB_CLIENT_ID?: string;
   GITHUB_CLIENT_SECRET?: string;
   COPILOT_TOKEN_ENCRYPTION_KEY?: string;
   COPILOT_CONNECTION_TTL_SECONDS?: string;
-  COPILOT_GRANT?: DurableObjectNamespace;
+  copilotGrants?: CopilotGrantStore;
   ALLOWED_ORIGINS: string;
-  RATE: KVNamespace;
+  RATE: KeyValueStore;
 }
 
 export interface GithubIdentity {
@@ -182,7 +178,7 @@ export function githubAuthConfigured(env: AuthEnv): boolean {
 export function copilotAuthConfigured(env: AuthEnv): boolean {
   return Boolean(
     githubAuthConfigured(env) &&
-      env.COPILOT_GRANT &&
+      env.copilotGrants &&
       copilotEncryptionConfigured(env.COPILOT_TOKEN_ENCRYPTION_KEY),
   );
 }
@@ -409,7 +405,7 @@ export async function finishGithubAuth(req: Request, env: AuthEnv): Promise<Resp
     if (
       !saved.session_token ||
       !saved.user_id ||
-      !env.COPILOT_GRANT ||
+      !env.copilotGrants ||
       !env.COPILOT_TOKEN_ENCRYPTION_KEY
     ) {
       return errorRedirect(returnTo, "connection_unavailable", "copilot");
@@ -441,11 +437,7 @@ export async function finishGithubAuth(req: Request, env: AuthEnv): Promise<Resp
         expiresAt,
         env.COPILOT_TOKEN_ENCRYPTION_KEY,
       );
-      await storeCopilotGrant(
-        { COPILOT_GRANT: env.COPILOT_GRANT },
-        saved.session_token,
-        grant,
-      );
+      await env.copilotGrants.put(saved.session_token, grant);
     } catch (error) {
       console.error(
         "Copilot delegation store failed",
@@ -485,8 +477,8 @@ export async function finishGithubAuth(req: Request, env: AuthEnv): Promise<Resp
 export async function endSession(req: Request, env: AuthEnv): Promise<void> {
   const token = bearerToken(req);
   if (!token) return;
-  if (env.COPILOT_GRANT) {
-    await revokeCopilotGrant({ COPILOT_GRANT: env.COPILOT_GRANT }, token);
+  if (env.copilotGrants) {
+    await env.copilotGrants.revoke(token);
   }
   await env.RATE.delete(`session:${token}`);
 }

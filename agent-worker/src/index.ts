@@ -1,136 +1,138 @@
 /**
- * CURATIONS gateway router.
+ * CURATIONS gateway router — Cloudflare Worker entrypoint.
  *
- * The static Astro site talks only to this Worker. It owns GitHub identity,
- * Azure persona calls, user-funded Copilot runs, rate limits, Cosmos writes,
- * votes, and discussions.
+ * This is the only file (besides `platform/cloudflare.ts`) that references
+ * Cloudflare's `KVNamespace`, `DurableObjectNamespace`, or Container types.
+ * It builds one project-owned `Env` (see `./env.ts`) from the real bindings
+ * and hands off to the shared Fetch router in `./router.ts`, which the
+ * Node/Azure entrypoint (`platform/azure/server.ts`) also calls.
  */
 
+import { copilotAuthConfigured, githubAuthConfigured } from "./auth.ts";
+import type { CopilotRuntime } from "./copilot-runtime.ts";
+import type { Env } from "./env.ts";
 import {
-  beginCopilotGithubAuth,
-  beginGithubAuth,
-  copilotAuthConfigured,
-  endSession,
-  finishGithubAuth,
-  getSession,
-  githubAuthConfigured,
-  issueCopilotAuthorization,
-} from "./auth";
-import {
-  handleCopilotDisconnect,
-  handleCopilotRun,
-  handleCopilotStatus,
-} from "./copilot";
-import {
-  corsHeaders,
-  handleAsk,
-  handleCreateComment,
-  handleCreateDiscussion,
-  handleDiscussions,
-  handleFeed,
-  handleVotes,
-  handleVoteSet,
-  handleVoteToggle,
-  json,
-} from "./community";
-import type { Env } from "./env";
-export { QuotaGuard } from "./quota";
-export { VoteGuard } from "./vote-guard";
-export { CopilotGrantGuard } from "./copilot-grant";
-export { CopilotRuntime } from "./copilot-runtime";
+  createCloudflareAgentModelClient,
+  createCloudflareCommunityStore,
+  createCloudflareCopilotGrantStore,
+  createCloudflareCopilotRuntimeClient,
+  createCloudflareQuotaStore,
+  createCloudflareReadinessProbe,
+  createCloudflareRequestMetadata,
+  createCloudflareVoteStore,
+} from "./platform/cloudflare.ts";
+import { handleRequest } from "./router.ts";
+
+export { QuotaGuard } from "./quota.ts";
+export { VoteGuard } from "./vote-guard.ts";
+export { CopilotGrantGuard } from "./copilot-grant.ts";
+export { CopilotRuntime } from "./copilot-runtime.ts";
+
+/** The real Cloudflare binding surface configured in `wrangler.toml`. */
+export interface CloudflareBindings {
+  RATE: KVNamespace;
+  QUOTA: DurableObjectNamespace;
+  VOTE_GUARD: DurableObjectNamespace;
+  COPILOT_GRANT: DurableObjectNamespace;
+  COPILOT_RUNTIME: DurableObjectNamespace<CopilotRuntime>;
+  ALLOWED_ORIGINS: string;
+  GITHUB_CLIENT_ID?: string;
+  GITHUB_CLIENT_SECRET?: string;
+  GITHUB_REPOSITORY_TOKEN?: string;
+  COPILOT_TOKEN_ENCRYPTION_KEY?: string;
+  COPILOT_CONNECTION_TTL_SECONDS?: string;
+  AZURE_OPENAI_API_KEY: string;
+  AZURE_OPENAI_ENDPOINT: string;
+  AZURE_OPENAI_DEPLOYMENT: string;
+  COSMOS_KEY: string;
+  COSMOS_ENDPOINT: string;
+  COSMOS_DATABASE: string;
+  COSMOS_CONTAINER: string;
+  COSMOS_VOTES_CONTAINER: string;
+  COSMOS_SCORES_CONTAINER: string;
+  COSMOS_DISCUSSIONS_CONTAINER: string;
+  MAX_QUESTION_CHARS: string;
+  MAX_OUTPUT_TOKENS: string;
+  PER_IP_DAILY_LIMIT: string;
+  GLOBAL_DAILY_LIMIT: string;
+  COPILOT_MODEL: string;
+  COPILOT_MAX_PROMPT_CHARS: string;
+  COPILOT_MAX_RESPONSE_CHARS: string;
+  COPILOT_MAX_AI_CREDITS: string;
+  COPILOT_RUNS_PER_USER_DAILY: string;
+  COPILOT_RUNS_PER_IP_DAILY: string;
+  COPILOT_RUNS_GLOBAL_DAILY: string;
+  SOFTWARE_TARGETS: string;
+  VOTE_BACKEND: "kv" | "durable";
+}
+
+function buildGatewayEnv(bindings: CloudflareBindings): Env {
+  const env: Env = {
+    ALLOWED_ORIGINS: bindings.ALLOWED_ORIGINS,
+    GITHUB_CLIENT_ID: bindings.GITHUB_CLIENT_ID,
+    GITHUB_CLIENT_SECRET: bindings.GITHUB_CLIENT_SECRET,
+    GITHUB_REPOSITORY_TOKEN: bindings.GITHUB_REPOSITORY_TOKEN,
+    COPILOT_TOKEN_ENCRYPTION_KEY: bindings.COPILOT_TOKEN_ENCRYPTION_KEY,
+    COPILOT_CONNECTION_TTL_SECONDS: bindings.COPILOT_CONNECTION_TTL_SECONDS,
+    RATE: bindings.RATE,
+    quota: createCloudflareQuotaStore(bindings.QUOTA),
+    copilotGrants: createCloudflareCopilotGrantStore(bindings.COPILOT_GRANT),
+    votes: createCloudflareVoteStore({
+      RATE: bindings.RATE,
+      VOTE_GUARD: bindings.VOTE_GUARD,
+      COSMOS_ENDPOINT: bindings.COSMOS_ENDPOINT,
+      COSMOS_KEY: bindings.COSMOS_KEY,
+      COSMOS_DATABASE: bindings.COSMOS_DATABASE,
+      COSMOS_VOTES_CONTAINER: bindings.COSMOS_VOTES_CONTAINER,
+      COSMOS_SCORES_CONTAINER: bindings.COSMOS_SCORES_CONTAINER,
+    }),
+    community: createCloudflareCommunityStore({
+      endpoint: bindings.COSMOS_ENDPOINT,
+      key: bindings.COSMOS_KEY,
+      database: bindings.COSMOS_DATABASE,
+    }),
+    agentModel: createCloudflareAgentModelClient({
+      endpoint: bindings.AZURE_OPENAI_ENDPOINT,
+      apiKey: bindings.AZURE_OPENAI_API_KEY,
+      deployment: bindings.AZURE_OPENAI_DEPLOYMENT,
+    }),
+    copilotRuntime: createCloudflareCopilotRuntimeClient(bindings.COPILOT_RUNTIME),
+    requestMetadata: createCloudflareRequestMetadata(),
+    // Placeholder; replaced below once the rest of `env` can be inspected.
+    readiness: createCloudflareReadinessProbe({}),
+    AZURE_OPENAI_DEPLOYMENT: bindings.AZURE_OPENAI_DEPLOYMENT,
+    COSMOS_CONTAINER: bindings.COSMOS_CONTAINER,
+    COSMOS_VOTES_CONTAINER: bindings.COSMOS_VOTES_CONTAINER,
+    COSMOS_SCORES_CONTAINER: bindings.COSMOS_SCORES_CONTAINER,
+    COSMOS_DISCUSSIONS_CONTAINER: bindings.COSMOS_DISCUSSIONS_CONTAINER,
+    MAX_QUESTION_CHARS: bindings.MAX_QUESTION_CHARS,
+    MAX_OUTPUT_TOKENS: bindings.MAX_OUTPUT_TOKENS,
+    PER_IP_DAILY_LIMIT: bindings.PER_IP_DAILY_LIMIT,
+    GLOBAL_DAILY_LIMIT: bindings.GLOBAL_DAILY_LIMIT,
+    COPILOT_MODEL: bindings.COPILOT_MODEL,
+    COPILOT_MAX_PROMPT_CHARS: bindings.COPILOT_MAX_PROMPT_CHARS,
+    COPILOT_MAX_RESPONSE_CHARS: bindings.COPILOT_MAX_RESPONSE_CHARS,
+    COPILOT_MAX_AI_CREDITS: bindings.COPILOT_MAX_AI_CREDITS,
+    COPILOT_RUNS_PER_USER_DAILY: bindings.COPILOT_RUNS_PER_USER_DAILY,
+    COPILOT_RUNS_PER_IP_DAILY: bindings.COPILOT_RUNS_PER_IP_DAILY,
+    COPILOT_RUNS_GLOBAL_DAILY: bindings.COPILOT_RUNS_GLOBAL_DAILY,
+    SOFTWARE_TARGETS: bindings.SOFTWARE_TARGETS,
+    VOTE_BACKEND: bindings.VOTE_BACKEND,
+  };
+  // Cloudflare readiness is a bounded, non-billable configuration check — no
+  // network dependency call is made, matching the existing Worker dry-run
+  // compatibility contract.
+  env.readiness = createCloudflareReadinessProbe({
+    github: githubAuthConfigured(env),
+    copilot: copilotAuthConfigured(env),
+    cosmos: Boolean(bindings.COSMOS_ENDPOINT && bindings.COSMOS_KEY),
+    foundry: Boolean(bindings.AZURE_OPENAI_ENDPOINT && bindings.AZURE_OPENAI_API_KEY),
+  });
+  return env;
+}
 
 export default {
-  async fetch(req: Request, env: Env): Promise<Response> {
-    const url = new URL(req.url);
-    const cors = corsHeaders(req.headers.get("origin") ?? "", env);
-
-    if (req.method === "OPTIONS") {
-      return new Response(null, { status: 204, headers: cors });
-    }
-
-    if (url.pathname === "/api/auth/github/start" && req.method === "GET") {
-      return beginGithubAuth(req, env);
-    }
-    if (url.pathname === "/api/auth/github/callback" && req.method === "GET") {
-      return finishGithubAuth(req, env);
-    }
-    if (url.pathname === "/api/auth/config" && req.method === "GET") {
-      return json(
-        {
-          github: githubAuthConfigured(env),
-          copilot: copilotAuthConfigured(env),
-        },
-        200,
-        cors,
-      );
-    }
-    if (url.pathname === "/api/auth/me" && req.method === "GET") {
-      const session = await getSession(req, env);
-      return session
-        ? json({ user: session.user, expires_at: session.expires_at }, 200, cors)
-        : json({ user: null }, 401, cors);
-    }
-    if (url.pathname === "/api/auth/logout" && req.method === "POST") {
-      await endSession(req, env);
-      return json({ ok: true }, 200, cors);
-    }
-
-    if (url.pathname === "/api/copilot/connect" && req.method === "POST") {
-      const result = await issueCopilotAuthorization(req, env);
-      return result.ok
-        ? json({ authorize_url: result.authorize_url }, 200, cors)
-        : json({ error: result.error }, result.status, cors);
-    }
-    if (url.pathname === "/api/copilot/github/start" && req.method === "GET") {
-      return beginCopilotGithubAuth(req, env);
-    }
-    if (url.pathname === "/api/copilot/status" && req.method === "GET") {
-      return handleCopilotStatus(req, env, cors);
-    }
-    if (url.pathname === "/api/copilot/disconnect" && req.method === "POST") {
-      return handleCopilotDisconnect(req, env, cors);
-    }
-    if (url.pathname === "/api/copilot/run" && req.method === "POST") {
-      return handleCopilotRun(req, env, cors);
-    }
-
-    if (url.pathname === "/api/ask" && req.method === "POST") {
-      return handleAsk(req, env, cors);
-    }
-    if (url.pathname === "/api/feed" && req.method === "GET") {
-      return handleFeed(url, env, cors);
-    }
-    if (url.pathname === "/api/votes" && req.method === "GET") {
-      return handleVotes(req, url, env, cors);
-    }
-    if (url.pathname === "/api/votes/set" && req.method === "POST") {
-      return handleVoteSet(req, env, cors);
-    }
-    if (url.pathname === "/api/votes/toggle" && req.method === "POST") {
-      return handleVoteToggle(req, env, cors);
-    }
-    if (url.pathname === "/api/discussions" && req.method === "GET") {
-      return handleDiscussions(req, url, env, cors);
-    }
-    if (url.pathname === "/api/discussions" && req.method === "POST") {
-      return handleCreateDiscussion(req, env, cors);
-    }
-    if (url.pathname === "/api/discussions/comment" && req.method === "POST") {
-      return handleCreateComment(req, env, cors);
-    }
-    if (url.pathname === "/api/health") {
-      return json(
-        {
-          ok: true,
-          identity: githubAuthConfigured(env) ? "github" : "github-unconfigured",
-          copilot: copilotAuthConfigured(env) ? "user-funded" : "unconfigured",
-          storage: "cosmos-serverless",
-          model: env.AZURE_OPENAI_DEPLOYMENT,
-        },
-        200,
-        cors,
-      );
-    }
-    return json({ error: "not found" }, 404, cors);
+  async fetch(req: Request, bindings: CloudflareBindings): Promise<Response> {
+    return handleRequest(req, buildGatewayEnv(bindings));
   },
-} satisfies ExportedHandler<Env>;
+} satisfies ExportedHandler<CloudflareBindings>;

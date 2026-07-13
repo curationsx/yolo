@@ -8,6 +8,7 @@ import {
   buildSessionConfig,
   classifyCopilotError,
   createRequestHandler,
+  isRuntimeRequestAuthorized,
   validateRunPayload,
 } from "../server.mjs";
 import { createServer } from "node:http";
@@ -103,3 +104,108 @@ test("HTTP boundary returns a response without echoing the delegated token", asy
   assert.match(response.text, /Reviewed 11111111/);
   assert.equal(response.text.includes(validPayload.gitHubToken), false);
 });
+
+test("isRuntimeRequestAuthorized allows any request when no shared secret is configured", () => {
+  assert.equal(isRuntimeRequestAuthorized({ headers: {} }, undefined), true);
+  assert.equal(isRuntimeRequestAuthorized({ headers: {} }, ""), true);
+});
+
+test("isRuntimeRequestAuthorized requires a matching shared secret when configured", () => {
+  const secret = "runtime-shared-secret-value";
+  assert.equal(
+    isRuntimeRequestAuthorized({ headers: { "x-copilot-runtime-secret": secret } }, secret),
+    true,
+  );
+  assert.equal(
+    isRuntimeRequestAuthorized({ headers: { "x-copilot-runtime-secret": "wrong" } }, secret),
+    false,
+  );
+  assert.equal(isRuntimeRequestAuthorized({ headers: {} }, secret), false);
+  assert.equal(
+    isRuntimeRequestAuthorized({ headers: { "x-copilot-runtime-secret": "short" } }, secret),
+    false,
+  );
+});
+
+function postJson(server, path, body, headers = {}) {
+  const payload = JSON.stringify(body);
+  return new Promise((resolve, reject) => {
+    const req = request(
+      {
+        host: "127.0.0.1",
+        port: server.address().port,
+        path,
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "content-length": Buffer.byteLength(payload),
+          ...headers,
+        },
+      },
+      async (res) => {
+        const chunks = [];
+        for await (const chunk of res) chunks.push(chunk);
+        resolve({ status: res.statusCode, text: Buffer.concat(chunks).toString("utf8") });
+      },
+    );
+    req.on("error", reject);
+    req.end(payload);
+  });
+}
+
+test("the internal runtime rejects requests without the shared secret", async (context) => {
+  const secret = "top-secret-runtime-value";
+  const server = createServer(
+    createRequestHandler(async (payload) => ({ content: `Reviewed ${payload.runId}`, model: payload.model }), secret),
+  );
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+
+  const unauthorized = await postJson(server, "/run", validPayload);
+  assert.equal(unauthorized.status, 401);
+  assert.equal(JSON.parse(unauthorized.text).code, "runtime_unauthorized");
+  assert.equal(unauthorized.text.includes(secret), false);
+
+  const wrongSecret = await postJson(server, "/run", validPayload, {
+    "x-copilot-runtime-secret": "not-the-secret",
+  });
+  assert.equal(wrongSecret.status, 401);
+
+  const authorized = await postJson(server, "/run", validPayload, {
+    "x-copilot-runtime-secret": secret,
+  });
+  assert.equal(authorized.status, 200);
+});
+
+test("health checks never require the shared secret", async (context) => {
+  const secret = "another-runtime-secret";
+  const server = createServer(createRequestHandler(async () => ({ content: "x", model: "m" }), secret));
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  context.after(() => server.close());
+
+  const response = await new Promise((resolve, reject) => {
+    const req = request(
+      { host: "127.0.0.1", port: server.address().port, path: "/health", method: "GET" },
+      async (res) => {
+        const chunks = [];
+        for await (const chunk of res) chunks.push(chunk);
+        resolve({ status: res.statusCode, text: Buffer.concat(chunks).toString("utf8") });
+      },
+    );
+    req.on("error", reject);
+    req.end();
+  });
+  assert.equal(response.status, 200);
+  assert.deepEqual(JSON.parse(response.text), { ok: true, mode: "empty", tools: 0 });
+});
+
+test("runtime timeout is classified without leaking run details", () => {
+  assert.deepEqual(classifyCopilotError(new Error("Copilot session timed out")), {
+    status: 504,
+    code: "copilot_timeout",
+    error: "GitHub Copilot did not finish before the run timed out.",
+  });
+});
+

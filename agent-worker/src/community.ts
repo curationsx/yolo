@@ -11,32 +11,19 @@ import {
   getSession,
   resolvedAllowedOrigin,
   type AuthSession,
-} from "./auth";
-import { chat, type AzureConfig, type ChatResult } from "./azure";
-import {
-  createDocument,
-  createDocumentWithSession,
-  deleteDocumentWithSession,
-  queryDocuments,
-  queryDocumentsWithSession,
-  readDocument,
-  readDocumentWithSession,
-  type CosmosConfig,
-  upsertDocument,
-} from "./cosmos";
-import type { Env, Persona } from "./env";
-import { reserveDailyQuota } from "./quota";
-import { getViewerVotes, setVote } from "./vote-guard";
+} from "./auth.ts";
+import type { ChatResult } from "./platform/contracts.ts";
+import type { Env, Persona } from "./env.ts";
 import {
   verifyPublicRepository,
   type RepositoryEvidence,
-} from "./repository-verification";
-import cloudflareGuide from "../personas/cloudflare-guide.json";
-import langfuseGuide from "../personas/langfuse-guide.json";
-import n8nGuide from "../personas/n8n-guide.json";
-import obsidianGuide from "../personas/obsidian-guide.json";
-import ollamaGuide from "../personas/ollama-guide.json";
-import supabaseGuide from "../personas/supabase-guide.json";
+} from "./repository-verification.ts";
+import cloudflareGuide from "../personas/cloudflare-guide.json" with { type: "json" };
+import langfuseGuide from "../personas/langfuse-guide.json" with { type: "json" };
+import n8nGuide from "../personas/n8n-guide.json" with { type: "json" };
+import obsidianGuide from "../personas/obsidian-guide.json" with { type: "json" };
+import ollamaGuide from "../personas/ollama-guide.json" with { type: "json" };
+import supabaseGuide from "../personas/supabase-guide.json" with { type: "json" };
 
 export const PERSONAS: Record<string, Persona> = {
   cloudflare: cloudflareGuide as Persona,
@@ -151,15 +138,6 @@ export function json(
   });
 }
 
-function cosmosConfig(env: Env, container: string): CosmosConfig {
-  return {
-    endpoint: env.COSMOS_ENDPOINT,
-    key: env.COSMOS_KEY,
-    database: env.COSMOS_DATABASE,
-    container,
-  };
-}
-
 async function parseBody<T>(req: Request): Promise<T | null> {
   try {
     return (await req.json()) as T;
@@ -238,14 +216,14 @@ async function requireSession(
 }
 
 async function checkAgentCapacity(req: Request, env: Env, userId?: string): Promise<void> {
-  const ip = req.headers.get("cf-connecting-ip") ?? "unknown";
+  const ip = env.requestMetadata.clientIp(req);
   const personalLimit = parseInt(env.PER_IP_DAILY_LIMIT, 10);
   const rules = [
     ...(userId ? [{ key: `agent:user:${userId}`, limit: personalLimit }] : []),
     { key: `agent:ip:${await hashIdentifier(ip)}`, limit: personalLimit },
     { key: "agent:global", limit: parseInt(env.GLOBAL_DAILY_LIMIT, 10) },
   ];
-  const reservation = await reserveDailyQuota(env, rules);
+  const reservation = await env.quota.reserve(rules);
   if (!reservation.allowed) {
     const global = reservation.blocked_key === "agent:global";
     throw new CapacityError(
@@ -265,16 +243,11 @@ async function invokePersona(
   outputTokens?: number,
 ): Promise<ChatResult> {
   await checkAgentCapacity(req, env, userId);
-  const azure: AzureConfig = {
-    endpoint: env.AZURE_OPENAI_ENDPOINT,
-    apiKey: env.AZURE_OPENAI_API_KEY,
-    deployment: env.AZURE_OPENAI_DEPLOYMENT,
-    maxOutputTokens: Math.min(
-      outputTokens ?? parseInt(env.MAX_OUTPUT_TOKENS, 10),
-      parseInt(env.MAX_OUTPUT_TOKENS, 10),
-    ),
-  };
-  return chat(azure, persona.system_prompt, message);
+  const maxOutputTokens = Math.min(
+    outputTokens ?? parseInt(env.MAX_OUTPUT_TOKENS, 10),
+    parseInt(env.MAX_OUTPUT_TOKENS, 10),
+  );
+  return env.agentModel.chat(persona.system_prompt, message, maxOutputTokens);
 }
 
 function humanAuthor(session: AuthSession): Pick<
@@ -351,11 +324,7 @@ async function writeThread(
     request_fingerprint: requestFingerprintValue ?? null,
     created_at: new Date().toISOString(),
   };
-  await createDocument(
-    cosmosConfig(env, env.COSMOS_DISCUSSIONS_CONTAINER),
-    doc,
-    toolId,
-  );
+  await env.community.createDocument(env.COSMOS_DISCUSSIONS_CONTAINER, doc, toolId);
   return doc;
 }
 
@@ -379,11 +348,7 @@ async function writeComment(
     ...author,
     created_at: new Date().toISOString(),
   };
-  await createDocument(
-    cosmosConfig(env, env.COSMOS_DISCUSSIONS_CONTAINER),
-    doc,
-    toolId,
-  );
+  await env.community.createDocument(env.COSMOS_DISCUSSIONS_CONTAINER, doc, toolId);
   return doc;
 }
 
@@ -399,8 +364,8 @@ async function voteTargetExists(env: Env, targetId: string): Promise<boolean> {
   if ((kind !== "discussion" && kind !== "comment") || !maybeId || !getPersona(toolOrId)) {
     return false;
   }
-  const doc = await readDocument<DiscussionDoc>(
-    cosmosConfig(env, env.COSMOS_DISCUSSIONS_CONTAINER),
+  const doc = await env.community.readDocument<DiscussionDoc>(
+    env.COSMOS_DISCUSSIONS_CONTAINER,
     maybeId,
     toolOrId,
   );
@@ -413,46 +378,37 @@ async function setLegacyVote(
   userId: string,
   voted: boolean,
 ): Promise<{ target_id: string; voted: boolean; count: number }> {
-  const votes = cosmosConfig(env, env.COSMOS_VOTES_CONTAINER);
   const voteId = `github-${userId}`;
-  let sessionToken: string | undefined;
-  const existingResult = await readDocumentWithSession<VoteDoc>(
-    votes,
+  const existing = await env.community.readDocument<VoteDoc>(
+    env.COSMOS_VOTES_CONTAINER,
     voteId,
     targetId,
-    sessionToken,
   );
-  sessionToken = existingResult.sessionToken ?? undefined;
 
-  if (voted && !existingResult.value) {
-    sessionToken =
-      (await createDocumentWithSession(
-        votes,
-        {
-          id: voteId,
-          target_id: targetId,
-          user_id: userId,
-          created_at: new Date().toISOString(),
-        },
-        targetId,
-        sessionToken,
-      )) ?? sessionToken;
-  } else if (!voted && existingResult.value) {
-    sessionToken =
-      (await deleteDocumentWithSession(votes, voteId, targetId, sessionToken)) ??
-      sessionToken;
+  if (voted && !existing) {
+    await env.community.createDocument(
+      env.COSMOS_VOTES_CONTAINER,
+      {
+        id: voteId,
+        target_id: targetId,
+        user_id: userId,
+        created_at: new Date().toISOString(),
+      },
+      targetId,
+    );
+  } else if (!voted && existing) {
+    await env.community.deleteDocument(env.COSMOS_VOTES_CONTAINER, voteId, targetId);
   }
 
-  const countResult = await queryDocumentsWithSession<number>(
-    votes,
+  const countResult = await env.community.queryDocuments<number>(
+    env.COSMOS_VOTES_CONTAINER,
     "SELECT VALUE COUNT(1) FROM c",
     [],
     targetId,
-    sessionToken,
   );
-  const count = countResult.value[0] ?? 0;
-  await upsertDocument(
-    cosmosConfig(env, env.COSMOS_SCORES_CONTAINER),
+  const count = countResult[0] ?? 0;
+  await env.community.upsertDocument(
+    env.COSMOS_SCORES_CONTAINER,
     {
       id: targetId,
       scope: "global",
@@ -488,8 +444,8 @@ async function voteSummary(
       value: target,
     }));
     const placeholders = parameters.map((parameter) => parameter.name).join(", ");
-    const rows = await queryDocuments<Pick<ScoreDoc, "target_id" | "count">>(
-      cosmosConfig(env, env.COSMOS_SCORES_CONTAINER),
+    const rows = await env.community.queryDocuments<Pick<ScoreDoc, "target_id" | "count">>(
+      env.COSMOS_SCORES_CONTAINER,
       `SELECT c.target_id, c.count FROM c WHERE c.target_id IN (${placeholders})`,
       parameters,
       "global",
@@ -498,7 +454,7 @@ async function voteSummary(
   }
   const viewerVotes = session
     ? useDurableVotes(env)
-      ? await getViewerVotes(env, session.user.id, unique)
+      ? await env.votes.getViewerVotes(session.user.id, unique)
       : await legacyViewerVotes(env, session.user.id, unique)
     : [];
   return {
@@ -506,6 +462,7 @@ async function voteSummary(
     viewer_votes: viewerVotes,
   };
 }
+
 
 export async function handleVotes(
   req: Request,
@@ -558,19 +515,19 @@ async function applyVoteMutation(
     if (!(await voteTargetExists(env, targetId))) {
       return json({ error: "vote target not found" }, 404, cors);
     }
-    const ipHash = await hashIdentifier(req.headers.get("cf-connecting-ip") ?? "unknown");
-    const personal = await reserveDailyQuota(env, [
+    const ipHash = await hashIdentifier(env.requestMetadata.clientIp(req));
+    const personal = await env.quota.reserve([
       { key: `vote:user:${auth.user.id}`, limit: VOTES_PER_USER_PER_DAY },
       { key: `vote:ip:${ipHash}`, limit: VOTES_PER_IP_PER_DAY },
     ]);
     if (!personal.allowed) return json({ error: "daily vote limit reached" }, 429, cors);
-    const global = await reserveDailyQuota(env, [
+    const global = await env.quota.reserve([
       { key: "vote:global", limit: VOTES_GLOBAL_PER_DAY },
     ]);
     if (!global.allowed) return json({ error: "community voting is at daily capacity" }, 429, cors);
 
     const result = useDurableVotes(env)
-      ? await setVote(env, targetId, auth.user.id, voted)
+      ? await env.votes.setVote(targetId, auth.user.id, voted)
       : await setLegacyVote(env, targetId, auth.user.id, voted);
     return json(result, 200, cors);
   } catch (error) {
@@ -596,7 +553,7 @@ export async function handleVoteToggle(
   }
   try {
     const viewerVotes = useDurableVotes(env)
-      ? await getViewerVotes(env, auth.user.id, [targetId])
+      ? await env.votes.getViewerVotes(auth.user.id, [targetId])
       : await legacyViewerVotes(env, auth.user.id, [targetId]);
     return applyVoteMutation(
       req,
@@ -621,8 +578,8 @@ export async function handleDiscussions(
   const toolId = url.searchParams.get("tool") ?? "";
   if (!getPersona(toolId)) return json({ error: "unknown tool" }, 400, cors);
   try {
-    const threads = await queryDocuments<DiscussionDoc>(
-      cosmosConfig(env, env.COSMOS_DISCUSSIONS_CONTAINER),
+    const threads = await env.community.queryDocuments<DiscussionDoc>(
+      env.COSMOS_DISCUSSIONS_CONTAINER,
       "SELECT TOP 40 * FROM c WHERE c.tool_id = @tool AND c.kind = @kind ORDER BY c.created_at DESC",
       [
         { name: "@tool", value: toolId },
@@ -635,8 +592,8 @@ export async function handleDiscussions(
       value: thread.id,
     }));
     const comments = threadParameters.length
-      ? await queryDocuments<DiscussionDoc>(
-          cosmosConfig(env, env.COSMOS_DISCUSSIONS_CONTAINER),
+      ? await env.community.queryDocuments<DiscussionDoc>(
+          env.COSMOS_DISCUSSIONS_CONTAINER,
           `SELECT TOP 160 * FROM c WHERE c.tool_id = @tool AND c.kind = @kind ` +
             `AND c.thread_id IN (${threadParameters.map(({ name }) => name).join(", ")}) ` +
             "ORDER BY c.created_at ASC",
@@ -742,7 +699,7 @@ export async function handleCreateDiscussion(
     normalizedPrdUrl = verification.prdUrl;
   }
 
-  const quota = await reserveDailyQuota(env, [
+  const quota = await env.quota.reserve([
     { key: `community:thread:${auth.user.id}`, limit: THREADS_PER_DAY },
   ]);
   if (!quota.allowed) return json({ error: "daily discussion limit reached" }, 429, cors);
@@ -844,16 +801,23 @@ export async function handleCreateComment(
   if (!/^[0-9a-f-]{36}$/.test(threadId)) return json({ error: "invalid thread_id" }, 400, cors);
   if (parentId && !/^[0-9a-f-]{36}$/.test(parentId)) return json({ error: "invalid parent_id" }, 400, cors);
   if (message.length < 2) return json({ error: "reply is required" }, 400, cors);
-  const cfg = cosmosConfig(env, env.COSMOS_DISCUSSIONS_CONTAINER);
   try {
-    const thread = await readDocument<DiscussionDoc>(cfg, threadId, toolId);
+    const thread = await env.community.readDocument<DiscussionDoc>(
+      env.COSMOS_DISCUSSIONS_CONTAINER,
+      threadId,
+      toolId,
+    );
     if (!thread || thread.kind !== "thread") return json({ error: "thread not found" }, 404, cors);
     if (parentId) {
-      const parent = await readDocument<DiscussionDoc>(cfg, parentId, toolId);
+      const parent = await env.community.readDocument<DiscussionDoc>(
+        env.COSMOS_DISCUSSIONS_CONTAINER,
+        parentId,
+        toolId,
+      );
       if (!parent || parent.thread_id !== threadId) return json({ error: "parent reply not found" }, 404, cors);
     }
 
-    const quota = await reserveDailyQuota(env, [
+    const quota = await env.quota.reserve([
       { key: `community:comment:${auth.user.id}`, limit: COMMENTS_PER_DAY },
     ]);
     if (!quota.allowed) return json({ error: "daily reply limit reached" }, 429, cors);
@@ -941,8 +905,8 @@ export async function handleAsk(
 
   let existingPublishedThread: DiscussionDoc | null = null;
   if (publish && session) {
-    const existing = await readDocument<DiscussionDoc>(
-      cosmosConfig(env, env.COSMOS_DISCUSSIONS_CONTAINER),
+    const existing = await env.community.readDocument<DiscussionDoc>(
+      env.COSMOS_DISCUSSIONS_CONTAINER,
       requestId,
       persona.tool_id,
     );
@@ -959,8 +923,8 @@ export async function handleAsk(
         );
       }
       existingPublishedThread = existing;
-      const comments = await queryDocuments<DiscussionDoc>(
-        cosmosConfig(env, env.COSMOS_DISCUSSIONS_CONTAINER),
+      const comments = await env.community.queryDocuments<DiscussionDoc>(
+        env.COSMOS_DISCUSSIONS_CONTAINER,
         "SELECT * FROM c WHERE c.tool_id = @tool AND c.thread_id = @thread",
         [
           { name: "@tool", value: persona.tool_id },
@@ -1045,11 +1009,7 @@ export async function handleAsk(
         created_at: new Date().toISOString(),
         published: true,
       };
-      await createDocument(
-        cosmosConfig(env, env.COSMOS_CONTAINER),
-        engagement,
-        persona.tool_id,
-      );
+      await env.community.createDocument(env.COSMOS_CONTAINER, engagement, persona.tool_id);
     } catch (error) {
       console.error("published ask persistence failed", error);
       return json({ error: "The answer was generated but could not be published. Please retry." }, 502, cors);
@@ -1090,8 +1050,8 @@ export async function handleFeed(
     return json({ error: `limit must be ${LEGACY_FEED_LIMIT}` }, 400, cors);
   }
   try {
-    const docs = await queryDocuments<EngagementDoc>(
-      cosmosConfig(env, env.COSMOS_CONTAINER),
+    const docs = await env.community.queryDocuments<EngagementDoc>(
+      env.COSMOS_CONTAINER,
       "SELECT TOP @limit c.id, c.tool_id, c.lane, c.author_name, c.author_type, " +
         "c.message, c.reply_persona, c.reply_display_name, c.reply_disclosure, " +
         "c.reply_text, c.created_at FROM c WHERE c.tool_id = @tool " +

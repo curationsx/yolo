@@ -5,12 +5,26 @@ import {
   readDocumentWithSession,
   type CosmosConfig,
   upsertDocument,
-} from "./cosmos";
-import type { Env } from "./env";
+} from "./cosmos.ts";
+import type { KeyValueStore } from "./platform/contracts.ts";
 import {
   getStorageValuesInBatches,
   putStorageEntriesInBatches,
-} from "./storage-batches";
+} from "./storage-batches.ts";
+
+/** Cloudflare-only environment for the durable vote guard and its exported
+ * `setVote`/`getViewerVotes` wrappers. This is the implementation detail
+ * behind the project-owned `VoteStore` contract's Cloudflare adapter — it may
+ * reference Cloudflare types directly. */
+export interface VoteGuardEnv {
+  RATE: KeyValueStore;
+  VOTE_GUARD: DurableObjectNamespace;
+  COSMOS_ENDPOINT: string;
+  COSMOS_KEY: string;
+  COSMOS_DATABASE: string;
+  COSMOS_VOTES_CONTAINER: string;
+  COSMOS_SCORES_CONTAINER: string;
+}
 
 interface VoteDoc {
   id: string;
@@ -41,7 +55,7 @@ interface ViewerCheck {
 const TARGET_PATTERN =
   /^(?:software:[a-z0-9]+(?:-[a-z0-9]+)*|(?:discussion|comment):[a-z0-9]+(?:-[a-z0-9]+)*:[0-9a-f-]{36})$/;
 
-function cosmosConfig(env: Env, container: string): CosmosConfig {
+function cosmosConfig(env: VoteGuardEnv, container: string): CosmosConfig {
   return {
     endpoint: env.COSMOS_ENDPOINT,
     key: env.COSMOS_KEY,
@@ -52,11 +66,13 @@ function cosmosConfig(env: Env, container: string): CosmosConfig {
 
 export class VoteGuard {
   private queue: Promise<void> = Promise.resolve();
+  private readonly state: DurableObjectState;
+  private readonly env: VoteGuardEnv;
 
-  constructor(
-    private readonly state: DurableObjectState,
-    private readonly env: Env,
-  ) {}
+  constructor(state: DurableObjectState, env: VoteGuardEnv) {
+    this.state = state;
+    this.env = env;
+  }
 
   private enqueue(operation: () => Promise<Response>): Promise<Response> {
     const response = this.queue.then(operation);
@@ -261,7 +277,7 @@ export class VoteGuard {
 }
 
 async function callGuard<T>(
-  env: Env,
+  env: VoteGuardEnv,
   name: string,
   path: string,
   body: unknown,
@@ -277,7 +293,7 @@ async function callGuard<T>(
 }
 
 export async function setVote(
-  env: Env,
+  env: VoteGuardEnv,
   targetId: string,
   userId: string,
   voted: boolean,
@@ -300,7 +316,7 @@ export async function setVote(
 }
 
 export async function getViewerVotes(
-  env: Env,
+  env: VoteGuardEnv,
   userId: string,
   targets: string[],
 ): Promise<string[]> {

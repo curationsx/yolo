@@ -18,93 +18,75 @@ class MemoryKv {
   }
 }
 
-class AllowingQuotaNamespace {
+class MemoryQuotaStore {
   actions = [];
 
-  idFromName(name) {
-    return name;
+  async reserve(rules) {
+    this.actions.push("reserve");
+    return { allowed: true };
   }
 
-  get() {
-    return {
-      fetch: async (_url, init) => {
-        const body = JSON.parse(init.body);
-        this.actions.push(body.action ?? "reserve");
-        return Response.json({ allowed: true });
-      },
-    };
+  async release(rules) {
+    this.actions.push("release");
   }
 }
 
-class GrantNamespace {
+class MemoryCopilotGrantStore {
   values = new Map();
 
-  idFromName(name) {
-    return name;
+  async put(sessionToken, grant) {
+    this.values.set(sessionToken, grant);
   }
 
-  get(id) {
-    return {
-      fetch: async (url) => {
-        const path = new URL(url).pathname;
-        const grant = this.values.get(id);
-        if (!grant) {
-          return Response.json({ error: "not found" }, { status: 404 });
-        }
-        if (path === "/status") {
-          return Response.json({
-            connected: true,
-            expires_at: grant.expires_at,
-          });
-        }
-        if (path === "/consume") {
-          this.values.delete(id);
-          return Response.json(grant);
-        }
-        return Response.json({ error: "not found" }, { status: 404 });
-      },
-    };
+  async consume(sessionToken) {
+    const grant = this.values.get(sessionToken);
+    if (!grant) return null;
+    this.values.delete(sessionToken);
+    return grant;
+  }
+
+  async status(sessionToken) {
+    const grant = this.values.get(sessionToken);
+    return grant
+      ? { connected: true, expires_at: grant.expires_at }
+      : { connected: false, expires_at: null };
+  }
+
+  async revoke(sessionToken) {
+    this.values.delete(sessionToken);
   }
 }
 
-class RacingGrantNamespace {
-  idFromName(name) {
-    return name;
+class RacingCopilotGrantStore {
+  async put() {}
+
+  async consume() {
+    return null;
   }
 
-  get() {
-    return {
-      fetch: async (url) => {
-        const path = new URL(url).pathname;
-        if (path === "/status") {
-          return Response.json({
-            connected: true,
-            expires_at: new Date(Date.now() + 60_000).toISOString(),
-          });
-        }
-        return Response.json({ error: "not found" }, { status: 404 });
-      },
-    };
+  async status() {
+    return { connected: true, expires_at: new Date(Date.now() + 60_000).toISOString() };
   }
+
+  async revoke() {}
 }
 
-class RuntimeNamespace {
+class MemoryCopilotRuntimeClient {
   requests = [];
 
-  idFromName(name) {
-    return name;
-  }
-
-  get() {
+  async run(payload) {
+    this.requests.push(payload);
     return {
-      fetch: async (request) => {
-        this.requests.push(await request.json());
-        return Response.json({
-          content: "AI · GITHUB COPILOT SDK\n\nHUMAN DECISION NEEDED",
-          model: "gpt-5.4",
-        });
-      },
+      status: 200,
+      ok: true,
+      body: { content: "AI · GITHUB COPILOT SDK\n\nHUMAN DECISION NEEDED", model: "gpt-5.4" },
     };
+  }
+}
+
+class CloudflareRequestMetadata {
+  clientIp(req) {
+    return req.headers.get("cf-connecting-ip") ?? "unknown";
   }
 }
 
@@ -118,9 +100,10 @@ function copilotEnv() {
     COPILOT_MODEL: "gpt-5.4",
     COPILOT_MAX_AI_CREDITS: "10",
     RATE: new MemoryKv(),
-    QUOTA: new AllowingQuotaNamespace(),
-    COPILOT_GRANT: new GrantNamespace(),
-    COPILOT_RUNTIME: new RuntimeNamespace(),
+    quota: new MemoryQuotaStore(),
+    copilotGrants: new MemoryCopilotGrantStore(),
+    copilotRuntime: new MemoryCopilotRuntimeClient(),
+    requestMetadata: new CloudflareRequestMetadata(),
   };
 }
 
@@ -152,7 +135,7 @@ test("Copilot status exposes only connection state and bounded runtime metadata"
     new Date(Date.now() + 10 * 60 * 1000).toISOString(),
     env.COPILOT_TOKEN_ENCRYPTION_KEY,
   );
-  env.COPILOT_GRANT.values.set(sessionToken, grant);
+  env.copilotGrants.values.set(sessionToken, grant);
 
   const response = await handleCopilotStatus(
     new Request("https://api.curations.dev/api/copilot/status", {
@@ -179,7 +162,7 @@ test("Copilot run consumes the grant and sends one bounded request to the privat
     new Date(Date.now() + 10 * 60 * 1000).toISOString(),
     env.COPILOT_TOKEN_ENCRYPTION_KEY,
   );
-  env.COPILOT_GRANT.values.set(sessionToken, grant);
+  env.copilotGrants.values.set(sessionToken, grant);
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url) => {
     if (
@@ -216,11 +199,11 @@ test("Copilot run consumes the grant and sends one bounded request to the privat
     assert.equal(response.status, 200);
     assert.equal(payload.billing, "github-copilot-user");
     assert.equal(JSON.stringify(payload).includes(githubToken), false);
-    assert.equal(env.COPILOT_GRANT.values.has(sessionToken), false);
-    assert.equal(env.COPILOT_RUNTIME.requests.length, 1);
-    assert.equal(env.COPILOT_RUNTIME.requests[0].gitHubToken, githubToken);
+    assert.equal(env.copilotGrants.values.has(sessionToken), false);
+    assert.equal(env.copilotRuntime.requests.length, 1);
+    assert.equal(env.copilotRuntime.requests[0].gitHubToken, githubToken);
     assert.match(
-      env.COPILOT_RUNTIME.requests[0].prompt,
+      env.copilotRuntime.requests[0].prompt,
       /Stress-test rollback assumptions\./,
     );
   } finally {
@@ -231,7 +214,7 @@ test("Copilot run consumes the grant and sends one bounded request to the privat
 test("Copilot run restores daily capacity when the one-run grant loses a race", async () => {
   const env = copilotEnv();
   const sessionToken = addSession(env);
-  env.COPILOT_GRANT = new RacingGrantNamespace();
+  env.copilotGrants = new RacingCopilotGrantStore();
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url) => {
     if (
@@ -265,8 +248,8 @@ test("Copilot run restores daily capacity when the one-run grant loses a race", 
       {},
     );
     assert.equal(response.status, 409);
-    assert.deepEqual(env.QUOTA.actions, ["reserve", "release"]);
-    assert.equal(env.COPILOT_RUNTIME.requests.length, 0);
+    assert.deepEqual(env.quota.actions, ["reserve", "release"]);
+    assert.equal(env.copilotRuntime.requests.length, 0);
   } finally {
     globalThis.fetch = originalFetch;
   }

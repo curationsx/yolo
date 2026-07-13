@@ -1,19 +1,36 @@
-import type { AuthEnv } from "./auth";
-import type { CopilotRuntime } from "./copilot-runtime";
+import type { AuthEnv } from "./auth.ts";
+import type {
+  AgentModelClient,
+  CommunityStore,
+  CopilotGrantStore,
+  CopilotRuntimeClient,
+  QuotaStore,
+  ReadinessProbe,
+  RequestMetadata,
+  VoteStore,
+} from "./platform/contracts.ts";
 
+/**
+ * Shared gateway environment. Route handlers (auth.ts, copilot.ts,
+ * community.ts, router.ts) depend only on this project-owned shape — never on
+ * `KVNamespace`, `DurableObjectNamespace`, `Fetcher`, or an Azure SDK type.
+ * `index.ts` (Cloudflare) and `platform/azure/server.ts` (Node/Azure) each
+ * construct one `Env` from their own bindings/clients.
+ */
 export interface Env extends AuthEnv {
-  QUOTA: DurableObjectNamespace;
-  VOTE_GUARD: DurableObjectNamespace;
-  COPILOT_GRANT: DurableObjectNamespace;
-  COPILOT_RUNTIME: DurableObjectNamespace<CopilotRuntime>;
-  AZURE_OPENAI_API_KEY: string;
-  COSMOS_KEY: string;
+  quota: QuotaStore;
+  copilotGrants: CopilotGrantStore;
+  votes: VoteStore;
+  community: CommunityStore;
+  agentModel: AgentModelClient;
+  copilotRuntime: CopilotRuntimeClient;
+  requestMetadata: RequestMetadata;
+  readiness: ReadinessProbe;
+
   GITHUB_REPOSITORY_TOKEN?: string;
-  COPILOT_TOKEN_ENCRYPTION_KEY?: string;
-  AZURE_OPENAI_ENDPOINT: string;
+  /** Foundry deployment/model name, used only as a display label — the
+   * network call itself goes through `agentModel`. */
   AZURE_OPENAI_DEPLOYMENT: string;
-  COSMOS_ENDPOINT: string;
-  COSMOS_DATABASE: string;
   COSMOS_CONTAINER: string;
   COSMOS_VOTES_CONTAINER: string;
   COSMOS_SCORES_CONTAINER: string;
@@ -26,7 +43,6 @@ export interface Env extends AuthEnv {
   COPILOT_MAX_PROMPT_CHARS: string;
   COPILOT_MAX_RESPONSE_CHARS: string;
   COPILOT_MAX_AI_CREDITS: string;
-  COPILOT_CONNECTION_TTL_SECONDS: string;
   COPILOT_RUNS_PER_USER_DAILY: string;
   COPILOT_RUNS_PER_IP_DAILY: string;
   COPILOT_RUNS_GLOBAL_DAILY: string;

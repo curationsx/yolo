@@ -1,0 +1,18 @@
+# Azure Container Apps build context for Dockerfile.azure.
+# Only production dependencies and the source the gateway needs at runtime
+# are copied into the image (see Dockerfile.azure).
+
+node_modules
+.wrangler
+.dev.vars
+.env
+.git
+.gitignore
+test
+copilot-runtime
+personas/*.md
+*.test.mjs
+README.md
+wrangler.toml
+Dockerfile.azure
+Dockerfile

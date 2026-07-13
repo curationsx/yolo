@@ -1,0 +1,34 @@
+# Azure Container Apps image for the Node gateway (`ca-yolo-gateway`).
+#
+# The gateway ships its TypeScript source unmodified and runs it with Node's
+# native type-stripping — there is no separate build/emit step, matching the
+# existing Cloudflare Worker path where the same source is bundled by
+# Wrangler instead. Only production dependencies are installed, and the
+# process runs as the image's built-in non-root `node` user.
+
+FROM node:24-alpine
+
+ENV NODE_ENV=production \
+    PORT=8080
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev \
+    && npm cache clean --force
+
+COPY tsconfig.json ./
+COPY personas ./personas
+COPY src ./src
+
+RUN chown -R node:node /app
+
+USER node
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:8080/api/live').then((r) => { if (!r.ok) process.exit(1); }).catch(() => process.exit(1))"
+
+CMD ["node", "--experimental-strip-types", "--disable-warning=ExperimentalWarning", "src/platform/azure/server.ts"]
+
