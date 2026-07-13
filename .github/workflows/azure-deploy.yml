@@ -355,6 +355,9 @@ jobs:
       - name: az deployment group create — infra/runtime.bicep
         id: deploy_infra
         run: |
+          set -euo pipefail
+          outputs_file="$(mktemp)"
+          trap 'rm -f -- "$outputs_file"' EXIT
           az deployment group create \
             --name "yolo-runtime-azure-staging-${{ github.run_id }}" \
             --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
@@ -367,9 +370,9 @@ jobs:
             --parameters enableStagingIpRestriction=true \
             --parameters stagingSiteOrigin="${{ steps.swa_site.outputs.origin }}" \
             --parameters deploymentRevision="${{ env.DEPLOYMENT_REVISION_MARKER }}" \
-            --query "properties.outputs" -o json | tee deploy-outputs.json
-          echo "gateway_fqdn=$(jq -r '.gatewayFqdn.value' deploy-outputs.json)" >> "$GITHUB_OUTPUT"
-          rm -f deploy-outputs.json
+            --query "properties.outputs" -o json | tee "$outputs_file"
+          gateway_fqdn="$(jq -er '.gatewayFqdn.value | select(type == "string" and length > 0)' "$outputs_file")"
+          echo "gateway_fqdn=${gateway_fqdn}" >> "$GITHUB_OUTPUT"
 
       - name: Build Astro site (generated Azure gateway hostname — never api.curations.dev pre-cutover)
         # api.curations.dev still resolves to Cloudflare until Stage 5 of
@@ -615,6 +618,9 @@ jobs:
         # rather than potentially reusing a revision still running with
         # staging's already-loaded OAuth secret values.
         run: |
+          set -euo pipefail
+          outputs_file="$(mktemp)"
+          trap 'rm -f -- "$outputs_file"' EXIT
           az deployment group create \
             --name "yolo-runtime-production-${{ github.run_id }}" \
             --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
@@ -625,9 +631,9 @@ jobs:
             --parameters copilotImageTag="${{ steps.build_images.outputs.copilot_image }}" \
             --parameters enableStagingIpRestriction=false \
             --parameters deploymentRevision="${{ env.DEPLOYMENT_REVISION_MARKER }}" \
-            --query "properties.outputs" -o json | tee deploy-outputs.json
-          echo "gateway_fqdn=$(jq -r '.gatewayFqdn.value' deploy-outputs.json)" >> "$GITHUB_OUTPUT"
-          rm -f deploy-outputs.json
+            --query "properties.outputs" -o json | tee "$outputs_file"
+          gateway_fqdn="$(jq -er '.gatewayFqdn.value | select(type == "string" and length > 0)' "$outputs_file")"
+          echo "gateway_fqdn=${gateway_fqdn}" >> "$GITHUB_OUTPUT"
 
       - name: Build Astro site (rebuild same committed SHA against api.curations.dev)
         # This is the Stage 4/5 rebuild: same source commit (github.sha)

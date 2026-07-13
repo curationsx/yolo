@@ -30,6 +30,7 @@ SHA_OVERRIDE=""
 GATEWAY_ONLY=0
 COPILOT_ONLY=0
 JSON_OUTPUT=0
+BUILT_IMAGE_REF=""
 
 GATEWAY_CONTEXT="${REPO_ROOT}/agent-worker"
 GATEWAY_DOCKERFILE="Dockerfile.azure"
@@ -84,6 +85,7 @@ resolve_sha() {
 build_one() {
   local label="$1" context="$2" dockerfile="$3" repo="$4" sha="$5"
   local image_ref="${ACR_NAME}.azurecr.io/${repo}:${sha}"
+  BUILT_IMAGE_REF="$image_ref"
 
   if [[ ! -d "$context" ]]; then
     die "$label build context not found at $context"
@@ -126,10 +128,12 @@ main() {
   local gateway_ref="" copilot_ref=""
 
   if [[ "$COPILOT_ONLY" != "1" ]]; then
-    gateway_ref="$(build_one "gateway" "$GATEWAY_CONTEXT" "$GATEWAY_DOCKERFILE" "$GATEWAY_IMAGE_REPO" "$sha")"
+    build_one "gateway" "$GATEWAY_CONTEXT" "$GATEWAY_DOCKERFILE" "$GATEWAY_IMAGE_REPO" "$sha"
+    gateway_ref="$BUILT_IMAGE_REF"
   fi
   if [[ "$GATEWAY_ONLY" != "1" ]]; then
-    copilot_ref="$(build_one "copilot-runtime" "$COPILOT_CONTEXT" "$COPILOT_DOCKERFILE" "$COPILOT_IMAGE_REPO" "$sha")"
+    build_one "copilot-runtime" "$COPILOT_CONTEXT" "$COPILOT_DOCKERFILE" "$COPILOT_IMAGE_REPO" "$sha"
+    copilot_ref="$BUILT_IMAGE_REF"
   fi
 
   if [[ "$JSON_OUTPUT" == "1" ]]; then

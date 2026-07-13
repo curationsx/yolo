@@ -69,12 +69,17 @@ assert_file_mode() {
 SOURCE_ROOT="$(cd -- "${AZURE_DIR}/../.." >/dev/null 2>&1 && pwd -P)"
 identity_rbac_bicep="$(cat "${SOURCE_ROOT}/infra/modules/identity-rbac.bicep")"
 bootstrap_bicep="$(cat "${SOURCE_ROOT}/infra/bootstrap.bicep")"
+azure_deploy_workflow="$(cat "${SOURCE_ROOT}/.github/workflows/azure-deploy.yml")"
 assert_contains "GitHub federated credentials deploy serially beneath one managed identity" \
   "$identity_rbac_bicep" $'@batchSize(1)\nresource githubFederatedCredentials'
 assert_contains "first-time budget start defaults to the current UTC month" \
   "$bootstrap_bicep" "param budgetStartDate string = utcNow('yyyy-MM-01T00:00:00Z')"
 assert_not_contains "budget start date is not pinned to a stale calendar month" \
   "$bootstrap_bicep" "param budgetStartDate string = '2026-01-01T00:00:00Z'"
+assert_equal "both runtime deployment steps validate a non-empty gateway FQDN" "2" \
+  "$(printf '%s' "$azure_deploy_workflow" | grep -Fc 'gateway_fqdn="$(jq -er')"
+assert_equal "both runtime deployment steps clean their temporary output file" "2" \
+  "$(printf '%s' "$azure_deploy_workflow" | grep -Fc "trap 'rm -f -- \"\$outputs_file\"' EXIT")"
 
 # --- fixture git repo -----------------------------------------------------
 
@@ -748,6 +753,25 @@ ledger="${SCRATCH}/build-mutex.ledger"
 out="$(run_script "$ledger" "${AZURE_DIR}/build-images.sh" --gateway-only --copilot-only 2>&1)"
 code=$?
 assert_exit_code "build-images refuses conflicting scope flags" 1 "$code"
+
+echo "-- --apply propagates a failed ACR build instead of reporting nonexistent images --"
+ledger="${SCRATCH}/build-apply-failure.ledger"
+: > "$ledger"
+valid_sha="$(git -C "$FIXTURE_REPO" rev-parse HEAD)"
+out="$(AZ_ACR_BUILD_FAIL=1 run_script "$ledger" "${AZURE_DIR}/build-images.sh" --apply --sha "$valid_sha" 2>&1)"
+code=$?
+assert_exit_code "build-images --apply exits nonzero when az acr build fails" 1 "$code"
+assert_equal "build-images stops after the first failed ACR build" "1" "$(grep -c 'acr build' "$ledger")"
+assert_not_contains "build-images never reports a failed image as built" "$out" "image built:"
+
+echo "-- --apply executes both ACR builds when they succeed --"
+ledger="${SCRATCH}/build-apply-success.ledger"
+: > "$ledger"
+out="$(run_script "$ledger" "${AZURE_DIR}/build-images.sh" --apply --sha "$valid_sha" --json 2>&1)"
+code=$?
+assert_exit_code "build-images --apply succeeds when both ACR builds succeed" 0 "$code"
+assert_equal "build-images --apply submits both immutable image builds" "2" "$(grep -c 'acr build' "$ledger")"
+assert_contains "build-images --apply reports applied JSON only after both builds pass" "$out" '"applied":true'
 
 echo
 echo "== deploy.sh =="

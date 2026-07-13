@@ -162,6 +162,9 @@ case "$1 $2" in
     esac
     ;;
   "acr build")
+    if [[ "${AZ_ACR_BUILD_FAIL:-0}" == "1" ]]; then
+      fail "fixture az: simulated acr build failure"
+    fi
     printf 'fixture: acr build executed (mutating)\n'
     ;;
   "consumption budget")
