@@ -79,10 +79,24 @@ name: AZURE DEPLOY
 
 on:
   pull_request:
+    # Bounded to files whose correctness this workflow's `verify` job can
+    # actually check (local az bicep build/lint, no Azure credential) or
+    # whose behavior the staging/production jobs directly depend on --
+    # not all of agent-worker/** or scripts/azure's own test suite. Kept
+    # deliberately inclusive of scripts/azure/** and Docker/dependency
+    # -manifest surfaces so an ops-only PR can never bypass local Bicep
+    # verification just because it never touches infra/**: deploy.sh,
+    # build-images.sh, and friends are exactly what integrates with this
+    # workflow's Azure calls, and a Dockerfile or package manifest change
+    # can change what's actually inside a deployed image.
     paths:
       - "infra/**"
       - "azure.yaml"
       - ".github/workflows/azure-deploy.yml"
+      - "scripts/azure/**"
+      - "agent-worker/**/Dockerfile*"
+      - "agent-worker/**/package.json"
+      - "agent-worker/**/package-lock.json"
   workflow_dispatch:
     inputs:
       target_environment:
