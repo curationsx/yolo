@@ -182,6 +182,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: azure-staging
+    env:
+      # Environment-suffixed so staging and production can never collide,
+      # even if a re-run or some other edge case ever produced the same
+      # github.run_id for both (they cannot run in the same workflow_dispatch
+      # invocation today, per the job-level `if:` above, but this marker
+      # does not rely on that mutual exclusivity to stay unique). Includes
+      # run_attempt too, so a manual re-run of this exact job also gets its
+      # own distinct marker rather than reusing the first attempt's.
+      DEPLOYMENT_REVISION_MARKER: ${{ github.run_id }}-${{ github.run_attempt }}-azure-staging
 
     steps:
       - name: Check out repository
@@ -284,7 +293,7 @@ jobs:
             --parameters wyattStagingIpCidr="${{ vars.WYATT_STAGING_IP_CIDR }}" \
             --parameters enableStagingIpRestriction=true \
             --parameters stagingSiteOrigin="${{ steps.swa_site.outputs.origin }}" \
-            --parameters deploymentRevision="${{ github.run_id }}"
+            --parameters deploymentRevision="${{ env.DEPLOYMENT_REVISION_MARKER }}"
 
       - name: az deployment group create — infra/runtime.bicep
         id: deploy_infra
@@ -300,7 +309,7 @@ jobs:
             --parameters wyattStagingIpCidr="${{ vars.WYATT_STAGING_IP_CIDR }}" \
             --parameters enableStagingIpRestriction=true \
             --parameters stagingSiteOrigin="${{ steps.swa_site.outputs.origin }}" \
-            --parameters deploymentRevision="${{ github.run_id }}" \
+            --parameters deploymentRevision="${{ env.DEPLOYMENT_REVISION_MARKER }}" \
             --query "properties.outputs" -o json | tee deploy-outputs.json
           echo "gateway_fqdn=$(jq -r '.gatewayFqdn.value' deploy-outputs.json)" >> "$GITHUB_OUTPUT"
           rm -f deploy-outputs.json
@@ -349,7 +358,7 @@ jobs:
               --copilot-image "${{ steps.build_images.outputs.copilot_image }}" \
               --sha "${{ github.sha }}" \
               --environment azure-staging \
-              --deployment-revision "${{ github.run_id }}" \
+              --deployment-revision "${{ env.DEPLOYMENT_REVISION_MARKER }}" \
               --verify-gateway
           else
             echo "scripts/azure/deploy.sh not present yet (separate lane) — skipping."
@@ -386,6 +395,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: production
+    env:
+      # See the staging job's identical env var for the full rationale.
+      DEPLOYMENT_REVISION_MARKER: ${{ github.run_id }}-${{ github.run_attempt }}-production
 
     steps:
       - name: Check out repository
@@ -474,7 +486,7 @@ jobs:
             --parameters gatewayImageTag="${{ steps.build_images.outputs.gateway_image }}" \
             --parameters copilotImageTag="${{ steps.build_images.outputs.copilot_image }}" \
             --parameters enableStagingIpRestriction=false \
-            --parameters deploymentRevision="${{ github.run_id }}"
+            --parameters deploymentRevision="${{ env.DEPLOYMENT_REVISION_MARKER }}"
 
       - name: az deployment group create — infra/runtime.bicep (production)
         id: deploy_infra
@@ -482,7 +494,8 @@ jobs:
         # environment explicitly gated by GitHub's `production` protection
         # rules, and only after every prior acceptance check has passed per
         # .azure/deployment-plan.md Stage 5. deploymentRevision is always
-        # this run's unique github.run_id -- staging and production commonly
+        # this run's DEPLOYMENT_REVISION_MARKER (job-level env, run_id +
+        # run_attempt + environment name) -- staging and production commonly
         # deploy the identical image SHA, and this forces a genuinely new
         # Container Apps revision so the versionless github-client-id/
         # github-client-secret Key Vault references are re-read from
@@ -499,7 +512,7 @@ jobs:
             --parameters gatewayImageTag="${{ steps.build_images.outputs.gateway_image }}" \
             --parameters copilotImageTag="${{ steps.build_images.outputs.copilot_image }}" \
             --parameters enableStagingIpRestriction=false \
-            --parameters deploymentRevision="${{ github.run_id }}" \
+            --parameters deploymentRevision="${{ env.DEPLOYMENT_REVISION_MARKER }}" \
             --query "properties.outputs" -o json | tee deploy-outputs.json
           echo "gateway_fqdn=$(jq -r '.gatewayFqdn.value' deploy-outputs.json)" >> "$GITHUB_OUTPUT"
           rm -f deploy-outputs.json
@@ -543,7 +556,7 @@ jobs:
               --copilot-image "${{ steps.build_images.outputs.copilot_image }}" \
               --sha "${{ github.sha }}" \
               --environment production \
-              --deployment-revision "${{ github.run_id }}" \
+              --deployment-revision "${{ env.DEPLOYMENT_REVISION_MARKER }}" \
               --verify-gateway
           else
             echo "scripts/azure/deploy.sh not present yet (separate lane) — skipping."
