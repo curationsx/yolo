@@ -76,6 +76,14 @@ jobs:
           npm ci
           npm run build
 
+      - name: Install Visual Oracle browser
+        working-directory: catalog-site
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Visual Oracle contract
+        working-directory: catalog-site
+        run: npm run test:visual:ci
+
       - name: Test and typecheck Cloudflare Worker
         working-directory: agent-worker
         run: |
