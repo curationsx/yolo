@@ -18,7 +18,11 @@
 //      required by the plan, including the Cosmos-native SQL role
 //      assignment and the Cognitive Services role on the existing
 //      rg-yolo-foundry resources.
-//   5. Create the new `gateway-state` Cosmos container.
+//   5. Create the new `gateway-state` Cosmos container, plus five fully
+//      isolated `*-staging` containers (engagements-staging,
+//      discussions-staging, votes-staging, scores-staging,
+//      gateway-state-staging) so azure-staging never writes to shared
+//      production data.
 //   6. Declare the alert-only monthly budget covering both resource groups.
 //
 // infra/runtime.bicep is the separate, repeatable, Contributor-safe entry

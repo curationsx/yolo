@@ -317,6 +317,7 @@ jobs:
               --copilot-image "${{ steps.build_images.outputs.copilot_image }}" \
               --sha "${{ github.sha }}" \
               --environment azure-staging \
+              --deployment-revision "${{ github.run_id }}" \
               --verify-gateway
           else
             echo "scripts/azure/deploy.sh not present yet (separate lane) — skipping."
@@ -493,6 +494,7 @@ jobs:
               --copilot-image "${{ steps.build_images.outputs.copilot_image }}" \
               --sha "${{ github.sha }}" \
               --environment production \
+              --deployment-revision "${{ github.run_id }}" \
               --verify-gateway
           else
             echo "scripts/azure/deploy.sh not present yet (separate lane) — skipping."
