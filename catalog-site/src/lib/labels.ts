@@ -27,6 +27,37 @@ export const LICENSE_LABELS: Record<string, string> = {
   mixed: 'Mixed licensing',
 };
 
+const STACK_ACCENTS: Record<string, string> = {
+  ollama: '#ff3131',
+  supabase: '#02a9ea',
+  cloudflare: '#f254b8',
+  n8n: '#dc6acf',
+  langfuse: '#0496ff',
+  obsidian: '#c5d86d',
+};
+
+const CATEGORY_ACCENTS: Record<string, string> = {
+  research: '#c5d86d',
+  'model-access': '#ff3131',
+  automation: '#dc6acf',
+  'observability-evaluation': '#0496ff',
+  'knowledge-data': '#02a9ea',
+  development: '#353839',
+  'design-content': '#f254b8',
+  'community-documentation': '#e82828',
+};
+
+export function stackAccent(id: string, category: string): string {
+  return STACK_ACCENTS[id] ?? CATEGORY_ACCENTS[category] ?? '#ff3131';
+}
+
+export function boardCategoryLabel(category: string): string {
+  return (CATEGORY_LABELS[category] ?? category)
+    .toLowerCase()
+    .replaceAll(' & ', '-')
+    .replaceAll(' ', '-');
+}
+
 /** Prefix an internal path with the configured base (GitHub Pages subpath). */
 export function withBase(path: string): string {
   const base = import.meta.env.BASE_URL.replace(/\/$/, '');

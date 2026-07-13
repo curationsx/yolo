@@ -1,0 +1,6 @@
+/* CurationsX — webfonts
+   No font binaries ship in curationsvibes/v1.1; the site loads Google Fonts.
+   We mirror that here. SUBSTITUTION FLAG: if you have licensed .woff2 files
+   for Inter / Fraunces / JetBrains Mono / Fira Sans, replace these imports
+   with local @font-face rules. */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..700&family=JetBrains+Mono:wght@400;500;600;700&family=Fira+Sans:wght@900&display=swap');

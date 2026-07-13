@@ -14,18 +14,22 @@ interface Controls {
 }
 
 export function initFilters(): void {
-  const grid = document.querySelector<HTMLElement>('[data-directory-grid]');
+  const grids = Array.from(
+    document.querySelectorAll<HTMLElement>('[data-directory-grid]'),
+  );
   const count = document.querySelector<HTMLElement>('[data-result-count]');
-  if (!grid || !count) return;
+  if (!grids.length || !count) return;
 
   const controls: Controls = {
-    search: grid.ownerDocument.querySelector('#filter-search')!,
-    category: grid.ownerDocument.querySelector('#filter-category')!,
-    deployment: grid.ownerDocument.querySelector('#filter-deployment')!,
-    license: grid.ownerDocument.querySelector('#filter-license')!,
+    search: document.querySelector('#filter-search')!,
+    category: document.querySelector('#filter-category')!,
+    deployment: document.querySelector('#filter-deployment')!,
+    license: document.querySelector('#filter-license')!,
   };
 
-  const cards = Array.from(grid.querySelectorAll<HTMLElement>('.card'));
+  const cards = grids.flatMap((grid) =>
+    Array.from(grid.querySelectorAll<HTMLElement>('.stack-row')),
+  );
 
   const apply = (): void => {
     const q = controls.search.value.trim().toLowerCase();
@@ -44,13 +48,21 @@ export function initFilters(): void {
       if (matches) visible += 1;
     }
 
+    for (const section of document.querySelectorAll<HTMLElement>('[data-card-section]')) {
+      section.hidden = !section.querySelector('.stack-row:not([hidden])');
+    }
+
     count.textContent =
       visible === cards.length
-        ? `${cards.length} tools`
-        : `${visible} of ${cards.length} tools`;
+        ? `${cards.length} stacks`
+        : `${visible} of ${cards.length} stacks`;
   };
 
   controls.search.addEventListener('input', apply);
+  controls.search.form?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    apply();
+  });
   for (const select of [controls.category, controls.deployment, controls.license]) {
     select.addEventListener('change', apply);
   }

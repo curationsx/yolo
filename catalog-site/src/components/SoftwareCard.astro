@@ -1,6 +1,10 @@
 ---
-import DeploymentBadge from './DeploymentBadge.astro';
-import { CATEGORY_LABELS, LICENSE_LABELS, withBase } from '../lib/labels';
+import {
+  boardCategoryLabel,
+  DEPLOYMENT_LABELS,
+  stackAccent,
+  withBase,
+} from '../lib/labels';
 import type { CollectionEntry } from 'astro:content';
 
 interface Props {
@@ -17,28 +21,59 @@ const searchable = [
 ]
   .join(' ')
   .toLowerCase();
+const accent = stackAccent(entry.id, entry.category);
+const tags = (entry.tags ?? []).slice(0, 2);
 ---
 
 <li
-  class="card"
+  class:list={['stack-row', { 'stack-row-featured': entry.featured }]}
   data-search={searchable}
   data-category={entry.category}
   data-deployment={entry.deployment}
   data-license={entry.license ?? ''}
+  style={`--stack-accent: ${accent};`}
 >
-  <div class="card-head">
-    <h3>{entry.name}</h3>
-    <DeploymentBadge deployment={entry.deployment} />
-    {entry.license && <span class="badge">{LICENSE_LABELS[entry.license]}</span>}
-  </div>
-  <p class="muted">{CATEGORY_LABELS[entry.category]}</p>
-  <p>{entry.primary_use}</p>
-  <p class="muted">{entry.notable_strength}</p>
-  <p class="card-verify">⚠️ Verify before use: {entry.verify_before_use}</p>
-  <div class="card-actions">
-    <a class="btn btn-primary" href={withBase(`/software/${entry.id}/`)}>Details</a>
-    <a class="btn btn-secondary" href={entry.reference} rel="noopener">
-      Official site ↗
-    </a>
+  <button
+    type="button"
+    class="stack-score"
+    data-software-vote
+    data-vote-target={`software:${entry.id}`}
+    aria-pressed="false"
+    aria-label={`Upvote ${entry.name}`}
+  >
+    <span class="vote-arrow" aria-hidden="true">▲</span>
+    <strong data-vote-count>0</strong>
+  </button>
+  <div class="stack-row-main">
+    <div class="stack-row-heading">
+      <a class="stack-name" href={withBase(`/software/${entry.id}/`)}>{entry.name}</a>
+      <span class="stack-category">{boardCategoryLabel(entry.category)}</span>
+      {tags.map((tag) => <span class="stack-tag">{tag}</span>)}
+    </div>
+    <p>
+      {entry.primary_use}
+      <span class="stack-strength"> {entry.notable_strength}</span>
+    </p>
+    <div class="stack-meta">
+      {
+        entry.featured ? (
+          <>
+            <span data-thread-count={entry.id}>0 threads</span>
+            <span aria-hidden="true">·</span>
+            <a href={withBase(`/software/${entry.id}/`)}>wiki</a>
+            <span aria-hidden="true">·</span>
+            <a href={withBase(`/software/${entry.id}/#company-board`)}>discuss</a>
+          </>
+        ) : (
+          <>
+            <span>{DEPLOYMENT_LABELS[entry.deployment]}</span>
+            <span aria-hidden="true">·</span>
+            <a href={withBase(`/software/${entry.id}/`)}>details</a>
+            <span aria-hidden="true">·</span>
+            <a href={entry.reference} rel="noopener">source</a>
+          </>
+        )
+      }
+    </div>
   </div>
 </li>
