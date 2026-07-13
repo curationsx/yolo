@@ -266,8 +266,14 @@ test("Cloudflare vote store delegates to the durable VoteGuard Durable Object an
     assert.deepEqual(first, { target_id: "software:cloudflare", voted: true, count: 1 });
     assert.deepEqual(await store.getViewerVotes("123", ["software:cloudflare"]), ["software:cloudflare"]);
 
+    // getCounts must read the same legacy `scores` container the durable
+    // VoteGuard's mutate() already keeps current on every vote — no
+    // behavior change for Cloudflare.
+    assert.deepEqual(await store.getCounts(["software:cloudflare"]), { "software:cloudflare": 1 });
+
     const removed = await store.setVote("software:cloudflare", "123", false);
     assert.deepEqual(removed, { target_id: "software:cloudflare", voted: false, count: 0 });
+    assert.deepEqual(await store.getCounts(["software:cloudflare"]), { "software:cloudflare": 0 });
   } finally {
     globalThis.fetch = originalFetch;
   }

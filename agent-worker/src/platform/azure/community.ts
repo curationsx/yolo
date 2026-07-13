@@ -204,6 +204,22 @@ export function createAzureVoteStore(container: CosmosContainerLike): VoteStore 
       );
       return voted.filter((target): target is string => target !== null);
     },
+
+    async getCounts(targetIds: string[]): Promise<Record<string, number>> {
+      // The score metadata document lives in the same partition as its
+      // target's vote documents and is what `setVote`'s transactional
+      // batch itself updates — reading it here (rather than the legacy
+      // `scores` container, which this store never writes to) is what
+      // keeps public vote summaries from going stale after an Azure vote.
+      const entries = await Promise.all(
+        targetIds.map(async (targetId) => {
+          const response = await container.item(SCORE_DOC_ID, targetId).read();
+          if (response.statusCode === 404 || !response.resource) return null;
+          return [targetId, (response.resource as ScoreDoc).count] as const;
+        }),
+      );
+      return Object.fromEntries(entries.filter((entry): entry is readonly [string, number] => entry !== null));
+    },
   };
 }
 

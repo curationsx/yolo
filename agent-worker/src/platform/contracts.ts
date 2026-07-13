@@ -64,10 +64,17 @@ export interface VoteMutationResult {
 }
 
 /** Vote/score source of truth. Cloudflare serializes through a Durable
- * Object; Azure uses a same-partition Cosmos transactional batch. */
+ * Object; Azure uses a same-partition Cosmos transactional batch.
+ *
+ * `getCounts` is the authoritative read path for public vote summaries —
+ * on Cloudflare it reads the same legacy `scores` container the durable
+ * Worker path already keeps current; on Azure it reads the same-partition
+ * score metadata document `setVote` itself writes, so summaries never go
+ * stale relative to the transactional batch that produced them. */
 export interface VoteStore {
   setVote(targetId: string, userId: string, voted: boolean): Promise<VoteMutationResult>;
   getViewerVotes(userId: string, targets: string[]): Promise<string[]>;
+  getCounts(targetIds: string[]): Promise<Record<string, number>>;
 }
 
 export type CosmosParameterValue = string | number | boolean | null | string[] | number[];

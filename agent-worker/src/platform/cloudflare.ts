@@ -57,9 +57,35 @@ export function createCloudflareCopilotGrantStore(
 }
 
 export function createCloudflareVoteStore(deps: VoteGuardEnv): VoteStore {
+  const scoresConfig: CosmosConfig = {
+    endpoint: deps.COSMOS_ENDPOINT,
+    key: deps.COSMOS_KEY,
+    database: deps.COSMOS_DATABASE,
+    container: deps.COSMOS_SCORES_CONTAINER,
+  };
   return {
     setVote: (targetId, userId, voted) => setVote(deps, targetId, userId, voted),
     getViewerVotes: (userId, targets) => getViewerVotes(deps, userId, targets),
+    async getCounts(targetIds: string[]): Promise<Record<string, number>> {
+      // Preserves the exact legacy read path: the durable Cloudflare
+      // VoteGuard already keeps this `scores` container current on every
+      // vote (see vote-guard.ts's mutate()), so reading it here is not a
+      // behavior change for Cloudflare.
+      const counts: Record<string, number> = {};
+      for (let offset = 0; offset < targetIds.length; offset += 100) {
+        const chunk = targetIds.slice(offset, offset + 100);
+        const parameters = chunk.map((target, index) => ({ name: `@target${index}`, value: target }));
+        const placeholders = parameters.map((parameter) => parameter.name).join(", ");
+        const rows = await queryDocuments<{ target_id: string; count: number }>(
+          scoresConfig,
+          `SELECT c.target_id, c.count FROM c WHERE c.target_id IN (${placeholders})`,
+          parameters,
+          "global",
+        );
+        for (const row of rows) counts[row.target_id] = row.count;
+      }
+      return counts;
+    },
   };
 }
 

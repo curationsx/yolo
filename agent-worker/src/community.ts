@@ -436,21 +436,32 @@ async function voteSummary(
   const unique = [...new Set(targets.filter((target) => VOTE_TARGET_PATTERN.test(target)))];
   if (!unique.length) return { counts: {}, viewer_votes: [] };
 
-  const counts: Record<string, number> = {};
-  for (let offset = 0; offset < unique.length; offset += 100) {
-    const chunk = unique.slice(offset, offset + 100);
-    const parameters = chunk.map((target, index) => ({
-      name: `@target${index}`,
-      value: target,
-    }));
-    const placeholders = parameters.map((parameter) => parameter.name).join(", ");
-    const rows = await env.community.queryDocuments<Pick<ScoreDoc, "target_id" | "count">>(
-      env.COSMOS_SCORES_CONTAINER,
-      `SELECT c.target_id, c.count FROM c WHERE c.target_id IN (${placeholders})`,
-      parameters,
-      "global",
-    );
-    for (const row of rows) counts[row.target_id] = row.count;
+  let counts: Record<string, number>;
+  if (useDurableVotes(env)) {
+    // Durable mode: read through the VoteStore contract so Azure reads its
+    // own same-partition score metadata (kept current by setVote's
+    // transactional batch) instead of the legacy `scores` container,
+    // which Azure never writes to. Cloudflare's adapter still reads the
+    // legacy container — unchanged, since its durable VoteGuard keeps it
+    // current on every vote.
+    counts = await env.votes.getCounts(unique);
+  } else {
+    counts = {};
+    for (let offset = 0; offset < unique.length; offset += 100) {
+      const chunk = unique.slice(offset, offset + 100);
+      const parameters = chunk.map((target, index) => ({
+        name: `@target${index}`,
+        value: target,
+      }));
+      const placeholders = parameters.map((parameter) => parameter.name).join(", ");
+      const rows = await env.community.queryDocuments<Pick<ScoreDoc, "target_id" | "count">>(
+        env.COSMOS_SCORES_CONTAINER,
+        `SELECT c.target_id, c.count FROM c WHERE c.target_id IN (${placeholders})`,
+        parameters,
+        "global",
+      );
+      for (const row of rows) counts[row.target_id] = row.count;
+    }
   }
   const viewerVotes = session
     ? useDurableVotes(env)

@@ -152,6 +152,29 @@ test("getViewerVotes returns an empty list for targets with no vote", async () =
   assert.deepEqual(await store.getViewerVotes("123", ["software:cloudflare", "software:supabase"]), []);
 });
 
+test("getCounts reads the same-partition score metadata setVote writes, never the legacy scores container", async () => {
+  const votesContainer = new FakeCosmosContainer();
+  const store = createAzureVoteStore(votesContainer);
+  await store.setVote("software:cloudflare", "1", true);
+  await store.setVote("software:cloudflare", "2", true);
+  await store.setVote("software:supabase", "1", true);
+
+  const counts = await store.getCounts(["software:cloudflare", "software:supabase", "software:never-voted"]);
+  assert.deepEqual(counts, { "software:cloudflare": 2, "software:supabase": 1 });
+});
+
+test("getCounts reflects a vote immediately, proving it never depends on the legacy scores container", async () => {
+  const votesContainer = new FakeCosmosContainer();
+  const store = createAzureVoteStore(votesContainer);
+  assert.deepEqual(await store.getCounts(["software:cloudflare"]), {});
+
+  await store.setVote("software:cloudflare", "1", true);
+  assert.deepEqual(await store.getCounts(["software:cloudflare"]), { "software:cloudflare": 1 });
+
+  await store.setVote("software:cloudflare", "1", false);
+  assert.deepEqual(await store.getCounts(["software:cloudflare"]), { "software:cloudflare": 0 });
+});
+
 test("reconcileScoreFromVotes rebuilds the score document from vote documents", async () => {
   const votesContainer = new FakeCosmosContainer();
   const store = createAzureVoteStore(votesContainer);
