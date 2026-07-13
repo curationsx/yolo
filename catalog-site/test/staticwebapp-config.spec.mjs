@@ -39,7 +39,7 @@ test.describe('staticwebapp.config.json — caching + security contract', () => 
 
   test('versioned /copilot/ and /cookbooks/ prompt artifacts get immutable caching', () => {
     const copilot = config.routes.find((r) => r.route === '/copilot/*');
-    const cookbooks = config.routes.find((r) => r.route === '/cookbooks/*/*/**');
+    const cookbooks = config.routes.find((r) => r.route === '/cookbooks/*');
     for (const route of [copilot, cookbooks]) {
       expect(route?.headers?.['cache-control']).toMatch(/immutable/);
     }
@@ -47,10 +47,29 @@ test.describe('staticwebapp.config.json — caching + security contract', () => 
 
   test('HTML and the cookbooks index revalidate instead of caching immutably', () => {
     const catchAll = config.routes.find((r) => r.route === '/*');
-    const cookbooksIndex = config.routes.find((r) => r.route === '/cookbooks/');
-    for (const route of [catchAll, cookbooksIndex]) {
+    const cookbooksIndexes = ['/cookbooks/', '/cookbooks/index.html'].map((path) =>
+      config.routes.find((r) => r.route === path),
+    );
+    for (const route of [catchAll, ...cookbooksIndexes]) {
       expect(route?.headers?.['cache-control']).toMatch(/must-revalidate/);
       expect(route?.headers?.['cache-control']).not.toMatch(/immutable/);
+    }
+  });
+
+  test('route patterns use at most one Azure Static Web Apps wildcard', () => {
+    for (const route of config.routes) {
+      expect(route.route.match(/\*/g) ?? []).toHaveLength(route.route.includes('*') ? 1 : 0);
+    }
+  });
+
+  test('both exact cookbooks index request forms precede the immutable wildcard rule', () => {
+    const indexRules = ['/cookbooks/', '/cookbooks/index.html'].map((path) =>
+      config.routes.findIndex((r) => r.route === path),
+    );
+    const artifactRule = config.routes.findIndex((r) => r.route === '/cookbooks/*');
+    for (const indexRule of indexRules) {
+      expect(indexRule).toBeGreaterThanOrEqual(0);
+      expect(artifactRule).toBeGreaterThan(indexRule);
     }
   });
 

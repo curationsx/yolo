@@ -24,16 +24,22 @@
       }
     },
     {
-      "route": "/cookbooks/*/*/**",
-      "headers": {
-        "cache-control": "public, max-age=31536000, immutable",
-        "content-type": "text/plain; charset=utf-8"
-      }
-    },
-    {
       "route": "/cookbooks/",
       "headers": {
         "cache-control": "public, max-age=0, must-revalidate"
+      }
+    },
+    {
+      "route": "/cookbooks/index.html",
+      "headers": {
+        "cache-control": "public, max-age=0, must-revalidate"
+      }
+    },
+    {
+      "route": "/cookbooks/*",
+      "headers": {
+        "cache-control": "public, max-age=31536000, immutable",
+        "content-type": "text/plain; charset=utf-8"
       }
     },
     {
