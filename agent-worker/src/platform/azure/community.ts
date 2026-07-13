@@ -225,7 +225,7 @@ export function createAzureVoteStore(container: CosmosContainerLike): VoteStore 
 
 /** Rebuilds the score metadata document for one target from its
  * authoritative vote documents. Idempotent: it always recomputes "current
- * vote count now" and upserts, so repeated calls converge to the same
+ * vote count now" and writes it, so repeated calls converge to the same
  * result and never double-count, whether this is the first pre-cutover
  * backfill, a post-cutover late-vote absorption pass, or a repeat of
  * either.
@@ -236,34 +236,81 @@ export function createAzureVoteStore(container: CosmosContainerLike): VoteStore 
  * still reachable during the post-cutover DNS TTL race window) are shaped
  * `{id, target_id, user_id, created_at}` with no `doc_type` field at all —
  * filtering on `doc_type = "vote"` would silently miss exactly the late
- * legacy writes this reconciliation exists to absorb. */
+ * legacy writes this reconciliation exists to absorb.
+ *
+ * Uses the same bounded ETag CAS pattern as `setVote`, in this exact
+ * order, per attempt: read the score doc (and its ETag) first, then
+ * recompute the authoritative vote count, then write conditionally
+ * (Replace with `ifMatch` if the doc existed, Create if it did not). A
+ * blind `upsert` here would be a lost-update race: if a live `setVote`
+ * commits its own score update between this function's count query and
+ * its write, a blind upsert would silently overwrite that concurrent
+ * result with this call's now-stale count. Reading the ETag before
+ * recomputing the count means any such race is instead detected as a
+ * 409/412 conflict and retried against fresh state, so the final written
+ * count can never regress behind a vote that has already been recorded. */
 export async function reconcileScoreFromVotes(
   container: CosmosContainerLike,
   targetId: string,
 ): Promise<{ target_id: string; count: number }> {
-  const result = await container.items
-    .query<number>(
-      {
-        query:
-          "SELECT VALUE COUNT(1) FROM c WHERE (NOT IS_DEFINED(c.doc_type) OR c.doc_type = @type) AND c.id != @scoreId",
-        parameters: [
-          { name: "@type", value: "vote" },
-          { name: "@scoreId", value: SCORE_DOC_ID },
-        ],
-      },
-      { partitionKey: targetId },
-    )
-    .fetchAll();
-  const count = result.resources[0] ?? 0;
-  const scoreDoc: ScoreDoc = {
-    id: SCORE_DOC_ID,
-    doc_type: "score",
-    target_id: targetId,
-    count,
-    updated_at: new Date().toISOString(),
-  };
-  await container.items.upsert(scoreDoc);
-  return { target_id: targetId, count };
+  for (let attempt = 0; attempt < MAX_CAS_ATTEMPTS; attempt += 1) {
+    let existingScore: ScoreDoc | undefined;
+    let scoreEtag: string | undefined;
+    try {
+      const read = await container.item(SCORE_DOC_ID, targetId).read();
+      if (read.statusCode !== 404 && read.resource) {
+        existingScore = read.resource as ScoreDoc;
+        scoreEtag = read.etag;
+      }
+    } catch (error) {
+      if (cosmosStatus(error) === 429) {
+        await jitteredBackoff(attempt);
+        continue;
+      }
+      throw error;
+    }
+
+    const result = await container.items
+      .query<number>(
+        { query: "SELECT VALUE COUNT(1) FROM c WHERE (NOT IS_DEFINED(c.doc_type) OR c.doc_type = 'vote') AND c.id != 'score'" },
+        { partitionKey: targetId },
+      )
+      .fetchAll();
+    const count = result.resources[0] ?? 0;
+    const scoreDoc: ScoreDoc = {
+      id: SCORE_DOC_ID,
+      doc_type: "score",
+      target_id: targetId,
+      count,
+      updated_at: new Date().toISOString(),
+    };
+
+    const operation: CosmosBatchOperation = existingScore
+      ? { operationType: "Replace", id: SCORE_DOC_ID, resourceBody: scoreDoc as ItemDefinition, ifMatch: scoreEtag }
+      : { operationType: "Create", resourceBody: scoreDoc as ItemDefinition };
+
+    let response;
+    try {
+      response = await container.items.batch([operation], targetId);
+    } catch (error) {
+      if (cosmosStatus(error) === 429) {
+        await jitteredBackoff(attempt);
+        continue;
+      }
+      throw error;
+    }
+
+    const results = response.result ?? [];
+    const succeeded = results.length === 1 && results[0].statusCode >= 200 && results[0].statusCode < 300;
+    if (succeeded) {
+      return { target_id: targetId, count };
+    }
+    // A concurrent setVote (or another reconciliation run) created or
+    // replaced the score doc between our read and our write — re-read
+    // and recompute against fresh state rather than overwrite it.
+    await jitteredBackoff(attempt);
+  }
+  throw GatewayErrors.dependencyThrottled(1, { store: "reconciliation" });
 }
 
 /**

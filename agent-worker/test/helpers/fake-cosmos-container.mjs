@@ -125,14 +125,19 @@ export class FakeCosmosContainer {
             // excluding the score metadata doc" query. Matches documents
             // missing the field entirely (legacy Cloudflare shape) or equal
             // to the given value (Azure-native shape), same as real Cosmos
-            // SQL's IS_DEFINED semantics.
+            // SQL's IS_DEFINED semantics. Supports both parameterized
+            // (`@type`) and literal (`'vote'`) forms of the predicate.
             const isDefinedMatch = querySpec.query.match(
-              /COUNT\(1\)\s+FROM c\s+WHERE\s+\(NOT IS_DEFINED\(c\.(\w+)\)\s+OR\s+c\.\1\s*=\s*@(\w+)\)\s+AND\s+c\.id\s*!=\s*@(\w+)/i,
+              /COUNT\(1\)\s+FROM c\s+WHERE\s+\(NOT IS_DEFINED\(c\.(\w+)\)\s+OR\s+c\.\1\s*=\s*(@\w+|'[^']*')\)\s+AND\s+c\.id\s*!=\s*(@\w+|'[^']*')/i,
             );
             if (isDefinedMatch) {
-              const [, field, typeParamName, idParamName] = isDefinedMatch;
-              const typeValue = (querySpec.parameters ?? []).find((p) => p.name === `@${typeParamName}`)?.value;
-              const excludedId = (querySpec.parameters ?? []).find((p) => p.name === `@${idParamName}`)?.value;
+              const [, field, typeToken, idToken] = isDefinedMatch;
+              const resolveToken = (token) =>
+                token.startsWith("@")
+                  ? (querySpec.parameters ?? []).find((p) => p.name === token)?.value
+                  : token.slice(1, -1);
+              const typeValue = resolveToken(typeToken);
+              const excludedId = resolveToken(idToken);
               const filtered = entries.filter((doc) => {
                 if (doc.id === excludedId) return false;
                 return !Object.hasOwn(doc, field) || doc[field] === typeValue;
