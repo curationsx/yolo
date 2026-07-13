@@ -56,9 +56,13 @@ test.describe('staticwebapp.config.json — caching + security contract', () => 
     }
   });
 
-  test('route patterns use at most one Azure Static Web Apps wildcard', () => {
-    for (const route of config.routes) {
-      expect(route.route.match(/\*/g) ?? []).toHaveLength(route.route.includes('*') ? 1 : 0);
+  test('route and fallback patterns use at most one Azure Static Web Apps wildcard', () => {
+    const patterns = [
+      ...config.routes.map((route) => route.route),
+      ...(config.navigationFallback?.exclude ?? []),
+    ];
+    for (const pattern of patterns) {
+      expect(pattern.match(/\*/g) ?? []).toHaveLength(pattern.includes('*') ? 1 : 0);
     }
   });
 

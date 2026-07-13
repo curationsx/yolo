@@ -3,7 +3,7 @@
   "trailingSlash": "always",
   "navigationFallback": {
     "rewrite": "/index.html",
-    "exclude": ["/*", "/*/**"]
+    "exclude": ["/*"]
   },
   "mimeTypes": {
     ".webmanifest": "application/manifest+json"
