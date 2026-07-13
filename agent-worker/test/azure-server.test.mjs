@@ -3,7 +3,7 @@ import test from "node:test";
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
 
-import { buildAzureEnv, startAzureGateway } from "../src/platform/azure/server.ts";
+import { buildAzureEnv, handleIncomingHttpRequest, startAzureGateway } from "../src/platform/azure/server.ts";
 import { loadAzureConfig } from "../src/platform/azure/config.ts";
 import { FakeCosmosContainer } from "./helpers/fake-cosmos-container.mjs";
 
@@ -78,6 +78,13 @@ test("requestMetadata trusts only the rightmost X-Forwarded-For entry", () => {
 
   const missing = new Request("https://api.curations.dev/api/health");
   assert.equal(env.requestMetadata.clientIp(missing), "unknown");
+
+  const blank = new Request("https://api.curations.dev/api/health", {
+    headers: { "x-forwarded-for": " , " },
+  });
+  // Present but empty after trimming/filtering — must fall back to
+  // "unknown" rather than indexing an empty array.
+  assert.equal(env.requestMetadata.clientIp(blank), "unknown");
 });
 
 async function fetchFrom(port, path, options = {}) {
@@ -357,4 +364,131 @@ test("an error while converting the Node request itself is logged and answered s
   } finally {
     Headers.prototype.set = originalSet;
   }
+});
+
+test("a failure logging a successful response (after headers are already sent) does not attempt to write headers twice", async (context) => {
+  const config = loadAzureConfig(validEnv());
+  const server = startAzureGateway(config, fakeCosmosClient(), fakeCredential());
+  context.after(() => server.close());
+  await server.ready;
+  const port = server.address().port;
+
+  const originalLog = console.log;
+  let armed = true;
+  console.log = function patchedLog(...args) {
+    if (armed) {
+      armed = false; // fail exactly once, right after this request's headers/body are sent
+      throw new Error("simulated logging failure after headers sent");
+    }
+    return originalLog.apply(console, args);
+  };
+  try {
+    // The client already received the full response before logRequest
+    // threw, so this must still resolve 200 — the outer catch only logs
+    // and must skip res.writeHead() because res.headersSent is true.
+    const response = await fetch(`http://127.0.0.1:${port}/api/live`);
+    assert.equal(response.status, 200);
+  } finally {
+    console.log = originalLog;
+  }
+});
+
+test("handleIncomingHttpRequest falls back to a synthetic route label when the raw Node request has no URL", async () => {
+  const config = loadAzureConfig(validEnv());
+  const env = buildAzureEnv(config, fakeCosmosClient(), fakeCredential());
+
+  // A real Node HTTP client always populates `req.url`; this proves the
+  // outer last-resort error handler still logs safely on a synthetic
+  // request that lacks one (defensive fallback), rather than crashing on
+  // `undefined` or throwing while trying to build the log line.
+  const fakeReq = { method: "GET", url: undefined, headers: undefined };
+  let loggedRoute;
+  const originalError = console.error;
+  console.error = (line) => {
+    loggedRoute = JSON.parse(line).route;
+  };
+  let headersSent = false;
+  let ended = false;
+  const fakeRes = {
+    get headersSent() {
+      return headersSent;
+    },
+    get writableEnded() {
+      return ended;
+    },
+    writeHead: () => {
+      headersSent = true;
+    },
+    end: () => {
+      ended = true;
+    },
+  };
+  try {
+    handleIncomingHttpRequest(fakeReq, fakeRes, env);
+    // The failure happens inside a microtask (headers destructuring throws
+    // asynchronously from within the async IIFE); give it a tick.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  } finally {
+    console.error = originalError;
+  }
+  assert.equal(loggedRoute, "/");
+  assert.equal(headersSent, true);
+  assert.equal(ended, true);
+});
+
+test("server.address() returns null once the server has stopped listening", async () => {
+  const config = loadAzureConfig(validEnv());
+  const server = startAzureGateway(config, fakeCosmosClient(), fakeCredential());
+  await server.ready;
+  assert.equal(typeof server.address().port, "number");
+  await server.close();
+  assert.equal(server.address(), null);
+});
+
+test("closing an already-closed gateway server rejects with the underlying error", async () => {
+  const config = loadAzureConfig(validEnv());
+  const server = startAzureGateway(config, fakeCosmosClient(), fakeCredential());
+  await server.ready;
+  await server.close();
+  await assert.rejects(server.close());
+});
+
+test("running server.ts directly exits cleanly on SIGINT", async (context) => {
+  const workerRoot = new URL("../", import.meta.url).pathname;
+  const port = 34100 + Math.floor(Math.random() * 1000);
+  const child = spawn(
+    process.execPath,
+    ["--experimental-strip-types", "--disable-warning=ExperimentalWarning", "src/platform/azure/server.ts"],
+    {
+      cwd: workerRoot,
+      env: { ...process.env, ...validEnv({ PORT: String(port) }) },
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+  let output = "";
+  child.stdout.on("data", (chunk) => (output += chunk.toString()));
+  child.stderr.on("data", (chunk) => (output += chunk.toString()));
+  context.after(async () => {
+    if (child.exitCode === null && child.pid) {
+      process.kill(child.pid, "SIGKILL");
+      await Promise.race([once(child, "exit"), new Promise((resolve) => setTimeout(resolve, 2_000))]);
+    }
+  });
+
+  let ready = false;
+  for (let attempt = 0; attempt < 30 && !ready; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}/api/live`);
+      if (response.status === 200) ready = true;
+    } catch (error) {
+      if (child.exitCode !== null) throw new Error(`server exited early (${child.exitCode}):\n${output}`);
+    }
+  }
+  assert.equal(ready, true, `server never became reachable: ${output}`);
+
+  process.kill(child.pid, "SIGINT");
+  const [code, signal] = await once(child, "exit");
+  assert.equal(code, 0);
+  assert.equal(signal, null);
 });

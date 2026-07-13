@@ -147,6 +147,84 @@ test("readBoundedBody returns undefined for GET/HEAD requests", async () => {
   );
 });
 
+test("readBoundedBody treats a request with no method as GET (no body read)", async () => {
+  let body;
+  await withIncomingRequest(
+    async (req, res) => {
+      req.method = undefined;
+      body = await readBoundedBody(req);
+      res.writeHead(200);
+      res.end("ok");
+    },
+    {},
+    "",
+  );
+  assert.equal(body, undefined);
+});
+
+test("readBoundedBody returns undefined for a HEAD request specifically", async () => {
+  let body = "not-set";
+  await withIncomingRequest(
+    async (req, res) => {
+      req.method = "HEAD";
+      body = await readBoundedBody(req);
+      res.writeHead(200);
+      res.end("ok");
+    },
+    {},
+    "",
+  );
+  assert.equal(body, undefined);
+});
+
+test("nodeRequestToFetchRequest falls back to localhost when the Host header is missing", async () => {
+  let capturedUrl;
+  await withIncomingRequest(
+    async (req, res) => {
+      delete req.headers.host;
+      const fetchRequest = await nodeRequestToFetchRequest(req);
+      capturedUrl = fetchRequest.url;
+      res.writeHead(200);
+      res.end("ok");
+    },
+    {},
+    "",
+  );
+  assert.match(capturedUrl, /^https:\/\/localhost\//);
+});
+
+test("nodeRequestToFetchRequest falls back to / when the request URL is missing", async () => {
+  let capturedUrl;
+  await withIncomingRequest(
+    async (req, res) => {
+      req.url = undefined;
+      const fetchRequest = await nodeRequestToFetchRequest(req);
+      capturedUrl = fetchRequest.url;
+      res.writeHead(200);
+      res.end("ok");
+    },
+    {},
+    "",
+  );
+  assert.match(capturedUrl, /\/$/);
+});
+
+test("nodeRequestToFetchRequest defaults to GET when the request has no method", async () => {
+  let capturedMethod;
+  await withIncomingRequest(
+    async (req, res) => {
+      req.method = undefined;
+      const fetchRequest = await nodeRequestToFetchRequest(req);
+      capturedMethod = fetchRequest.method;
+      res.writeHead(200);
+      res.end("ok");
+    },
+    {},
+    "",
+  );
+  assert.equal(capturedMethod, "GET");
+});
+
 test("readBoundedBody rejects a body whose declared content-length exceeds the limit", async () => {
   const server = createServer((req, res) => {
     Promise.resolve()

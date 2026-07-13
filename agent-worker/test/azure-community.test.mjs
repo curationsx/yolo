@@ -409,3 +409,99 @@ test("reconcileLegacyScoresContainer rebuilds the legacy scores container for ev
   const legacySupabase = await legacyScoresContainer.item("software:supabase", "global").read();
   assert.equal(legacySupabase.resource.count, 2);
 });
+
+test("Azure community store deleteDocument swallows a string-typed 404 status code", async () => {
+  const { containerFor, containers } = communityStore();
+  const store = createAzureCommunityStore(containerFor);
+  await store.createDocument("discussions", { id: "thread-1", tool_id: "cloudflare" }, "cloudflare");
+  // Defensive: some Cosmos error shapes surface `.code` as a numeric string
+  // rather than a number. cosmosStatus() must still parse it.
+  containers.get("discussions").failNext("delete", "404");
+  await assert.doesNotReject(store.deleteDocument("discussions", "thread-1", "cloudflare"));
+});
+
+test("Azure community store deleteDocument rethrows a non-numeric string status code", async () => {
+  const { containerFor, containers } = communityStore();
+  const store = createAzureCommunityStore(containerFor);
+  await store.createDocument("discussions", { id: "thread-1", tool_id: "cloudflare" }, "cloudflare");
+  containers.get("discussions").failNext("delete", "ETIMEDOUT");
+  await assert.rejects(store.deleteDocument("discussions", "thread-1", "cloudflare"));
+});
+
+test("Azure vote store treats a malformed batch response (fewer results than operations) as a conflict and retries", async () => {
+  const votesContainer = new FakeCosmosContainer();
+  let calls = 0;
+  const malformedOnce = {
+    item: (id, partitionKey) => votesContainer.item(id, partitionKey),
+    items: {
+      ...votesContainer.items,
+      batch: async (operations, partitionKey) => {
+        calls += 1;
+        if (calls === 1) {
+          // Simulate a malformed/partial SDK response: fewer results than
+          // operations submitted. This must never be treated as success.
+          return { code: 200, result: [{ statusCode: 201 }] };
+        }
+        return votesContainer.items.batch(operations, partitionKey);
+      },
+    },
+  };
+  const store = createAzureVoteStore(malformedOnce);
+  const result = await store.setVote("software:cloudflare", "1", true);
+  assert.deepEqual(result, { target_id: "software:cloudflare", voted: true, count: 1 });
+  assert.equal(calls, 2);
+});
+
+test("Azure vote store retries when a transactional batch response omits its result array", async () => {
+  const votesContainer = new FakeCosmosContainer();
+  let calls = 0;
+  const noResultOnce = {
+    item: (id, partitionKey) => votesContainer.item(id, partitionKey),
+    items: {
+      ...votesContainer.items,
+      batch: async (operations, partitionKey) => {
+        calls += 1;
+        if (calls === 1) return { code: 200 }; // malformed: no `.result`
+        return votesContainer.items.batch(operations, partitionKey);
+      },
+    },
+  };
+  const store = createAzureVoteStore(noResultOnce);
+  const result = await store.setVote("software:cloudflare", "1", true);
+  assert.deepEqual(result, { target_id: "software:cloudflare", voted: true, count: 1 });
+  assert.equal(calls, 2);
+});
+
+test("reconcileScoreFromVotes treats an empty count-query result as zero votes", async () => {
+  const votesContainer = new FakeCosmosContainer();
+  const noRowsContainer = {
+    item: (id, partitionKey) => votesContainer.item(id, partitionKey),
+    items: {
+      ...votesContainer.items,
+      // Defensive: a COUNT query should always return one row, but the
+      // fallback (`?? 0`) must hold even if the driver ever returns none.
+      query: () => ({ fetchAll: async () => ({ resources: [] }) }),
+    },
+  };
+  const reconciled = await reconcileScoreFromVotes(noRowsContainer, "software:cloudflare");
+  assert.deepEqual(reconciled, { target_id: "software:cloudflare", count: 0 });
+});
+
+test("reconcileScoreFromVotes retries when its conditional write response omits a result array", async () => {
+  const votesContainer = new FakeCosmosContainer();
+  let calls = 0;
+  const noResultOnce = {
+    item: (id, partitionKey) => votesContainer.item(id, partitionKey),
+    items: {
+      ...votesContainer.items,
+      batch: async (operations, partitionKey) => {
+        calls += 1;
+        if (calls === 1) return { code: 200 }; // malformed: no `.result`
+        return votesContainer.items.batch(operations, partitionKey);
+      },
+    },
+  };
+  const reconciled = await reconcileScoreFromVotes(noResultOnce, "software:cloudflare");
+  assert.deepEqual(reconciled, { target_id: "software:cloudflare", count: 0 });
+  assert.equal(calls, 2);
+});

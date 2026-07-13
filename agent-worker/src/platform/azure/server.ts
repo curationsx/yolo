@@ -11,6 +11,7 @@
  */
 
 import { createServer } from "node:http";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { CosmosClient } from "@azure/cosmos";
@@ -129,6 +130,63 @@ export interface AzureGatewayServer {
   close(): Promise<void>;
 }
 
+/** One incoming request's full lifecycle: Node request -> Fetch request ->
+ * shared router -> Fetch response -> Node response, with redacted
+ * structured logging and a last-resort 500 fallback. Exported (not just an
+ * inline `createServer` closure) so tests can drive it directly with a
+ * synthetic request/response pair — including edge cases a real Node HTTP
+ * client can never produce, like a request object with no URL. */
+export function handleIncomingHttpRequest(req: IncomingMessage, res: ServerResponse, env: Env): void {
+  const correlationId = randomUUID();
+  const startedAt = Date.now();
+  void (async () => {
+    let request: Request;
+    try {
+      request = await nodeRequestToFetchRequest(req);
+    } catch (error) {
+      if (error instanceof RequestBodyTooLargeError) {
+        await sendFetchResponse(requestTooLargeResponse(), res);
+        logRequest({ route: req.url ?? "/", method: req.method ?? "GET", status: 413, latencyMs: Date.now() - startedAt, correlationId });
+        return;
+      }
+      throw error;
+    }
+    request.headers.set("x-correlation-id", correlationId);
+
+    try {
+      const response = await handleRequest(request, env);
+      await sendFetchResponse(response, res);
+      logRequest({
+        route: new URL(request.url).pathname,
+        method: request.method,
+        status: response.status,
+        latencyMs: Date.now() - startedAt,
+        correlationId,
+      });
+    } catch (error) {
+      const response = isGatewayError(error)
+        ? error.toResponse()
+        : new Response(JSON.stringify({ error: "internal error", code: "internal_error" }), {
+            status: 500,
+            headers: { "content-type": "application/json; charset=utf-8" },
+          });
+      await sendFetchResponse(response, res);
+      logError(new URL(request.url).pathname, correlationId, error);
+    }
+  })().catch((error) => {
+    logError(req.url ?? "/", correlationId, error);
+    // A response may already have been fully sent (e.g. a logging call
+    // that runs after a successful write throws) — writing headers or
+    // ending the stream again would crash the process, so both are
+    // guarded by whether the response is still open.
+    if (res.writableEnded) return;
+    if (!res.headersSent) {
+      res.writeHead(500, { "content-type": "application/json; charset=utf-8" });
+    }
+    res.end(JSON.stringify({ error: "internal error", code: "internal_error" }));
+  });
+}
+
 export function startAzureGateway(
   config: AzureGatewayConfig = loadAzureConfig(process.env),
   cosmosClient: CosmosClient = new CosmosClient({
@@ -139,51 +197,7 @@ export function startAzureGateway(
 ): AzureGatewayServer {
   const env = buildAzureEnv(config, cosmosClient, credential);
 
-  const server = createServer((req, res) => {
-    const correlationId = randomUUID();
-    const startedAt = Date.now();
-    void (async () => {
-      let request: Request;
-      try {
-        request = await nodeRequestToFetchRequest(req);
-      } catch (error) {
-        if (error instanceof RequestBodyTooLargeError) {
-          await sendFetchResponse(requestTooLargeResponse(), res);
-          logRequest({ route: req.url ?? "/", method: req.method ?? "GET", status: 413, latencyMs: Date.now() - startedAt, correlationId });
-          return;
-        }
-        throw error;
-      }
-      request.headers.set("x-correlation-id", correlationId);
-
-      try {
-        const response = await handleRequest(request, env);
-        await sendFetchResponse(response, res);
-        logRequest({
-          route: new URL(request.url).pathname,
-          method: request.method,
-          status: response.status,
-          latencyMs: Date.now() - startedAt,
-          correlationId,
-        });
-      } catch (error) {
-        const response = isGatewayError(error)
-          ? error.toResponse()
-          : new Response(JSON.stringify({ error: "internal error", code: "internal_error" }), {
-              status: 500,
-              headers: { "content-type": "application/json; charset=utf-8" },
-            });
-        await sendFetchResponse(response, res);
-        logError(new URL(request.url).pathname, correlationId, error);
-      }
-    })().catch((error) => {
-      logError(req.url ?? "/", correlationId, error);
-      if (!res.headersSent) {
-        res.writeHead(500, { "content-type": "application/json; charset=utf-8" });
-      }
-      res.end(JSON.stringify({ error: "internal error", code: "internal_error" }));
-    });
-  });
+  const server = createServer((req, res) => handleIncomingHttpRequest(req, res, env));
 
   server.listen(config.port, "0.0.0.0");
   const ready = new Promise<void>((resolve) => server.once("listening", () => resolve()));

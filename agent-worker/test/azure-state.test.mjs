@@ -61,6 +61,24 @@ test("Azure KV store delete rethrows non-404 errors", async () => {
   await assert.rejects(store.delete("key"));
 });
 
+test("Azure KV store delete swallows a string-typed 404 status code", async () => {
+  const container = new FakeCosmosContainer("scope");
+  const store = createAzureKeyValueStore(container);
+  await store.put("key", "value");
+  // Defensive: some Cosmos error shapes surface `.code` as a numeric
+  // string rather than a number. cosmosStatus() must still parse it.
+  container.failNext("delete", "404");
+  await assert.doesNotReject(store.delete("key"));
+});
+
+test("Azure KV store delete rethrows a non-numeric string status code", async () => {
+  const container = new FakeCosmosContainer("scope");
+  const store = createAzureKeyValueStore(container);
+  await store.put("key", "value");
+  container.failNext("delete", "ETIMEDOUT");
+  await assert.rejects(store.delete("key"));
+});
+
 const validGrant = () => ({
   version: 1,
   user_id: "123",
