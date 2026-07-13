@@ -1,0 +1,100 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/curationsx/yolo/schemas/cookbook-entry.schema.json",
+  "title": "Cookbook entry",
+  "description": "Validates curated cookbook revisions in cookbooks/entries.json and their mapping to schema-validated prompt sources.",
+  "type": "object",
+  "required": [
+    "id",
+    "title",
+    "category",
+    "version",
+    "release_status",
+    "description",
+    "source_prompt",
+    "source_prompt_id",
+    "source_version",
+    "source_status",
+    "strong_fit",
+    "partial_fit"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 3
+    },
+    "category": {
+      "type": "string",
+      "enum": ["engineering", "research", "operations", "safety"]
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "release_status": {
+      "type": "string",
+      "enum": ["preview", "stable", "retired"]
+    },
+    "description": {
+      "type": "string",
+      "minLength": 20
+    },
+    "source_prompt": {
+      "type": "string",
+      "pattern": "^prompts/[a-z0-9-]+\\.md$"
+    },
+    "source_prompt_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+    },
+    "source_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "source_status": {
+      "type": "string",
+      "enum": ["draft", "tested", "stable", "retired"]
+    },
+    "strong_fit": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "enum": ["ollama", "supabase", "cloudflare", "n8n", "langfuse", "obsidian"]
+      }
+    },
+    "partial_fit": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "enum": ["ollama", "supabase", "cloudflare", "n8n", "langfuse", "obsidian"]
+      }
+    }
+  },
+  "definitions": {
+    "collection": {
+      "title": "Cookbook entries collection",
+      "type": "object",
+      "required": ["version", "entries"],
+      "additionalProperties": false,
+      "properties": {
+        "$schema": { "type": "string" },
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
+        "entries": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#" }
+        }
+      }
+    }
+  }
+}

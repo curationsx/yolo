@@ -3,13 +3,12 @@ import { file } from 'astro/loaders';
 
 // One authoritative dataset: the repository's software/entries.json.
 // The site never copies it — the build reads and validates it in place.
-const software = defineCollection({
-  loader: file('../software/entries.json', {
-    parser: (text) => JSON.parse(text).entries,
-  }),
-  schema: z.object({
+const softwareEntrySchema = z
+  .object({
     id: z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/),
     name: z.string().min(1),
+    entity_type: z.enum(['tool', 'company', 'platform', 'project']).optional(),
+    featured: z.boolean().optional(),
     category: z.enum([
       'research',
       'model-access',
@@ -43,7 +42,83 @@ const software = defineCollection({
     last_reviewed: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     review_status: z.enum(['verified', 'needs-review']).optional(),
     tags: z.array(z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/)).optional(),
+  })
+  .superRefine((entry, context) => {
+    if (entry.review_status === 'verified' && !entry.last_reviewed) {
+      context.addIssue({
+        code: 'custom',
+        path: ['last_reviewed'],
+        message: 'verified entries require last_reviewed',
+      });
+    }
+  });
+
+const software = defineCollection({
+  loader: file('../software/entries.json', {
+    parser: (text) => JSON.parse(text).entries,
   }),
+  schema: softwareEntrySchema,
 });
 
-export const collections = { software };
+const cookbookStack = z.enum([
+  'ollama',
+  'supabase',
+  'cloudflare',
+  'n8n',
+  'langfuse',
+  'obsidian',
+]);
+
+const cookbookEntrySchema = z
+  .object({
+    id: z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/),
+    title: z.string().min(3),
+    category: z.enum(['engineering', 'research', 'operations', 'safety']),
+    version: z.string().regex(/^\d+\.\d+\.\d+$/),
+    release_status: z.enum(['preview', 'stable', 'retired']),
+    description: z.string().min(20),
+    source_prompt: z.string().regex(/^prompts\/[a-z0-9-]+\.md$/),
+    source_prompt_id: z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/),
+    source_version: z.string().regex(/^\d+\.\d+\.\d+$/),
+    source_status: z.enum(['draft', 'tested', 'stable', 'retired']),
+    strong_fit: z.array(cookbookStack).min(1),
+    partial_fit: z.array(cookbookStack).min(1),
+  })
+  .superRefine((entry, context) => {
+    const allStacks = new Set([
+      'ollama',
+      'supabase',
+      'cloudflare',
+      'n8n',
+      'langfuse',
+      'obsidian',
+    ]);
+    const strong = new Set(entry.strong_fit);
+    const partial = new Set(entry.partial_fit);
+    const overlap = [...strong].filter((stack) => partial.has(stack));
+    if (overlap.length) {
+      context.addIssue({
+        code: 'custom',
+        path: ['partial_fit'],
+        message: `stack fit overlaps: ${overlap.join(', ')}`,
+      });
+    }
+    const covered = new Set([...strong, ...partial]);
+    const missing = [...allStacks].filter((stack) => !covered.has(stack));
+    if (missing.length) {
+      context.addIssue({
+        code: 'custom',
+        path: ['strong_fit'],
+        message: `stack fit is missing: ${missing.join(', ')}`,
+      });
+    }
+  });
+
+const cookbooks = defineCollection({
+  loader: file('../cookbooks/entries.json', {
+    parser: (text) => JSON.parse(text).entries,
+  }),
+  schema: cookbookEntrySchema,
+});
+
+export const collections = { software, cookbooks };

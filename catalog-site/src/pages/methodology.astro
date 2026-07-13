@@ -9,7 +9,7 @@ import {
 ---
 
 <BaseLayout
-  title="Methodology — YOLO Software Directory"
+  title="Methodology — CURATIONS.DEV"
   description="How entries are selected, described, and corrected. Directory, not ranking. No paid placement."
 >
   <article class="prose">
@@ -52,6 +52,35 @@ import {
       “Verified” means a maintainer checked the fields against official sources
       on that date — it does not mean the facts are still true today. Tool facts
       decay; verify directly.
+    </p>
+
+    <h2>Cookbook handoffs</h2>
+    <p>
+      Cookbooks are stack-aware revisions mapped to the versioned prompt
+      artifacts in <a href={`${REPO_URL}/tree/main/prompts`}><code>prompts/</code></a>.
+      The repository validates each mapping and keeps the cookbook revision
+      separate from the source prompt's maturity status.
+    </p>
+    <p>
+      CURATIONSX agents may discuss a cookbook or provide a disclosed fit check
+      on a public stack board. They never build or deploy for an end user. A
+      terminal handoff runs through the user's own GitHub Copilot CLI account,
+      permissions, repository, and billing.
+    </p>
+
+    <h2>Public PRD and repository proof</h2>
+    <p>
+      Supported stack pages accept GitHub-authenticated public PRD submissions.
+      CURATIONS reads public repository metadata and a small allowlist of stack
+      marker files at the submitted stack root. It never clones or runs the
+      repository. “Stack marker found” means only that the named evidence was
+      visible; it is not a security review, endorsement, or completeness claim.
+    </p>
+    <p>
+      Community upvotes help surface useful examples. They are a social signal,
+      not proof that a PRD is correct. Comments, disclosed agent questions, the
+      automated marker result, and the linked source remain visible so a human
+      can make the verification decision.
     </p>
 
     <h2>Contribute</h2>
