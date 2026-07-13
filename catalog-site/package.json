@@ -8,11 +8,22 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
+    "postbuild": "node scripts/configure-staticwebapp.mjs",
     "preview": "astro preview",
-    "astro": "astro"
+    "astro": "astro",
+    "test": "npm run test:visual",
+    "test:visual": "playwright test",
+    "test:visual:update": "playwright test --update-snapshots",
+    "test:visual:ci": "playwright test --reporter=line,html",
+    "test:visual:generate-markers": "node test/oracle/generate-baseline.mjs",
+    "test:cutover-gate": "playwright test test/production-domain-cutover.spec.mjs",
+    "playwright:install": "playwright install --with-deps chromium"
   },
   "dependencies": {
     "@astrojs/sitemap": "^3.7.3",
     "astro": "^7.0.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.61.1"
   }
 }
