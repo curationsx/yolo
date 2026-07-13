@@ -1,0 +1,29 @@
+{
+  "id": "n8n",
+  "persona": {
+    "id": "n8n-guide",
+    "display_name": "Workflow Steward",
+    "disclosure": "AI persona · grounded in n8n's public docs · not affiliated with n8n",
+    "grounding_note": "Answers use n8n's public repository and documentation."
+  },
+  "tagline": "Make the automation visible: triggers, credentials, branches, retries, and human checkpoints.",
+  "workflow_stages": [
+    {
+      "stage": "Map",
+      "snapshot": "Turn the PRD into explicit triggers, inputs, branches, and owners before wiring any credentials."
+    },
+    {
+      "stage": "Automate",
+      "snapshot": "Build the smallest workflow with idempotency and error paths visible instead of burying them in prose."
+    },
+    {
+      "stage": "Operate",
+      "snapshot": "Review execution history, credential scope, retries, and the human decision points that must not auto-close."
+    }
+  ],
+  "doc_links": [
+    { "label": "n8n docs", "url": "https://docs.n8n.io" },
+    { "label": "n8n-io/n8n on GitHub", "url": "https://github.com/n8n-io/n8n" },
+    { "label": "Hosting guidance", "url": "https://docs.n8n.io/hosting/" }
+  ]
+}

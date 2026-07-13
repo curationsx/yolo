@@ -31,6 +31,8 @@
     {
       "id": "ollama",
       "name": "Ollama",
+      "entity_type": "platform",
+      "featured": true,
       "category": "model-access",
       "primary_use": "Run open-weight language models locally.",
       "deployment": "local",
@@ -77,6 +79,8 @@
     {
       "id": "n8n",
       "name": "n8n",
+      "entity_type": "platform",
+      "featured": true,
       "category": "automation",
       "primary_use": "Workflow automation connecting tools and services.",
       "deployment": "hybrid",
@@ -102,6 +106,8 @@
     {
       "id": "langfuse",
       "name": "Langfuse",
+      "entity_type": "platform",
+      "featured": true,
       "category": "observability-evaluation",
       "primary_use": "Tracing and evaluation for LLM applications.",
       "deployment": "hybrid",
@@ -124,6 +130,8 @@
     {
       "id": "obsidian",
       "name": "Obsidian",
+      "entity_type": "tool",
+      "featured": true,
       "category": "knowledge-data",
       "primary_use": "Local-first personal knowledge base in Markdown.",
       "deployment": "local",
@@ -289,6 +297,8 @@
     {
       "id": "cloudflare",
       "name": "Cloudflare",
+      "entity_type": "company",
+      "featured": true,
       "category": "development",
       "primary_use": "Edge platform for deploying serverless Workers, static sites, and network services close to users.",
       "deployment": "cloud",
@@ -313,6 +323,8 @@
     {
       "id": "supabase",
       "name": "Supabase",
+      "entity_type": "company",
+      "featured": true,
       "category": "knowledge-data",
       "primary_use": "Postgres-based backend platform with auth, storage, realtime, and vector search for application data.",
       "deployment": "hybrid",

@@ -3,7 +3,7 @@ import { getCollection } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import DeploymentBadge from '../../components/DeploymentBadge.astro';
 import EngagePanel from '../../components/EngagePanel.astro';
-import EngagementFeed from '../../components/EngagementFeed.astro';
+import CompanyBoard from '../../components/CompanyBoard.astro';
 import {
   CATEGORY_LABELS,
   LICENSE_LABELS,
@@ -49,7 +49,7 @@ const landing = LANDING[entry.id];
 ---
 
 <BaseLayout
-  title={`${entry.name} — YOLO Software Directory`}
+  title={`${entry.name} — CURATIONS.DEV`}
   description={entry.primary_use}
 >
   <nav aria-label="Breadcrumb" style="margin-top: 1.5rem;">
@@ -64,7 +64,9 @@ const landing = LANDING[entry.id];
       entry.review_status && (
         <span class={`badge badge-${entry.review_status}`}>
           {entry.review_status === 'verified'
-            ? `Reviewed ${entry.last_reviewed}`
+            ? entry.last_reviewed
+              ? `Reviewed ${entry.last_reviewed}`
+              : 'Verified · date pending'
             : 'Needs re-review'}
         </span>
       )
@@ -196,7 +198,11 @@ const landing = LANDING[entry.id];
           disclosure={landing.persona.disclosure}
           groundingNote={landing.persona.grounding_note}
         />
-        <EngagementFeed toolId={entry.id} toolName={entry.name} />
+        <CompanyBoard
+          toolId={entry.id}
+          toolName={entry.name}
+          personaName={landing.persona.display_name}
+        />
       </>
     )
   }

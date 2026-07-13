@@ -19,6 +19,8 @@ interface Props {
 }
 const { toolId, toolName, personaName, disclosure, groundingNote } = Astro.props;
 const apiBase = import.meta.env.PUBLIC_AGENT_API ?? "";
+const messageId = `engage-message-${toolId}`;
+const privacyId = `engage-privacy-${toolId}`;
 ---
 
 <section class="engage" data-tool={toolId} data-api={apiBase}>
@@ -35,23 +37,31 @@ const apiBase = import.meta.env.PUBLIC_AGENT_API ?? "";
   </div>
 
   <form class="engage-form">
-    <label class="engage-label" data-for-lane="prd-check">
+    <label class="engage-label" data-for-lane="prd-check" for={messageId}>
       Describe your product or PRD — {personaName} will assess the fit and suggest tuning.
     </label>
-    <label class="engage-label" data-for-lane="community" hidden>
+    <label class="engage-label" data-for-lane="community" for={messageId} hidden>
       Share your setup, workflow, or a prompt you curated — {personaName} will respond,
       and your post joins the public feed below.
     </label>
     <textarea
+      id={messageId}
       name="message"
       rows="5"
       maxlength="4000"
+      aria-describedby={privacyId}
       required
       placeholder="Keep it concrete — stack, goal, constraint…"></textarea>
     <div class="engage-row">
-      <input name="author_name" type="text" maxlength="40" placeholder="Display name (optional)" />
+      <label class="check-row engage-publish">
+        <input type="checkbox" name="publish" />
+        <span data-publish-label>Publish this exchange to the company board</span>
+      </label>
       <button type="submit" class="btn btn-primary">Send</button>
     </div>
+    <p id={privacyId} class="engage-privacy muted" data-engage-privacy>
+      Private by default. Unpublished PRD checks are answered and not stored.
+    </p>
     <p class="engage-status" role="status" aria-live="polite"></p>
   </form>
 
@@ -65,6 +75,12 @@ const apiBase = import.meta.env.PUBLIC_AGENT_API ?? "";
 </section>
 
 <script>
+  import {
+    authHeaders,
+    beginGithubSignIn,
+    getSessionToken,
+  } from '../lib/browser-auth';
+
   for (const root of document.querySelectorAll<HTMLElement>(".engage")) {
     const api = root.dataset.api ?? "";
     const tool = root.dataset.tool ?? "";
@@ -73,7 +89,23 @@ const apiBase = import.meta.env.PUBLIC_AGENT_API ?? "";
     const replyBox = root.querySelector<HTMLElement>(".engage-reply")!;
     const replyPersona = root.querySelector<HTMLElement>(".reply-persona")!;
     const replyBody = root.querySelector<HTMLElement>(".engage-reply-body")!;
+    const publish = root.querySelector<HTMLInputElement>('input[name="publish"]')!;
+    const publishLabel = root.querySelector<HTMLElement>('[data-publish-label]')!;
+    const privacy = root.querySelector<HTMLElement>('[data-engage-privacy]')!;
     let lane = "prd-check";
+    let requestId = crypto.randomUUID();
+
+    const renderLane = (): void => {
+      const isCommunity = lane === 'community';
+      publish.checked = isCommunity;
+      publish.disabled = isCommunity;
+      publishLabel.textContent = isCommunity
+        ? 'Publish this community share'
+        : 'Publish this exchange to the company board';
+      privacy.textContent = isCommunity
+        ? 'Community shares are public and require GitHub sign-in.'
+        : 'Private by default. Unpublished PRD checks are answered and not stored.';
+    };
 
     for (const tab of root.querySelectorAll<HTMLButtonElement>("[data-lane]")) {
       tab.addEventListener("click", () => {
@@ -84,13 +116,20 @@ const apiBase = import.meta.env.PUBLIC_AGENT_API ?? "";
         for (const label of root.querySelectorAll<HTMLElement>(".engage-label")) {
           label.hidden = label.dataset.forLane !== lane;
         }
+        renderLane();
       });
     }
+    renderLane();
 
     form.addEventListener("submit", async (ev) => {
       ev.preventDefault();
       if (!api) {
         status.textContent = "The agent gateway is not configured for this build yet.";
+        return;
+      }
+      const shouldPublish = lane === 'community' || publish.checked;
+      if (shouldPublish && !getSessionToken()) {
+        beginGithubSignIn(api);
         return;
       }
       const data = new FormData(form);
@@ -101,15 +140,20 @@ const apiBase = import.meta.env.PUBLIC_AGENT_API ?? "";
       try {
         const res = await fetch(`${api}/api/ask`, {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: { "content-type": "application/json", ...authHeaders() },
           body: JSON.stringify({
             tool_id: tool,
             lane,
             message: data.get("message"),
-            author_name: data.get("author_name"),
+            publish: shouldPublish,
+            request_id: requestId,
           }),
         });
         const body = await res.json();
+        if (res.status === 401) {
+          beginGithubSignIn(api);
+          return;
+        }
         if (!res.ok) {
           status.textContent = body.error ?? "Something went wrong.";
           return;
@@ -118,7 +162,10 @@ const apiBase = import.meta.env.PUBLIC_AGENT_API ?? "";
         replyPersona.textContent = body.persona;
         replyBody.textContent = body.reply;
         replyBox.hidden = false;
-        document.dispatchEvent(new CustomEvent("curations:engagement", { detail: { tool } }));
+        if (body.published) {
+          document.dispatchEvent(new CustomEvent("curations:engagement", { detail: { tool } }));
+        }
+        requestId = crypto.randomUUID();
       } catch {
         status.textContent = "Network error — try again in a moment.";
       } finally {

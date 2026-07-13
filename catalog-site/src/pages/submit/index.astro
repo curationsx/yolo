@@ -1,0 +1,23 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import SubmissionForm from '../../components/SubmissionForm.astro';
+
+const existingIds = (await getCollection('software')).map((entry) => entry.data.id);
+---
+
+<BaseLayout
+  title="Submit a tool or company — CURATIONS.DEV"
+  description="A guided, non-technical contribution form that turns a CURATIONS directory proposal into a reviewable GitHub pull request."
+>
+  <div class="page-intro submission-intro">
+    <span class="editorial-eyebrow">Community-owned directory</span>
+    <h1>Curate the <em>next entry.</em></h1>
+    <p>
+      No JSON knowledge required. Answer the same questions our maintainers ask,
+      preview the result, then let GitHub carry provenance and review.
+    </p>
+  </div>
+
+  <SubmissionForm existingIds={existingIds} />
+</BaseLayout>

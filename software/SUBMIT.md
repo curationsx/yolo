@@ -8,9 +8,26 @@ Tools enter the [software directory](README.md) through evidence, not promotion.
 2. Check [entries.json](entries.json) — the tool may already be listed.
 3. Confirm you can fill every field below with defensible, durable statements.
 
-## How to submit
+## Easiest path: the CURATIONS form
 
-Open a pull request that adds an entry to [entries.json](entries.json) (matching [schemas/software-entry.schema.json](../schemas/software-entry.schema.json) — the CLI validates it: `python tools/yolo.py doctor`) and, if the category section exists in [README.md](README.md), a one-line rendered summary there.
+Go to **[curations.dev/submit](https://curations.dev/submit/)**. The guided form:
+
+1. asks the same durable questions reviewers use,
+2. validates the slug, URLs, and required language,
+3. shows a CURATIONS card preview,
+4. generates schema-compatible JSON, and
+5. opens GitHub's fork/branch/pull-request flow with the new file prefilled.
+
+The generated intake file lives at `software/submissions/<id>.json`. A maintainer
+verifies the sources, folds an accepted entry into [entries.json](entries.json),
+regenerates `catalog.json`, and removes the intake file before merge.
+
+## Direct repository path
+
+Experienced contributors may instead open a pull request that adds an entry
+directly to [entries.json](entries.json), matching
+[schemas/software-entry.schema.json](../schemas/software-entry.schema.json).
+The CLI validates it with `python tools/yolo.py doctor`.
 
 ## Required fields
 
@@ -18,6 +35,7 @@ Open a pull request that adds an entry to [entries.json](entries.json) (matching
 {
   "id": "tool-slug",
   "name": "Tool Name",
+  "entity_type": "tool | company | platform | project",
   "category": "research",
   "primary_use": "One sentence: the job this tool does.",
   "deployment": "local | self-hosted | cloud | hybrid",
@@ -36,6 +54,7 @@ Encouraged where you can state them with confidence — leave out anything you c
 ```json
 {
   "license": "open-source | source-available | open-weight | proprietary-free-tier | proprietary | mixed",
+  "featured": false,
   "source_repository": "https://official-source-repo.example",
   "platforms": ["Linux", "macOS", "Windows", "Web", "iOS", "Android"],
   "last_reviewed": "2026-07-12",
@@ -44,7 +63,15 @@ Encouraged where you can state them with confidence — leave out anything you c
 }
 ```
 
-The `license` buckets are deliberately coarse and **not interchangeable**: *open-source* (OSI-style license), *source-available* (visible source, restricted use — e.g. fair-code), *open-weight* (downloadable model weights, possibly restricted license), *proprietary-free-tier*, *proprietary*, and *mixed* (meaningfully different licenses across components). When in doubt, use `mixed` and explain in the PR — or omit the field.
+The `license` buckets are deliberately coarse and **not interchangeable**:
+*open-source* (OSI-style license), *source-available* (visible source,
+restricted use — e.g. fair-code), *open-weight* (downloadable model weights,
+possibly restricted license), *proprietary-free-tier*, *proprietary*, and
+*mixed* (meaningfully different licenses across components). When in doubt,
+use `mixed` and explain in the PR — or omit the field.
+
+`featured` is maintained editorially. Community upvotes inform attention but do
+not automatically make an entry featured.
 
 ## Required in the PR description
 
