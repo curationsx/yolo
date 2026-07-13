@@ -90,9 +90,6 @@ param githubEnvironments array = [
   'production'
 ]
 
-@description('Also federate the `repo:<org>/<repo>:pull_request` subject for the PR-triggered read-only "verify" job — see modules/identity-rbac.bicep for why this is required whenever azure-staging/production have a deployment branch policy configured.')
-param enablePullRequestFederation bool = true
-
 @description('Alert-only monthly budget amount in USD. Applied to rg-yolo-prod (and, in the unified filter, rg-yolo-foundry too — see budgetUseUnifiedFilter) so real project spend in the reused Foundry/Cosmos resource group is not silently excluded from budget coverage.')
 param budgetAmount int = 8
 
@@ -152,7 +149,6 @@ module identities 'modules/identity-rbac.bicep' = {
     githubIdentityName: githubIdentityName
     githubRepo: githubRepo
     githubEnvironments: githubEnvironments
-    enablePullRequestFederation: enablePullRequestFederation
     keyVaultName: foundation.outputs.keyVaultName
     acrName: foundation.outputs.acrName
     bootstrapOperatorPrincipalId: bootstrapOperatorPrincipalId

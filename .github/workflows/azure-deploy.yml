@@ -3,12 +3,26 @@ name: AZURE DEPLOY
 # Delivery lane for the Yolo Azure migration (infra/**, azure.yaml). This
 # workflow never applies infra/bootstrap.bicep — that file is Owner-only and
 # is applied out-of-band by a human with subscription Owner / User Access
-# Administrator rights, via scripts/azure/bootstrap.sh. Every job here uses
-# the Contributor-scoped id-yolo-github OIDC identity, federated only to the
-# `azure-staging` and `production` GitHub environments plus one narrow
-# `repo:curationsx/yolo:pull_request` subject for the read-only PR verify
-# job below (never a branch wildcard, never a long-lived Azure credential —
-# no client secret, no publish profile).
+# Administrator rights, via scripts/azure/bootstrap.sh. Every job that logs
+# in to Azure uses the Contributor-scoped id-yolo-github OIDC identity,
+# federated ONLY to the `azure-staging` and `production` GitHub environments
+# (never a branch wildcard, never a bare `pull_request` subject, never a
+# long-lived Azure credential — no client secret, no publish profile). The
+# PR-triggered `verify` job below requests no Azure credential at all.
+#
+# SECURITY (do not reintroduce): an earlier version of this workflow also
+# federated a bare `repo:curationsx/yolo:pull_request` subject so the PR
+# `verify` job could run a live `az deployment ... what-if`. That subject
+# would let the Contributor-scoped identity mint an Azure token from ANY
+# pull_request workflow run in this repository — including fork PRs once
+# runnable — with no environment or branch-policy gate in front of it. That
+# federated credential has been removed from
+# infra/modules/identity-rbac.bicep entirely. PR verification is now local
+# -only: `az bicep build` compiles and lints every template with zero
+# network calls and zero credentials. Live `what-if` only ever runs in the
+# provision-and-deploy / deploy-production jobs below, both
+# workflow_dispatch-triggered and gated by an explicitly human-approved,
+# branch-policy-restricted GitHub environment.
 #
 # OIDC hardening note: an environment-scoped federated subject
 # (repo:curationsx/yolo:environment:<name>) only narrows *which token* a job
@@ -22,15 +36,7 @@ name: AZURE DEPLOY
 #                          later feature branches here as needed, remove them
 #                          once merged).
 # Verify with: gh api repos/curationsx/yolo/environments/<name>/deployment-branch-policies
-# Neither environment is left callable from an arbitrary branch. The `verify`
-# job below intentionally does NOT attach a GitHub Environment at all — a
-# pull_request event's ref is always the synthetic `refs/pull/<n>/merge` ref,
-# which can never satisfy a branch-name policy (confirmed live: GitHub
-# rejects such jobs with "Branch ... is not allowed to deploy to
-# <environment> due to environment protection rules" before any step runs).
-# It instead uses the separate `repo:curationsx/yolo:pull_request` federated
-# subject (infra/modules/identity-rbac.bicep's enablePullRequestFederation),
-# which has no environment — and therefore no branch policy — attached.
+# Neither environment is left callable from an arbitrary branch.
 #
 # Production is intentionally workflow_dispatch/manual only -- there is no
 # push-to-main auto-trigger for the production job. A human must explicitly
@@ -48,13 +54,12 @@ name: AZURE DEPLOY
 #
 # Operational note (pending Stage 1 Owner bootstrap): AZURE_GITHUB_CLIENT_ID,
 # AZURE_TENANT_ID, and AZURE_SUBSCRIPTION_ID must be configured as
-# REPOSITORY-level (not environment-scoped) Actions variables once
+# repository-level or environment-scoped Actions variables once
 # infra/bootstrap.bicep has run, using its githubIdentityClientId output plus
-# the subscription/tenant IDs in .azure/deployment-plan.md. Repository-level
-# (not environment-scoped) is required specifically because the pull_request
-# verify job above has no environment context to read environment-scoped
-# variables from. No value is fabricated here; these do not exist yet
-# because rg-yolo-prod has not been created.
+# the subscription/tenant IDs in .azure/deployment-plan.md (only the
+# provision-and-deploy/deploy-production jobs need them now that `verify`
+# requests no Azure credential). No value is fabricated here; these do not
+# exist yet because rg-yolo-prod has not been created.
 
 on:
   pull_request:
@@ -95,39 +100,41 @@ env:
   AZURE_CONTAINER_REGISTRY: yolocurationsprod
 
 jobs:
-  # ── PR verification: syntax + read-only what-if. Never mutates Azure. ──
+  # ── PR verification: local Bicep compile/lint only. No Azure credential ──
+  # ── is ever requested by this job — see security note below. ──
   verify:
-    name: Verify Bicep (no mutation)
+    name: Verify Bicep (local compile/lint, no Azure credential)
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Deliberately NOT bound to the `azure-staging` GitHub Environment. A
-    # `pull_request` event's git ref is always the synthetic
-    # `refs/pull/<n>/merge` ref, which can never satisfy a branch-name
-    # deployment-branch-policy (confirmed in production: GitHub rejects the
-    # job outright with "Branch \"refs/pull/<n>/merge\" is not allowed to
-    # deploy to azure-staging due to environment protection rules" before a
-    # single step runs). This job instead authenticates via the separate
-    # `repo:curationsx/yolo:pull_request` OIDC subject (see
-    # infra/modules/identity-rbac.bicep's enablePullRequestFederation),
-    # which has no GitHub Environment — and therefore no branch policy —
-    # attached to it at all.
+    # SECURITY: this job intentionally requests no Azure credential at all.
+    # A `pull_request` event's git ref is always the synthetic
+    # `refs/pull/<n>/merge` ref, so it can never satisfy any GitHub
+    # Environment's deployment branch policy -- and, more importantly, a
+    # federated OIDC subject scoped only to `repo:<org>/<repo>:pull_request`
+    # (an earlier version of this workflow) would let this Contributor
+    # -scoped identity mint an Azure token from ANY pull_request workflow
+    # run in this repository, including fork PRs once runnable, with no
+    # environment or branch-policy gate in front of it. That federated
+    # credential has been removed entirely (see
+    # infra/modules/identity-rbac.bicep). PR verification is local-only:
+    # `az bicep build` compiles and lints (Bicep's built-in linter runs as
+    # part of build) every template with zero network calls and zero
+    # credentials. Live `az deployment ... what-if` only ever runs in the
+    # provision-and-deploy / deploy-production jobs below, both
+    # workflow_dispatch-triggered and gated by an explicitly human-approved,
+    # branch-policy-restricted GitHub environment.
+    permissions:
+      contents: read
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
 
-      - name: Log in to Azure (OIDC, pull_request subject)
-        uses: azure/login@v2
-        with:
-          client-id: ${{ vars.AZURE_GITHUB_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-
       - name: Install Bicep CLI
         run: az bicep install
 
-      - name: az bicep build (syntax) — every template
+      - name: az bicep build (compile + lint, local only, no Azure credential)
         run: |
           set -eu
           for f in infra/bootstrap.bicep infra/runtime.bicep infra/modules/*.bicep; do
@@ -136,32 +143,13 @@ jobs:
             echo "::endgroup::"
           done
 
-      - name: az deployment group what-if — infra/runtime.bicep (read-only)
-        # infra/bootstrap.bicep is intentionally never what-if'd or deployed
-        # here: it is subscription-scoped and Owner-only, applied only via
-        # scripts/azure/bootstrap.sh by a human. This job's OIDC identity
-        # holds only Contributor on rg-yolo-prod, which is exactly enough to
-        # preview infra/runtime.bicep and nothing more.
-        #
-        # The image tags below are what-if-only placeholders (never applied,
-        # never built, never pushed) so this preview does not depend on a
-        # real ACR build having already run for this PR's commit.
-        run: |
-          az deployment group what-if \
-            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
-            --template-file infra/runtime.bicep \
-            --parameters infra/runtime.parameters.json \
-            --parameters environmentName=azure-staging \
-            --parameters gatewayImageTag="${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/yolo/gateway:0000000whatifonly" \
-            --parameters copilotImageTag="${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/yolo/copilot-runtime:0000000whatifonly" \
-            --result-format FullResourcePayloads
-
-      - name: Verify script smoke check (module present, --help only)
+      - name: Verify script smoke check (module present, --help only, local)
         # Full endpoint verification (scripts/azure/verify.mjs --gateway-url
         # ... --site-url ...) only makes sense against real deployed
-        # hostnames, which do not exist for an unmerged PR. This step only
-        # confirms the read-only verifier is present and its CLI still
-        # parses, matching "verify on PR without Azure mutation".
+        # hostnames, which do not exist for an unmerged PR, and this script
+        # itself makes no Azure API calls either way (Node http fetch only).
+        # This step only confirms the read-only verifier is present and its
+        # CLI still parses.
         run: |
           if [ -f scripts/azure/verify.mjs ]; then
             node scripts/azure/verify.mjs --help

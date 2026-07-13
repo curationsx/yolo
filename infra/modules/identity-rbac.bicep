@@ -28,9 +28,6 @@ param githubEnvironments array = [
   'production'
 ]
 
-@description('Also federate the `repo:<org>/<repo>:pull_request` subject, in addition to the per-environment subjects above. Required for the PR-triggered read-only "verify" job: a `pull_request` event\'s ref is always the synthetic `refs/pull/<n>/merge` ref, which can never satisfy any branch-name deployment-branch-policy configured on a GitHub Environment (confirmed in production: GitHub rejects it with "Branch \\"refs/pull/<n>/merge\\" is not allowed to deploy to <environment> due to environment protection rules"). This subject is still narrowly scoped to this exact repository and only to pull_request events — never a branch wildcard — and is only ever used for bicep build/what-if (no Azure mutation).')
-param enablePullRequestFederation bool = true
-
 @description('Existing Key Vault name (created by modules/foundation.bicep in the same bootstrap deployment).')
 param keyVaultName string
 
@@ -77,7 +74,16 @@ resource githubIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-1
 
 // One federated credential per allowed GitHub environment. Subject is
 // restricted to `repo:<org>/<repo>:environment:<name>` — explicitly not a
-// branch wildcard (`repo:org/repo:ref:refs/heads/*`).
+// branch wildcard (`repo:org/repo:ref:refs/heads/*`), and deliberately NOT
+// a bare `repo:<org>/<repo>:pull_request` subject either: that subject
+// would let this Contributor-scoped identity mint an Azure OIDC token from
+// ANY pull_request workflow run in this repository (including, once
+// runnable, fork PRs) with no environment or branch-policy gate in front of
+// it. A PR-only read-only "verify" job must instead validate Bicep locally
+// (az bicep build) with no Azure credential at all — see
+// .github/workflows/azure-deploy.yml. Live `what-if` stays exclusively
+// behind workflow_dispatch + an explicitly human-approved, branch-policy
+// -restricted GitHub environment (azure-staging or production).
 resource githubFederatedCredentials 'Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials@2024-11-30' = [for envName in githubEnvironments: {
   parent: githubIdentity
   name: 'gh-${envName}'
@@ -89,26 +95,6 @@ resource githubFederatedCredentials 'Microsoft.ManagedIdentity/userAssignedIdent
     ]
   }
 }]
-
-// See enablePullRequestFederation description above: pull_request-triggered
-// jobs cannot use an environment-scoped subject if that environment has a
-// deployment branch policy, because the PR merge ref never matches a branch
-// name. This credential is scoped to pull_request events on this exact
-// repository only — read-only CI (bicep build / what-if), no Azure
-// mutation, no GitHub Environment attached, so no branch policy applies to
-// it (there is nothing broader being granted here than "this repo's PRs may
-// run read-only validation").
-resource githubPullRequestFederatedCredential 'Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials@2024-11-30' = if (enablePullRequestFederation) {
-  parent: githubIdentity
-  name: 'gh-pull-request'
-  properties: {
-    issuer: 'https://token.actions.githubusercontent.com'
-    subject: 'repo:${githubRepo}:pull_request'
-    audiences: [
-      'api://AzureADTokenExchange'
-    ]
-  }
-}
 
 resource keyVault 'Microsoft.KeyVault/vaults@2024-11-01' existing = {
   name: keyVaultName
