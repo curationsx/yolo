@@ -45,6 +45,27 @@ real Azure, Cloudflare, GitHub, or Cosmos account during tests (except one
 documented, read-only, human-verified smoke check of the real Cloudflare
 API — see `cutover.mjs` below).
 
+## Dependencies
+
+**`npm ci`/`npm test`/`npm run test:*` never require any dependency to be
+installed** — every script and every test in this directory is
+fixture/dry-run-by-default and works from a bare checkout with zero
+`node_modules`.
+
+The **one exception**: `reconcile-scores.mjs`'s real (non-`--fixture`)
+Cosmos mode dynamically imports `@azure/cosmos`/`@azure/identity` at
+runtime. These are pinned as ordinary `dependencies` in this directory's
+own `package.json` (matching `agent-worker/package.json`'s current
+`^4.9.3`/`^4.13.1` ranges) with a committed `package-lock.json`, so the
+install is source-reproducible rather than an untracked, undocumented
+ad-hoc step. **Run `npm ci --prefix scripts/azure` once before the first
+real (non-`--fixture`) reconciliation** in any fresh checkout, CI job, or
+ops job invocation — whichever workflow/job actually invokes real
+reconciliation is responsible for this step (this lane only owns
+`scripts/azure/**`; wiring it into `.github/workflows/**` or the ops job's
+own entrypoint is a coordination item for whichever lane owns those
+files).
+
 ## Script reference
 
 ### bootstrap.sh

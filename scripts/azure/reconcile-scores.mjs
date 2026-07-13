@@ -82,13 +82,18 @@
 //                       this task, which forbids real production mutation.
 //   (no --fixture)     Real mode: connects to the existing Cosmos account
 //                       via managed identity using @azure/identity +
-//                       @azure/cosmos. These packages are an intentional
-//                       *optional* dependency -- they are only imported
-//                       when this store actually runs, so scripts/azure
-//                       has no install requirement for dry-run/fixture
-//                       use. Install them (`npm install @azure/cosmos
-//                       @azure/identity` in the ops job's own package)
-//                       before using this store for real.
+//                       @azure/cosmos. These are pinned, ordinary
+//                       `dependencies` in scripts/azure/package.json
+//                       (matching agent-worker's current
+//                       @azure/cosmos/@azure/identity ranges) with a
+//                       committed scripts/azure/package-lock.json, so
+//                       real reconciliation is source-reproducible -- but
+//                       they are still only dynamically imported when
+//                       this store actually runs, so dry-run/fixture use
+//                       never requires them to be installed at all. Run
+//                       `npm ci --prefix scripts/azure` once before the
+//                       first real (non --fixture) reconciliation in any
+//                       fresh checkout, CI job, or ops job invocation.
 //
 // Usage:
 //   node scripts/azure/reconcile-scores.mjs --mode backfill --fixture path/to/fixture.json [--apply --confirm reconcile-scores] [--json]
@@ -474,9 +479,10 @@ async function runCosmosMode(values) {
     ({ DefaultAzureCredential } = await import("@azure/identity"));
   } catch (err) {
     throw new Error(
-      "Real Cosmos reconciliation requires '@azure/cosmos' and '@azure/identity' to be installed " +
-        "(this is intentionally not a default dependency of scripts/azure). " +
-        "Run with --fixture for offline/dry testing, or install these packages before using this mode. " +
+      "Real Cosmos reconciliation requires '@azure/cosmos' and '@azure/identity' to be installed. " +
+        "They are pinned dependencies in scripts/azure/package.json with a committed " +
+        "scripts/azure/package-lock.json -- run `npm ci --prefix scripts/azure` once, then retry. " +
+        "Run with --fixture instead for offline/dry testing that never needs them installed at all. " +
         `Original error: ${err && err.message ? err.message : err}`
     );
   }

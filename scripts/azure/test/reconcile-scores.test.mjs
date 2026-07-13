@@ -675,3 +675,37 @@ test("fetchLegacyScoresFromContainer reads the real target_id-keyed legacy score
   const result = await fetchLegacyScoresFromContainer(scores);
   assert.deepEqual(result, [{ target: "venue:echoplex", count: 5 }]);
 });
+
+// --- source-reproducible real Cosmos dependency resolution -------------
+//
+// scripts/azure/package.json pins @azure/cosmos/@azure/identity as
+// ordinary `dependencies` (matching agent-worker's current ranges) with a
+// committed scripts/azure/package-lock.json specifically so real
+// reconciliation never depends on an untracked, undocumented ad-hoc
+// install -- `npm ci --prefix scripts/azure` alone must make them
+// resolvable. This is a *conditional* test: if node_modules hasn't been
+// installed in this run (e.g. a bare checkout that only ever exercises
+// --fixture, which needs no install at all), it is skipped rather than
+// failed, since fixture/dry-run behavior must never depend on these
+// packages being present.
+test("real Cosmos mode's dynamic imports resolve once scripts/azure's own dependencies are installed (npm ci --prefix scripts/azure)", async (t) => {
+  let cosmosAvailable = true;
+  try {
+    await import("@azure/cosmos");
+    await import("@azure/identity");
+  } catch {
+    cosmosAvailable = false;
+  }
+  if (!cosmosAvailable) {
+    t.skip("@azure/cosmos/@azure/identity not installed in this run -- run `npm ci --prefix scripts/azure` to exercise this test");
+    return;
+  }
+  // Confirms scripts/azure/package.json's pinned dependencies are what
+  // actually get resolved (not some other package on the module
+  // resolution path), matching agent-worker's current ranges.
+  const { name: cosmosName, version: cosmosVersion } = JSON.parse(
+    fs.readFileSync(path.join(__dirname, "..", "node_modules", "@azure", "cosmos", "package.json"), "utf8")
+  );
+  assert.equal(cosmosName, "@azure/cosmos");
+  assert.match(cosmosVersion, /^4\./, "expected a @azure/cosmos v4.x release, matching the ^4.9.3 pin");
+});

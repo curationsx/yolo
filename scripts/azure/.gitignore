@@ -3,3 +3,9 @@
 # generated certificate material, or cutover rollback manifests.
 test/.tmp/
 test/.tmp-*/
+
+# Installed dependencies (@azure/cosmos, @azure/identity -- only needed for
+# real, non-fixture Cosmos reconciliation; install with
+# `npm ci --prefix scripts/azure`). package-lock.json IS committed so that
+# install is reproducible from source.
+node_modules/
