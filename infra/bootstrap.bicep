@@ -164,6 +164,7 @@ module foundryIntegration 'modules/foundry-integration.bicep' = {
     cognitiveServicesAccountName: cognitiveServicesAccountName
     cosmosAccountName: cosmosAccountName
     gatewayPrincipalId: identities.outputs.gatewayIdentityPrincipalId
+    bootstrapOperatorPrincipalId: identities.outputs.bootstrapOperatorPrincipalId
   }
 }
 

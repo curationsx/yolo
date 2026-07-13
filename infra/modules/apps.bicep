@@ -54,11 +54,32 @@ param cosmosDatabaseName string = 'curations'
 @description('Cosmos SQL container name for gateway session/quota/grant state.')
 param cosmosGatewayStateContainerName string = 'gateway-state'
 
+@description('Cosmos SQL container name for community engagements. Matches agent-worker/wrangler.toml\'s COSMOS_CONTAINER and the required cosmosContainer field in agent-worker/src/platform/azure/config.ts.')
+param cosmosContainerName string = 'engagements'
+
+@description('Cosmos SQL container name for votes. Matches wrangler.toml\'s COSMOS_VOTES_CONTAINER.')
+param cosmosVotesContainerName string = 'votes'
+
+@description('Cosmos SQL container name for score metadata. Matches wrangler.toml\'s COSMOS_SCORES_CONTAINER.')
+param cosmosScoresContainerName string = 'scores'
+
+@description('Cosmos SQL container name for community discussions. Matches wrangler.toml\'s COSMOS_DISCUSSIONS_CONTAINER.')
+param cosmosDiscussionsContainerName string = 'discussions'
+
 @description('Azure AI Foundry (Cognitive Services) endpoint for yolo-foundry (non-secret; identity-based auth).')
 param foundryEndpoint string
 
 @description('Azure AI Foundry model deployment name reused unchanged from the existing yolo-foundry resource.')
 param foundryDeploymentName string = 'gpt-5.4-mini'
+
+@description('Comma-separated software cookbook targets. Matches wrangler.toml\'s SOFTWARE_TARGETS exactly (order and values), required by agent-worker/src/platform/azure/config.ts.')
+param softwareTargets string = 'zotero,ollama,hugging-face,n8n,langfuse,obsidian,sqlite,git,vs-code,pandoc,github,discourse,cloudflare,supabase'
+
+@description('Vote storage backend. Matches wrangler.toml\'s VOTE_BACKEND; config.ts only accepts "kv" or "durable" and defaults to "durable" for anything else.')
+param voteBackend string = 'durable'
+
+@description('Copilot one-use grant connection TTL in seconds. Matches wrangler.toml\'s COPILOT_CONNECTION_TTL_SECONDS.')
+param copilotConnectionTtlSeconds string = '600'
 
 @description('Before production cutover, restrict ca-yolo-gateway ingress to only this CIDR (Wyatt\'s current IP). Required whenever enableStagingIpRestriction is true.')
 param wyattStagingIpCidr string = ''
@@ -150,12 +171,24 @@ resource gatewayApp 'Microsoft.App/containerApps@2025-01-01' = {
             { name: 'AZURE_CLIENT_ID', value: gatewayIdentityClientId }
             { name: 'PORT', value: string(gatewayTargetPort) }
             { name: 'ENVIRONMENT_NAME', value: environmentName }
-            { name: 'CORS_ALLOWED_ORIGINS', value: join(corsAllowedOrigins, ',') }
+            // Env var names below are aligned exactly with the
+            // Cloudflare-compatible contract in agent-worker/wrangler.toml
+            // and enforced (fail-fast on start-up) by
+            // agent-worker/src/platform/azure/config.ts's loadAzureConfig.
+            // Do not rename these without updating both files in that lane.
+            { name: 'ALLOWED_ORIGINS', value: join(corsAllowedOrigins, ',') }
             { name: 'COSMOS_ENDPOINT', value: cosmosEndpoint }
             { name: 'COSMOS_DATABASE', value: cosmosDatabaseName }
             { name: 'COSMOS_GATEWAY_STATE_CONTAINER', value: cosmosGatewayStateContainerName }
-            { name: 'FOUNDRY_ENDPOINT', value: foundryEndpoint }
-            { name: 'FOUNDRY_DEPLOYMENT', value: foundryDeploymentName }
+            { name: 'COSMOS_CONTAINER', value: cosmosContainerName }
+            { name: 'COSMOS_VOTES_CONTAINER', value: cosmosVotesContainerName }
+            { name: 'COSMOS_SCORES_CONTAINER', value: cosmosScoresContainerName }
+            { name: 'COSMOS_DISCUSSIONS_CONTAINER', value: cosmosDiscussionsContainerName }
+            { name: 'AZURE_OPENAI_ENDPOINT', value: foundryEndpoint }
+            { name: 'AZURE_OPENAI_DEPLOYMENT', value: foundryDeploymentName }
+            { name: 'SOFTWARE_TARGETS', value: softwareTargets }
+            { name: 'VOTE_BACKEND', value: voteBackend }
+            { name: 'COPILOT_CONNECTION_TTL_SECONDS', value: copilotConnectionTtlSeconds }
             { name: 'COPILOT_RUNTIME_URL', value: 'https://${copilotApp.properties.configuration.ingress.fqdn}' }
             { name: 'GITHUB_CLIENT_ID', secretRef: 'github-client-id' }
             { name: 'GITHUB_CLIENT_SECRET', secretRef: 'github-client-secret' }

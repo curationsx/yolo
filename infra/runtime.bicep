@@ -91,6 +91,27 @@ param foundryEndpoint string
 @description('Azure AI Foundry model deployment name, reused unchanged.')
 param foundryDeploymentName string = 'gpt-5.4-mini'
 
+@description('Cosmos SQL container name for community engagements. Matches agent-worker/wrangler.toml\'s COSMOS_CONTAINER.')
+param cosmosContainerName string = 'engagements'
+
+@description('Cosmos SQL container name for votes. Matches wrangler.toml\'s COSMOS_VOTES_CONTAINER.')
+param cosmosVotesContainerName string = 'votes'
+
+@description('Cosmos SQL container name for score metadata. Matches wrangler.toml\'s COSMOS_SCORES_CONTAINER.')
+param cosmosScoresContainerName string = 'scores'
+
+@description('Cosmos SQL container name for community discussions. Matches wrangler.toml\'s COSMOS_DISCUSSIONS_CONTAINER.')
+param cosmosDiscussionsContainerName string = 'discussions'
+
+@description('Comma-separated software cookbook targets. Matches wrangler.toml\'s SOFTWARE_TARGETS exactly.')
+param softwareTargets string = 'zotero,ollama,hugging-face,n8n,langfuse,obsidian,sqlite,git,vs-code,pandoc,github,discourse,cloudflare,supabase'
+
+@description('Vote storage backend. Matches wrangler.toml\'s VOTE_BACKEND.')
+param voteBackend string = 'durable'
+
+@description('Copilot one-use grant connection TTL in seconds. Matches wrangler.toml\'s COPILOT_CONNECTION_TTL_SECONDS.')
+param copilotConnectionTtlSeconds string = '600'
+
 @description('Wyatt\'s current staging IP in CIDR form (e.g. 203.0.113.4/32). Required whenever enableStagingIpRestriction is true.')
 param wyattStagingIpCidr string = ''
 
@@ -143,6 +164,13 @@ module apps 'modules/apps.bicep' = {
     cosmosEndpoint: cosmosEndpoint
     foundryEndpoint: foundryEndpoint
     foundryDeploymentName: foundryDeploymentName
+    cosmosContainerName: cosmosContainerName
+    cosmosVotesContainerName: cosmosVotesContainerName
+    cosmosScoresContainerName: cosmosScoresContainerName
+    cosmosDiscussionsContainerName: cosmosDiscussionsContainerName
+    softwareTargets: softwareTargets
+    voteBackend: voteBackend
+    copilotConnectionTtlSeconds: copilotConnectionTtlSeconds
     wyattStagingIpCidr: wyattStagingIpCidr
     enableStagingIpRestriction: enableStagingIpRestriction
     tags: tags

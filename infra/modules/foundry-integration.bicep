@@ -29,6 +29,9 @@ param cosmosGatewayStatePartitionKeyPath string = '/scope'
 @description('Principal ID of id-yolo-gateway (from modules/identity-rbac.bicep output).')
 param gatewayPrincipalId string
 
+@description('Entra object ID of the human bootstrap operator (from modules/identity-rbac.bicep\'s bootstrapOperatorPrincipalId output — itself defaulted to deployer().objectId). Granted Cosmos DB Built-in Data Contributor on this specific yolo-curations-feed account only, so pre/post-cutover reconciliation (scripts/azure/reconcile-scores.mjs) can authenticate keylessly from the operator\'s own machine via DefaultAzureCredential. This is a record of operator deployment access, not a service credential — no keys are read, stored, or printed anywhere in this module.')
+param bootstrapOperatorPrincipalId string
+
 // Built-in role definition IDs (documented, not invented).
 var roleCognitiveServicesOpenAiUser = '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd'
 // Cosmos DB Built-in Data Contributor is a Cosmos-native SQL role definition,
@@ -69,6 +72,22 @@ resource gatewayCosmosDataContributor 'Microsoft.DocumentDB/databaseAccounts/sql
   }
 }
 
+// Operator deployment access, not a service credential: lets
+// scripts/azure/reconcile-scores.mjs (which authenticates with
+// DefaultAzureCredential, no keys) run keylessly from the bootstrap
+// operator's own authenticated machine for authorized pre/post-cutover
+// reconciliation, per .azure/deployment-plan.md. Scoped to this specific
+// Cosmos account only — not subscription- or resource-group-wide.
+resource bootstrapOperatorCosmosDataContributor 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2024-11-15' = {
+  parent: cosmosAccount
+  name: guid(cosmosAccount.id, bootstrapOperatorPrincipalId, cosmosBuiltInDataContributorRoleId)
+  properties: {
+    roleDefinitionId: '${cosmosAccount.id}/sqlRoleDefinitions/${cosmosBuiltInDataContributorRoleId}'
+    principalId: bootstrapOperatorPrincipalId
+    scope: cosmosAccount.id
+  }
+}
+
 resource gatewayStateContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2024-11-15' = {
   parent: cosmosDatabase
   name: cosmosGatewayStateContainerName
@@ -91,3 +110,4 @@ resource gatewayStateContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabas
 output cosmosContainerId string = gatewayStateContainer.id
 output cosmosAccountEndpoint string = cosmosAccount.properties.documentEndpoint
 output cognitiveServicesEndpoint string = cognitiveServicesAccount.properties.endpoint
+output bootstrapOperatorCosmosDataContributorAssigned bool = true
