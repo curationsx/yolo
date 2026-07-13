@@ -261,6 +261,15 @@ export async function reconcileScoreFromVotes(
       if (read.statusCode !== 404 && read.resource) {
         existingScore = read.resource as ScoreDoc;
         scoreEtag = read.etag;
+        if (!scoreEtag) {
+          // An existing score document without an ETag can never be
+          // conditioned on for a Replace — issuing one with `ifMatch:
+          // undefined` would silently become an unconditional write that
+          // could clobber a concurrent setVote. Treat this the same as a
+          // transient conflict: back off and re-read fresh state.
+          await jitteredBackoff(attempt);
+          continue;
+        }
       }
     } catch (error) {
       if (cosmosStatus(error) === 429) {
@@ -270,13 +279,23 @@ export async function reconcileScoreFromVotes(
       throw error;
     }
 
-    const result = await container.items
-      .query<number>(
-        { query: "SELECT VALUE COUNT(1) FROM c WHERE (NOT IS_DEFINED(c.doc_type) OR c.doc_type = 'vote') AND c.id != 'score'" },
-        { partitionKey: targetId },
-      )
-      .fetchAll();
-    const count = result.resources[0] ?? 0;
+    let count: number;
+    try {
+      const result = await container.items
+        .query<number>(
+          { query: "SELECT VALUE COUNT(1) FROM c WHERE (NOT IS_DEFINED(c.doc_type) OR c.doc_type = 'vote') AND c.id != 'score'" },
+          { partitionKey: targetId },
+        )
+        .fetchAll();
+      count = result.resources[0] ?? 0;
+    } catch (error) {
+      if (cosmosStatus(error) === 429) {
+        await jitteredBackoff(attempt);
+        continue;
+      }
+      throw error;
+    }
+
     const scoreDoc: ScoreDoc = {
       id: SCORE_DOC_ID,
       doc_type: "score",

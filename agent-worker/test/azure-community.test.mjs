@@ -260,6 +260,68 @@ test("reconcileScoreFromVotes rethrows an unexpected error while reading the sco
   await assert.rejects(reconcileScoreFromVotes(votesContainer, "software:cloudflare"));
 });
 
+test("reconcileScoreFromVotes retries once on a 429 while counting votes", async () => {
+  const votesContainer = new FakeCosmosContainer();
+  votesContainer.failNext("query", 429);
+  const reconciled = await reconcileScoreFromVotes(votesContainer, "software:cloudflare");
+  assert.deepEqual(reconciled, { target_id: "software:cloudflare", count: 0 });
+});
+
+test("reconcileScoreFromVotes rethrows an unexpected error while counting votes", async () => {
+  const votesContainer = new FakeCosmosContainer();
+  votesContainer.failNext("query", 500);
+  await assert.rejects(reconcileScoreFromVotes(votesContainer, "software:cloudflare"));
+});
+
+test("reconcileScoreFromVotes never issues a conditional Replace with an undefined ifMatch, even when the score read unexpectedly omits an ETag", async () => {
+  const votesContainer = new FakeCosmosContainer();
+  const store = createAzureVoteStore(votesContainer);
+  await store.setVote("software:cloudflare", "1", true);
+  await store.setVote("software:cloudflare", "2", true);
+
+  let missingEtagOnce = true;
+  const replaceIfMatchValues = [];
+  const noEtagContainer = {
+    items: {
+      ...votesContainer.items,
+      batch: (operations, partitionKey) => {
+        // Capture what every Replace was actually conditioned on. A
+        // Replace with `ifMatch: undefined` is an unconditional write —
+        // it must never be issued, even when the preceding read gave us
+        // no ETag to work with.
+        for (const operation of operations) {
+          if (operation.operationType === "Replace") replaceIfMatchValues.push(operation.ifMatch);
+        }
+        return votesContainer.items.batch(operations, partitionKey);
+      },
+    },
+    item(id, partitionKey) {
+      const real = votesContainer.item(id, partitionKey);
+      if (id !== "score" || !missingEtagOnce) return real;
+      return {
+        ...real,
+        read: async () => {
+          // Defensive scenario: the driver returns a resource but no
+          // ETag. Reconciliation must back off and re-read fresh state
+          // rather than proceed to a Replace conditioned on nothing.
+          const snapshot = await real.read();
+          missingEtagOnce = false;
+          return { ...snapshot, etag: undefined };
+        },
+      };
+    },
+  };
+
+  const reconciled = await reconcileScoreFromVotes(noEtagContainer, "software:cloudflare");
+  assert.deepEqual(reconciled, { target_id: "software:cloudflare", count: 2 });
+  assert.equal(missingEtagOnce, false);
+  assert.ok(replaceIfMatchValues.length > 0, "expected at least one Replace operation");
+  assert.ok(
+    replaceIfMatchValues.every((ifMatch) => typeof ifMatch === "string" && ifMatch.length > 0),
+    `every Replace must be conditioned on a real ETag, never issued unconditionally (saw: ${JSON.stringify(replaceIfMatchValues)})`,
+  );
+});
+
 test("reconcileScoreFromVotes retries once on a 429 during the conditional write", async () => {
   const votesContainer = new FakeCosmosContainer();
   votesContainer.failNext("batch", 429);
