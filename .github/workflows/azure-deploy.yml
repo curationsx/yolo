@@ -449,6 +449,34 @@ jobs:
             echo "scripts/azure/verify.mjs not present yet (separate lane) — skipping."
           fi
 
+      - name: Install Visual Oracle browser
+        # Same tooling catalog-site's own CI (.github/workflows/catalog
+        # -site.yml) already uses for this exact suite -- no new install
+        # convention invented here.
+        working-directory: catalog-site
+        run: npx playwright install --with-deps chromium
+
+      - name: Cloud acceptance — Visual Oracle against the deployed SWA URL
+        # Same spec files, same config, same command catalog-site's own CI
+        # already runs (npm run test:visual:ci) -- only the target differs.
+        # Setting BASE_URL points playwright.config.mjs at the just
+        # -deployed generated Static Web Apps hostname instead of a local
+        # fixture-filled `astro dev` server; the config's own
+        # isExternalTarget branch (see playwright.config.mjs) then
+        # automatically narrows test/visual-oracle.spec.mjs to its
+        # content-agnostic structural/geometry/no-scroll/security-header
+        # assertions and skips the pixel-diff + marker-geometry checks that
+        # depend on deterministic fixture content -- no extra --grep or
+        # skip flag needed here; the cloud target cannot simplify what gets
+        # asserted beyond what the suite already, deliberately narrows
+        # itself to for any external target. Layout, typography, zero
+        # -radius/shadow, route, and responsive invariants all still run
+        # against the real deployed artifact.
+        working-directory: catalog-site
+        env:
+          BASE_URL: ${{ steps.swa_site.outputs.origin }}
+        run: npm run test:visual:ci
+
   # ── Production cutover deploy: workflow_dispatch/manual only, gated by ──
   # ── the GitHub `production` environment's branch policy (main only) ──
   # ── plus any reviewer/wait-timer protection rules configured on it. ──
@@ -653,3 +681,19 @@ jobs:
           else
             echo "scripts/azure/verify.mjs not present yet (separate lane) — skipping."
           fi
+
+      - name: Install Visual Oracle browser
+        # See the staging job's identical step: same tooling catalog-site's
+        # own CI already uses, no new install convention invented here.
+        working-directory: catalog-site
+        run: npx playwright install --with-deps chromium
+
+      - name: Cloud acceptance — Visual Oracle against the deployed SWA URL
+        # See the staging job's identical step for the full rationale.
+        # Same command (npm run test:visual:ci), same config, only the
+        # target differs: production's just-deployed generated Static Web
+        # Apps hostname.
+        working-directory: catalog-site
+        env:
+          BASE_URL: ${{ steps.swa_site.outputs.origin }}
+        run: npm run test:visual:ci
