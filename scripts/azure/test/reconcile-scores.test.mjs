@@ -17,6 +17,7 @@ import {
   writeAzureScoreMetadata,
   fetchLegacyScoresFromContainer,
   reconcileFromContainers,
+  resolveAzureCredential,
 } from "../reconcile-scores.mjs";
 import { FakeVotesContainer, FakeScoresContainer } from "./helpers/fake-cosmos-container.mjs";
 
@@ -676,6 +677,48 @@ test("fetchLegacyScoresFromContainer reads the real target_id-keyed legacy score
   assert.deepEqual(result, [{ target: "venue:echoplex", count: 5 }]);
 });
 
+// --- credential selection (managed identity vs. DefaultAzureCredential) --
+//
+// caj-yolo-ops's user-assigned managed identity binding exposes its
+// client ID via the standard AZURE_CLIENT_ID env var. resolveAzureCredential
+// takes injected credential classes so this selection logic is fully
+// testable without a live @azure/identity install.
+
+test("resolveAzureCredential uses ManagedIdentityCredential(AZURE_CLIENT_ID) when AZURE_CLIENT_ID is set", () => {
+  class FakeManagedIdentityCredential {
+    constructor(clientId) {
+      this.clientId = clientId;
+    }
+  }
+  class FakeDefaultAzureCredential {}
+  const credential = resolveAzureCredential(
+    { AZURE_CLIENT_ID: "11111111-2222-3333-4444-555555555555" },
+    { DefaultAzureCredential: FakeDefaultAzureCredential, ManagedIdentityCredential: FakeManagedIdentityCredential }
+  );
+  assert.ok(credential instanceof FakeManagedIdentityCredential);
+  assert.equal(credential.clientId, "11111111-2222-3333-4444-555555555555");
+});
+
+test("resolveAzureCredential falls back to DefaultAzureCredential when AZURE_CLIENT_ID is not set", () => {
+  class FakeManagedIdentityCredential {}
+  class FakeDefaultAzureCredential {}
+  const credential = resolveAzureCredential(
+    {},
+    { DefaultAzureCredential: FakeDefaultAzureCredential, ManagedIdentityCredential: FakeManagedIdentityCredential }
+  );
+  assert.ok(credential instanceof FakeDefaultAzureCredential);
+});
+
+test("resolveAzureCredential falls back to DefaultAzureCredential when AZURE_CLIENT_ID is an empty string", () => {
+  class FakeManagedIdentityCredential {}
+  class FakeDefaultAzureCredential {}
+  const credential = resolveAzureCredential(
+    { AZURE_CLIENT_ID: "" },
+    { DefaultAzureCredential: FakeDefaultAzureCredential, ManagedIdentityCredential: FakeManagedIdentityCredential }
+  );
+  assert.ok(credential instanceof FakeDefaultAzureCredential);
+});
+
 // --- source-reproducible real Cosmos dependency resolution -------------
 //
 // scripts/azure/package.json pins @azure/cosmos/@azure/identity as
@@ -708,4 +751,17 @@ test("real Cosmos mode's dynamic imports resolve once scripts/azure's own depend
   );
   assert.equal(cosmosName, "@azure/cosmos");
   assert.match(cosmosVersion, /^4\./, "expected a @azure/cosmos v4.x release, matching the ^4.9.3 pin");
+
+  // resolveAzureCredential must also work against the REAL
+  // ManagedIdentityCredential/DefaultAzureCredential classes, not just
+  // fakes -- proves the real @azure/identity constructors accept this
+  // call shape (a single client-id string / no-arg respectively).
+  const { DefaultAzureCredential, ManagedIdentityCredential } = await import("@azure/identity");
+  const withClientId = resolveAzureCredential(
+    { AZURE_CLIENT_ID: "11111111-2222-3333-4444-555555555555" },
+    { DefaultAzureCredential, ManagedIdentityCredential }
+  );
+  assert.ok(withClientId instanceof ManagedIdentityCredential);
+  const withoutClientId = resolveAzureCredential({}, { DefaultAzureCredential, ManagedIdentityCredential });
+  assert.ok(withoutClientId instanceof DefaultAzureCredential);
 });

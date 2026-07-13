@@ -94,6 +94,17 @@
 //                       `npm ci --prefix scripts/azure` once before the
 //                       first real (non --fixture) reconciliation in any
 //                       fresh checkout, CI job, or ops job invocation.
+//                       Credential selection (resolveAzureCredential):
+//                       when the standard `AZURE_CLIENT_ID` env var is
+//                       set (as caj-yolo-ops's user-assigned managed
+//                       identity binding does), uses
+//                       `ManagedIdentityCredential(AZURE_CLIENT_ID)`
+//                       directly rather than DefaultAzureCredential's
+//                       broader chain -- avoiding both the extra
+//                       credential-probing latency and the ambiguity of
+//                       which identity to pick when more than one is
+//                       attached. Falls back to `DefaultAzureCredential()`
+//                       only when `AZURE_CLIENT_ID` is unset.
 //
 // Usage:
 //   node scripts/azure/reconcile-scores.mjs --mode backfill --fixture path/to/fixture.json [--apply --confirm reconcile-scores] [--json]
@@ -463,6 +474,27 @@ export async function reconcileFromContainers(votesContainer, targetContainer, {
   return report;
 }
 
+/**
+ * Selects the Azure credential for real Cosmos mode. A caj-yolo-ops
+ * Container Apps Job binds a user-assigned managed identity and exposes
+ * its client ID via the standard `AZURE_CLIENT_ID` env var -- pinning to
+ * `ManagedIdentityCredential(AZURE_CLIENT_ID)` in that case avoids
+ * `DefaultAzureCredential`'s slower, broader credential-chain probing and
+ * the ambiguity of which identity to use when more than one is attached
+ * to the job/app. Falls back to `DefaultAzureCredential()` when
+ * `AZURE_CLIENT_ID` is not set (e.g. a local `az login` session, or any
+ * other environment `DefaultAzureCredential`'s chain already covers).
+ * Credential classes are injected so this is testable without a live
+ * `@azure/identity` install.
+ */
+export function resolveAzureCredential(env, { DefaultAzureCredential, ManagedIdentityCredential }) {
+  const clientId = env.AZURE_CLIENT_ID;
+  if (clientId) {
+    return new ManagedIdentityCredential(clientId);
+  }
+  return new DefaultAzureCredential();
+}
+
 async function runCosmosMode(values) {
   if (!values["cosmos-endpoint"]) {
     throw new Error("--cosmos-endpoint (or --fixture) is required.");
@@ -473,10 +505,10 @@ async function runCosmosMode(values) {
     );
   }
 
-  let CosmosClient, DefaultAzureCredential;
+  let CosmosClient, DefaultAzureCredential, ManagedIdentityCredential;
   try {
     ({ CosmosClient } = await import("@azure/cosmos"));
-    ({ DefaultAzureCredential } = await import("@azure/identity"));
+    ({ DefaultAzureCredential, ManagedIdentityCredential } = await import("@azure/identity"));
   } catch (err) {
     throw new Error(
       "Real Cosmos reconciliation requires '@azure/cosmos' and '@azure/identity' to be installed. " +
@@ -487,7 +519,7 @@ async function runCosmosMode(values) {
     );
   }
 
-  const credential = new DefaultAzureCredential();
+  const credential = resolveAzureCredential(process.env, { DefaultAzureCredential, ManagedIdentityCredential });
   const client = new CosmosClient({ endpoint: values["cosmos-endpoint"], aadCredentials: credential });
   const database = client.database(values.database);
   const votesContainer = database.container(values["votes-container"]);

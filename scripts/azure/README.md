@@ -303,12 +303,18 @@ this task and by most of the test suite — its `{votes, scores}` shape is
 this tool's own generic abstraction and applies identically regardless of
 which real mirror `--mode` would select). Real Cosmos mode requires
 `--cosmos-endpoint` and dynamically imports `@azure/cosmos` +
-`@azure/identity` only when actually connecting (**not installed by
-default** — install them before using real mode); it automatically targets
-the `votes` container itself for `backfill`/`post-cutover`, or the separate
-`--scores-container` for `pre-rollback`. Dry run always reports the diff;
-`--apply --confirm reconcile-scores` writes (subject to the post-cutover
-wait gate above).
+`@azure/identity` only when actually connecting — pinned, ordinary
+`dependencies` with a committed `package-lock.json` (see "Dependencies"
+above; run `npm ci --prefix scripts/azure` first); it automatically
+targets the `votes` container itself for `backfill`/`post-cutover`, or the
+separate `--scores-container` for `pre-rollback`. **Credential
+selection:** when the standard `AZURE_CLIENT_ID` env var is set (as
+`caj-yolo-ops`'s user-assigned managed identity binding does), uses
+`ManagedIdentityCredential(AZURE_CLIENT_ID)` directly; falls back to
+`DefaultAzureCredential()` only when `AZURE_CLIENT_ID` is unset (e.g. a
+local `az login` session). Dry run always reports the diff; `--apply
+--confirm reconcile-scores` writes (subject to the post-cutover wait gate
+above).
 
 ### cutover.mjs
 
@@ -475,8 +481,18 @@ by default.
   `requestSwaHostnameValidation`/`getSwaHostnameStatus` shape as
   `FixtureCloudflareClient` before any production run.
 - `reconcile-scores.mjs`'s real Cosmos mode assumes `@azure/cosmos`'s
-  `CosmosClient` accepts an `aadCredentials` option backed by
-  `DefaultAzureCredential` from `@azure/identity`. The container field
+  `CosmosClient` accepts an `aadCredentials` option backed by a
+  `TokenCredential` from `@azure/identity` (either
+  `ManagedIdentityCredential` or `DefaultAzureCredential`, per
+  `resolveAzureCredential`'s `AZURE_CLIENT_ID` selection — see the
+  `reconcile-scores.mjs` section above). `resolveAzureCredential` itself
+  is unit-tested against both fake and the real `@azure/identity`
+  constructors (proving the call shape — a single client-id string, or no
+  args — is accepted), but the end-to-end result (that
+  `ManagedIdentityCredential` actually authenticates successfully as
+  `caj-yolo-ops`'s user-assigned identity against a live Cosmos account)
+  is **not** exercised in this task; re-verify once `caj-yolo-ops` and its
+  managed identity binding exist for real. The container field
   schema itself is **confirmed** (not assumed) against the actual
   persisted shapes in `agent-worker/src/community.ts` (`VoteDoc`,
   `ScoreDoc`), `agent-worker/src/vote-guard.ts`, and
