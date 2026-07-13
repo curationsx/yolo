@@ -305,8 +305,16 @@ jobs:
         # non-interactive shell rather than silently succeeding. Pinned to
         # the version validated locally in this session (1.3.0b4), which
         # supports all three commands above; --yes makes the install itself
-        # noninteractive regardless of the dynamic-install config.
-        run: az extension add --name containerapp --version 1.3.0b4 --yes
+        # noninteractive regardless of the dynamic-install config. 1.3.0b4
+        # is itself a preview ("b4") package -- --yes only suppresses
+        # prompts, it does not override a runner whose az CLI config has
+        # preview extensions disabled (extension.use_dynamic_install=
+        # yes_without_prompt still refuses a preview version without this
+        # separate flag). --allow-preview true makes that acceptance
+        # explicit regardless of the runner's ambient config, rather than
+        # relying on GitHub-hosted runners' current (undocumented,
+        # unguaranteed) default.
+        run: az extension add --name containerapp --version 1.3.0b4 --allow-preview true --yes
 
       - name: Build gateway + Copilot runtime images (ACR remote build, immutable Git-SHA tags)
         id: build_images
@@ -559,8 +567,10 @@ jobs:
         run: az bicep install
 
       - name: Install az containerapp extension (pinned, noninteractive)
-        # See the staging job's identical step for the full rationale.
-        run: az extension add --name containerapp --version 1.3.0b4 --yes
+        # See the staging job's identical step for the full rationale,
+        # including why --allow-preview true is required alongside --yes
+        # for this preview ("b4") package version.
+        run: az extension add --name containerapp --version 1.3.0b4 --allow-preview true --yes
 
       - name: Build gateway + Copilot runtime images (ACR remote build, immutable Git-SHA tags)
         id: build_images
