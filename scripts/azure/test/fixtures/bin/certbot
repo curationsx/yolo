@@ -1,6 +1,67 @@
 #!/usr/bin/env bash
-# Fixture certbot stand-in used only by scripts/azure/test/**. certificate.sh
-# never actually invokes this in --apply mode (it defers real issuance), so
-# this only needs to exist and be detectable via `command -v certbot`.
+# Fixture certbot stand-in used only by scripts/azure/test/**, driven by
+# certificate.sh --apply (via YOLO_CERT_CERTBOT_BIN pointing directly at
+# this file) once CLOUDFLARE_API_TOKEN is set. Understands one real
+# invocation shape:
+#   certbot certonly --dns-cloudflare --dns-cloudflare-credentials <path>
+#     --config-dir <dir> --work-dir <dir> --logs-dir <dir> -d <domain>
+#     --non-interactive --agree-tos --email <addr>
+# and copies a FIXED, pre-generated, self-signed test-only certificate/key
+# pair (test/fixtures/data/fake-api-{fullchain,privkey}.pem -- never a real
+# key, never used for anything but local offline test crypto operations)
+# into Certbot's standard `<config-dir>/live/<domain>/` layout, falling
+# back to generating a fresh one if that fixture is missing for some
+# reason -- no network access either way. Using the FIXED pair keeps its
+# SHA-1 thumbprint stable and known in advance
+# (A33D7D8B3845319BF577C7040C06C1F007EABE60), so tests can assert
+# certificate.sh's own post-upload thumbprint-verification step actually
+# matches. Any other invocation (e.g. a bare `command -v certbot`
+# detection probe) exits 1, matching the previous stub behavior.
+set -euo pipefail
+
+FIXTURE_BIN_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd -P)"
+FIXTURE_DATA_DIR="$(cd -- "${FIXTURE_BIN_DIR}/../data" >/dev/null 2>&1 && pwd -P)"
+
+if [[ -n "${AZ_LEDGER:-}" ]]; then
+  printf 'certbot %s\n' "$*" >> "$AZ_LEDGER"
+fi
+
+if [[ "${1:-}" == "certonly" ]]; then
+  domain=""
+  config_dir=""
+  args=("$@")
+  for ((i = 0; i < ${#args[@]}; i++)); do
+    case "${args[$i]}" in
+      -d) domain="${args[$((i + 1))]}" ;;
+      --config-dir) config_dir="${args[$((i + 1))]}" ;;
+    esac
+  done
+  if [[ -z "$domain" || -z "$config_dir" ]]; then
+    echo "fixture certbot: certonly requires -d <domain> and --config-dir <path>" >&2
+    exit 1
+  fi
+  if [[ "${CERTBOT_FIXTURE_FAIL:-0}" == "1" ]]; then
+    echo "fixture certbot: simulated ACME validation failure" >&2
+    exit 1
+  fi
+  live_dir="${config_dir}/live/${domain}"
+  mkdir -p "$live_dir"
+  if [[ -f "${FIXTURE_DATA_DIR}/fake-api-fullchain.pem" && -f "${FIXTURE_DATA_DIR}/fake-api-privkey.pem" ]]; then
+    cp "${FIXTURE_DATA_DIR}/fake-api-fullchain.pem" "${live_dir}/fullchain.pem"
+    cp "${FIXTURE_DATA_DIR}/fake-api-privkey.pem" "${live_dir}/privkey.pem"
+  else
+    (
+      umask 077
+      openssl req -x509 -newkey rsa:2048 -nodes \
+        -keyout "${live_dir}/privkey.pem" \
+        -out "${live_dir}/fullchain.pem" \
+        -days 1 -subj "/CN=${domain}" >/dev/null 2>&1
+    )
+  fi
+  chmod 0600 "${live_dir}/privkey.pem" "${live_dir}/fullchain.pem"
+  echo "fixture certbot: issued fake certificate for ${domain} at ${live_dir}"
+  exit 0
+fi
+
 echo "fixture certbot: not implemented" >&2
 exit 1

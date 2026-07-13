@@ -10,6 +10,9 @@ import {
   AcceptanceError,
   FixtureCloudflareClient,
   RealCloudflareClient,
+  RealAzureSwaHostnameClient,
+  ComposedRealClient,
+  extractSwaValidationTokenValue,
   CloudflareApiError,
   loadCloudflareClient,
   computeCutoverPlan,
@@ -614,9 +617,10 @@ test("loadCloudflareClient prefers --fixture when given, even if env vars are al
   assert.ok(client instanceof FixtureCloudflareClient);
 });
 
-test("loadCloudflareClient falls back to a real client when both env vars are present and no --fixture is given", () => {
+test("loadCloudflareClient falls back to a real (composed) client when both env vars are present and no --fixture is given", () => {
   const client = loadCloudflareClient({}, { CLOUDFLARE_API_TOKEN: "fake-token", CLOUDFLARE_ACCOUNT_ID: "fake-account" });
-  assert.ok(client instanceof RealCloudflareClient);
+  assert.ok(client instanceof ComposedRealClient);
+  assert.ok(client.cloudflareClient instanceof RealCloudflareClient);
 });
 
 test("loadCloudflareClient refuses when neither --fixture nor both env vars are available", () => {
@@ -808,10 +812,211 @@ test("RealCloudflareClient surfaces Cloudflare's real error shape without crashi
   await assert.rejects(() => client.getDnsRecord("curations.dev"), /Invalid API Token/);
 });
 
-test("RealCloudflareClient does not implement SWA hostname validation (Azure, not Cloudflare, concern)", async () => {
+test("RealCloudflareClient no longer implements SWA hostname validation at all (Azure, not Cloudflare, concern -- see RealAzureSwaHostnameClient)", async () => {
   const client = new RealCloudflareClient({ apiToken: "t", accountId: "a", fetchImpl: async () => ({ json: async () => ({ success: true, result: [] }) }) });
-  await assert.rejects(() => client.requestSwaHostnameValidation("curations.dev"), /Azure Static Web Apps/);
-  await assert.rejects(() => client.getSwaHostnameStatus("curations.dev"), /Azure Static Web Apps/);
+  assert.equal(typeof client.requestSwaHostnameValidation, "undefined");
+  assert.equal(typeof client.getSwaHostnameStatus, "undefined");
+});
+
+// --- RealAzureSwaHostnameClient: `az staticwebapp hostname set/show`-backed SWA validation ---
+
+/** Builds a fake `execFileImpl` matching promisify(child_process.execFile)'s
+ * shape ({ stdout, stderr }), dispatching on the `az` subcommand
+ * (`hostname set` vs `hostname show`) the same way the fixture `az`
+ * binary used by the bash test harness dispatches on argv. */
+function fakeAzExecFile({ onSet, onShow } = {}) {
+  return async (cmd, args) => {
+    assert.equal(cmd, "az");
+    if (args[0] === "staticwebapp" && args[1] === "hostname" && args[2] === "set") {
+      if (onSet) await onSet(args);
+      return { stdout: "", stderr: "" };
+    }
+    if (args[0] === "staticwebapp" && args[1] === "hostname" && args[2] === "show") {
+      const result = onShow ? await onShow(args) : null;
+      if (result === null) {
+        const err = new Error("ResourceNotFound: hostname not found");
+        err.code = 3;
+        throw err;
+      }
+      return { stdout: JSON.stringify(result), stderr: "" };
+    }
+    throw new Error(`fakeAzExecFile: unexpected invocation: ${cmd} ${args.join(" ")}`);
+  };
+}
+
+test("extractSwaValidationTokenValue returns a bare token unchanged", () => {
+  assert.equal(extractSwaValidationTokenValue("bare-token-value"), "bare-token-value");
+});
+
+test("extractSwaValidationTokenValue extracts the value out of a zone-file-style TXT record line", () => {
+  assert.equal(
+    extractSwaValidationTokenValue('_dnsauth.curations.dev. IN TXT "the-real-token-value"'),
+    "the-real-token-value"
+  );
+  assert.equal(extractSwaValidationTokenValue("_dnsauth.curations.dev. IN TXT the-real-token-value"), "the-real-token-value");
+});
+
+test("extractSwaValidationTokenValue passes through a non-string input unchanged", () => {
+  assert.equal(extractSwaValidationTokenValue(undefined), undefined);
+});
+
+test("RealAzureSwaHostnameClient.requestSwaHostnameValidation calls 'hostname set --no-wait' then reads the token from 'hostname show'", async () => {
+  let setArgs = null;
+  const execFileImpl = fakeAzExecFile({
+    onSet: (args) => {
+      setArgs = args;
+    },
+    onShow: () => ({ status: "Validating", validationToken: "raw-token-123" }),
+  });
+  const client = new RealAzureSwaHostnameClient({
+    staticWebAppName: "stapp-yolo-prod",
+    resourceGroup: "rg-yolo-prod",
+    execFileImpl,
+  });
+  const result = await client.requestSwaHostnameValidation("curations.dev");
+  assert.deepEqual(result, { validationToken: "raw-token-123", txtRecordName: "_dnsauth.curations.dev" });
+
+  assert.ok(setArgs.includes("--no-wait"), "requestSwaHostnameValidation must pass --no-wait");
+  assert.ok(setArgs.includes("--validation-method"), "requestSwaHostnameValidation must set --validation-method");
+  const methodIndex = setArgs.indexOf("--validation-method");
+  assert.equal(setArgs[methodIndex + 1], "dns-txt-token");
+  assert.ok(setArgs.includes("stapp-yolo-prod"));
+  assert.ok(setArgs.includes("rg-yolo-prod"));
+  assert.ok(setArgs.includes("curations.dev"));
+});
+
+test("RealAzureSwaHostnameClient.requestSwaHostnameValidation extracts the token value from a zone-file-style validationToken", async () => {
+  const execFileImpl = fakeAzExecFile({
+    onShow: () => ({ status: "Validating", validationToken: '_dnsauth.curations.dev. IN TXT "extracted-value"' }),
+  });
+  const client = new RealAzureSwaHostnameClient({ execFileImpl });
+  const result = await client.requestSwaHostnameValidation("curations.dev");
+  assert.equal(result.validationToken, "extracted-value");
+});
+
+test("RealAzureSwaHostnameClient.requestSwaHostnameValidation throws a clear error when Azure has not yet returned a token", async () => {
+  const execFileImpl = fakeAzExecFile({ onShow: () => ({ status: "Validating", validationToken: null }) });
+  const client = new RealAzureSwaHostnameClient({ execFileImpl });
+  await assert.rejects(() => client.requestSwaHostnameValidation("curations.dev"), /has not yet returned a dns-txt-token validation token/);
+});
+
+test("RealAzureSwaHostnameClient.getSwaHostnameStatus reports 'NotRequested' before any 'hostname set' call", async () => {
+  const execFileImpl = fakeAzExecFile({ onShow: () => null });
+  const client = new RealAzureSwaHostnameClient({ execFileImpl });
+  assert.equal(await client.getSwaHostnameStatus("curations.dev"), "NotRequested");
+});
+
+test("RealAzureSwaHostnameClient.getSwaHostnameStatus reports Azure's real status once known, including 'Ready'", async () => {
+  const execFileImpl = fakeAzExecFile({ onShow: () => ({ status: "Ready", validationToken: "tok" }) });
+  const client = new RealAzureSwaHostnameClient({ execFileImpl });
+  assert.equal(await client.getSwaHostnameStatus("curations.dev"), "Ready");
+});
+
+test("RealAzureSwaHostnameClient never logs or throws with the validation token value in any error message it raises itself", async () => {
+  // The dns-txt-token value is not a secret (it is designed to be
+  // published as a public DNS TXT record), but this client must still
+  // never gratuitously embed it in any thrown error text -- the only
+  // place it should ever surface is the returned { validationToken }
+  // object, handed directly to the existing Cloudflare TXT-record path.
+  const execFileImpl = fakeAzExecFile({ onShow: () => ({ status: "Validating", validationToken: null }) });
+  const client = new RealAzureSwaHostnameClient({ execFileImpl });
+  try {
+    await client.requestSwaHostnameValidation("curations.dev");
+    assert.fail("expected requestSwaHostnameValidation to throw");
+  } catch (err) {
+    assert.doesNotMatch(err.message, /raw-token|extracted-value|tok\b/);
+  }
+});
+
+// --- ComposedRealClient: RealCloudflareClient + RealAzureSwaHostnameClient ---
+
+test("ComposedRealClient routes Cloudflare-concern methods to the Cloudflare client and SWA-concern methods to the SWA client", async () => {
+  const cloudflareCalls = [];
+  const swaCalls = [];
+  const cloudflareClient = {
+    preflight: async () => {
+      cloudflareCalls.push("preflight");
+      return { ok: true };
+    },
+    getDnsRecord: async (h) => {
+      cloudflareCalls.push(`getDnsRecord:${h}`);
+      return null;
+    },
+    upsertDnsRecord: async (h, opts) => {
+      cloudflareCalls.push(`upsertDnsRecord:${h}:${opts.type}`);
+      return { ...opts };
+    },
+    deleteDnsRecord: async (h) => {
+      cloudflareCalls.push(`deleteDnsRecord:${h}`);
+    },
+    getWorkerCustomDomain: async (h) => {
+      cloudflareCalls.push(`getWorkerCustomDomain:${h}`);
+      return null;
+    },
+    removeWorkerCustomDomain: async (h) => {
+      cloudflareCalls.push(`removeWorkerCustomDomain:${h}`);
+    },
+    attachWorkerCustomDomain: async (h, opts) => {
+      cloudflareCalls.push(`attachWorkerCustomDomain:${h}:${opts.service}`);
+    },
+  };
+  const swaClient = {
+    requestSwaHostnameValidation: async (h) => {
+      swaCalls.push(`requestSwaHostnameValidation:${h}`);
+      return { validationToken: "tok", txtRecordName: `_dnsauth.${h}` };
+    },
+    getSwaHostnameStatus: async (h) => {
+      swaCalls.push(`getSwaHostnameStatus:${h}`);
+      return "Ready";
+    },
+  };
+  const composed = new ComposedRealClient(cloudflareClient, swaClient);
+
+  await composed.preflight();
+  await composed.getDnsRecord("api.curations.dev");
+  await composed.upsertDnsRecord("api.curations.dev", { content: "x", type: "CNAME" });
+  await composed.deleteDnsRecord("api.curations.dev");
+  await composed.getWorkerCustomDomain("api.curations.dev");
+  await composed.removeWorkerCustomDomain("api.curations.dev");
+  await composed.attachWorkerCustomDomain("api.curations.dev", { service: "svc", environment: "production", zoneId: "z" });
+  const swaResult = await composed.requestSwaHostnameValidation("curations.dev");
+  const status = await composed.getSwaHostnameStatus("curations.dev");
+
+  assert.deepEqual(cloudflareCalls, [
+    "preflight",
+    "getDnsRecord:api.curations.dev",
+    "upsertDnsRecord:api.curations.dev:CNAME",
+    "deleteDnsRecord:api.curations.dev",
+    "getWorkerCustomDomain:api.curations.dev",
+    "removeWorkerCustomDomain:api.curations.dev",
+    "attachWorkerCustomDomain:api.curations.dev:svc",
+  ]);
+  assert.deepEqual(swaCalls, ["requestSwaHostnameValidation:curations.dev", "getSwaHostnameStatus:curations.dev"]);
+  assert.deepEqual(swaResult, { validationToken: "tok", txtRecordName: "_dnsauth.curations.dev" });
+  assert.equal(status, "Ready");
+});
+
+test("loadCloudflareClient in real mode returns a ComposedRealClient wired to both a RealCloudflareClient and a RealAzureSwaHostnameClient", () => {
+  const client = loadCloudflareClient({}, { CLOUDFLARE_API_TOKEN: "t", CLOUDFLARE_ACCOUNT_ID: "a" });
+  assert.ok(client instanceof ComposedRealClient);
+  assert.ok(client.cloudflareClient instanceof RealCloudflareClient);
+  assert.ok(client.swaClient instanceof RealAzureSwaHostnameClient);
+  assert.equal(client.swaClient.staticWebAppName, "stapp-yolo-prod");
+  assert.equal(client.swaClient.resourceGroup, "rg-yolo-prod");
+});
+
+test("loadCloudflareClient in real mode honors YOLO_STATIC_WEB_APP/YOLO_RESOURCE_GROUP env overrides for the SWA client", () => {
+  const client = loadCloudflareClient(
+    {},
+    {
+      CLOUDFLARE_API_TOKEN: "t",
+      CLOUDFLARE_ACCOUNT_ID: "a",
+      YOLO_STATIC_WEB_APP: "stapp-custom",
+      YOLO_RESOURCE_GROUP: "rg-custom",
+    }
+  );
+  assert.equal(client.swaClient.staticWebAppName, "stapp-custom");
+  assert.equal(client.swaClient.resourceGroup, "rg-custom");
 });
 
 // --- Cloudflare preflight: token/API access validated before any mutation ---

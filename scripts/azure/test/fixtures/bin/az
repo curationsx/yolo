@@ -65,11 +65,66 @@ case "$1 $2" in
     fi
     ;;
   "containerapp env")
-    if [[ "${AZ_ENV_EXISTS:-1}" == "1" ]]; then
-      printf '[{"name":{"value":"Consumption Cores"},"limit":%s,"currentValue":0}]\n' "${AZ_QUOTA_LIMIT:-10}"
-    else
-      exit 1
-    fi
+    case "${3:-}" in
+      list-usages|"")
+        if [[ "${AZ_ENV_EXISTS:-1}" == "1" ]]; then
+          printf '[{"name":{"value":"Consumption Cores"},"limit":%s,"currentValue":0}]\n' "${AZ_QUOTA_LIMIT:-10}"
+        else
+          exit 1
+        fi
+        ;;
+      certificate)
+        case "${4:-}" in
+          upload)
+            if [[ "${AZ_CERT_UPLOAD_FAIL:-0}" == "1" ]]; then
+              fail "fixture az: simulated certificate upload failure"
+            fi
+            # Remembers the exact --certificate-name this upload call was
+            # given (in a state file next to the ledger, if one is set),
+            # so a subsequent `certificate list` call in the same test can
+            # echo it back -- letting certificate.sh's real
+            # name-filtered verification query actually find a match,
+            # the same way a real Azure account would.
+            if [[ -n "${AZ_LEDGER:-}" ]]; then
+              uploaded_name=""
+              prev=""
+              for arg in "$@"; do
+                if [[ "$prev" == "--certificate-name" ]]; then
+                  uploaded_name="$arg"
+                  break
+                fi
+                prev="$arg"
+              done
+              if [[ -n "$uploaded_name" ]]; then
+                printf '%s' "$uploaded_name" > "${AZ_LEDGER}.last-cert-name"
+              fi
+            fi
+            printf 'fixture: containerapp env certificate upload executed (mutating)\n'
+            ;;
+          list)
+            # Echoes back whatever thumbprint the test told this fixture
+            # to report as already-uploaded, so certificate.sh's own
+            # post-upload verification step can be exercised end-to-end
+            # without a live Azure account. The reported name prefers an
+            # explicit AZ_CERT_NAME_ECHO override, then the name recorded
+            # by the most recent `certificate upload` call above, then a
+            # generic fallback.
+            cert_name_echo="${AZ_CERT_NAME_ECHO:-}"
+            if [[ -z "$cert_name_echo" && -n "${AZ_LEDGER:-}" && -f "${AZ_LEDGER}.last-cert-name" ]]; then
+              cert_name_echo="$(cat "${AZ_LEDGER}.last-cert-name")"
+            fi
+            printf '[{"name":"%s","properties":{"thumbprint":"%s"}}]\n' \
+              "${cert_name_echo:-fixture-cert}" "${AZ_CERT_THUMBPRINT:-}"
+            ;;
+          *)
+            fail "fixture az: unhandled containerapp env certificate subcommand: $*"
+            ;;
+        esac
+        ;;
+      *)
+        fail "fixture az: unhandled containerapp env subcommand: $*"
+        ;;
+    esac
     ;;
   "containerapp update")
     printf 'fixture: containerapp update executed (mutating)\n'

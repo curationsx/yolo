@@ -195,35 +195,43 @@ Prepares the temporary ACME DNS-01 certificate workflow for
 passed — its file path is never printed to logs (only the non-sensitive CSR
 path is).
 
-`--apply --confirm issue-api-curations-dev` prefers an automated path when
-`CLOUDFLARE_API_TOKEN` is set in the environment (never a CLI flag, never
-logged): it creates an isolated Python venv and a `certbot-dns-cloudflare`
-credentials file (`dns_cloudflare_api_token = ...`, built directly from the
-env var) at `0600`, both inside the same private `0700` working directory
-as Certbot's forced `--config-dir`/`--work-dir`/`--logs-dir` (never the
-global Certbot paths). With this plugin, Certbot creates *and* removes the
-`_acme-challenge` TXT record itself — no manual DNS step. Without a
-Cloudflare token, it falls back to detecting a system-installed
-certbot/acme.sh and the previous manual-DNS-01 flow (operator creates the
-TXT record by hand). Either way — per this task's explicit instruction —
-`--apply` still does not run `pip install` or submit the real ACME order;
-it prints the exact remaining commands instead.
+`--apply --confirm issue-api-curations-dev` **really executes** the
+automated path end to end when `CLOUDFLARE_API_TOKEN` is set in the
+environment (never a CLI flag, never logged): it creates an isolated
+Python venv and a `certbot-dns-cloudflare` credentials file
+(`dns_cloudflare_api_token = ...`, built directly from the env var) at
+`0600`, both inside the same private `0700` working directory as Certbot's
+forced `--config-dir`/`--work-dir`/`--logs-dir` (never the global Certbot
+paths); installs the pinned `certbot==2.11.0` +
+`certbot-dns-cloudflare==2.11.0` into that venv; runs `certbot certonly
+--dns-cloudflare` (which creates *and* removes the `_acme-challenge` TXT
+record itself — no manual DNS step); packages the result into a
+password-protected PFX; uploads it via `az containerapp env certificate
+upload --certificate-name <generated-name>`; verifies the upload by
+comparing the local PFX's SHA-1 thumbprint against `az containerapp env
+certificate list`'s reported thumbprint for that same name (warns, but
+does not fail, on a mismatch — a brief Azure propagation delay is
+possible); and lets the EXIT/INT/TERM trap securely remove the entire
+temporary directory (venv, credentials file, PFX, PFX password, and all
+Certbot state together). `az containerapp env certificate upload` has no
+file-based password option — `--certificate-password` is a plain CLI
+argument, an inherent Azure CLI interface limitation, not a choice made
+here; the value is read from its `0600` file only for the instant of that
+one call and never logged. Without a Cloudflare token, `--apply` falls
+back to detecting a system-installed certbot/acme.sh and only *preparing*
+(never executing) the manual-DNS-01 flow (operator creates the TXT record
+by hand) — automating a human DNS step with no Cloudflare credential to
+do it with isn't possible.
 
 `--convert-to-pfx --cert <path> --key <path> [--chain <path>] --out
-<path.pfx> [--password-file <path>]` is a real, independently usable
-subcommand: it exports a password-protected PFX via `openssl pkcs12
--export -passout file:...` (never `pass:...`, which would otherwise expose
-the password in the process list). If `--password-file` isn't given, a
-random password is generated into its own `0600` file inside the same
-private working directory; that password value is never printed (only its
-storage path is, when useful for chaining). The full intended pipeline —
-generate/obtain the cert in the isolated directory → `--convert-to-pfx` →
-`az containerapp env certificate upload` → verify with `verify.mjs`'s TLS
-check → securely remove the entire temp directory (venv, credentials file,
-and all Certbot state together) and, in manual mode, the ACME
-`_acme-challenge` TXT record — is what `--apply`'s printed instructions
-walk through; upload and verification require a live Azure session this
-task does not have.
+<path.pfx> [--password-file <path>]` remains a real, independently usable
+subcommand for packaging an already-obtained cert+key (e.g. from the
+manual-DNS-01 path): it exports a password-protected PFX via `openssl
+pkcs12 -export -passout file:...` (never `pass:...`, which would otherwise
+expose the password in the process list). If `--password-file` isn't
+given, a random password is generated into its own `0600` file inside the
+same private working directory; that password value is never printed
+(only its storage path is, when useful for chaining).
 
 The Azure-managed certificate for `api.curations.dev` cannot issue until
 the gateway's default-deny IP restriction is removed (DigiCert must reach
@@ -231,8 +239,21 @@ the app), so this temporary certificate is what bridges TLS during
 `cutover.mjs`'s `cut-api` step. `curations.dev`/`www.curations.dev` don't
 need this workflow at all — see `cutover.mjs` below.
 
+**Test seam:** `YOLO_CERT_PIP_BIN`/`YOLO_CERT_CERTBOT_BIN` override the
+venv's own absolute `pip`/`certbot` binary paths — empty (unset) in
+production, so `--apply` always uses the real venv's own binaries; only
+`scripts/azure/test/**` sets them, to fixture scripts
+(`test/fixtures/bin/pip`, `test/fixtures/bin/certbot`) that never reach
+PyPI/Let's Encrypt. The fixture `certbot` copies a fixed, pre-generated,
+self-signed test-only certificate/key pair
+(`test/fixtures/data/fake-api-{fullchain,privkey}.pem` — never a real key)
+into Certbot's expected layout, so its SHA-1 thumbprint is stable and
+known in advance, letting tests assert the thumbprint-verification step
+actually matches.
+
 **Never echoed, anywhere, under any mode:** the ACME TXT challenge value,
-the PFX export password, or the private key's file path.
+the Cloudflare API token, the PFX export password, or the private key's
+file path.
 
 ### verify.mjs
 
@@ -398,17 +419,32 @@ always leaves a resumable/rollback-able trail.
 **Cloudflare client:** `--fixture <path>` uses a local JSON file standing
 in for both Cloudflare zone state — DNS records, the Worker Custom Domain
 binding, and the untouched Advanced Certificate — and Azure Static Web Apps
-hostname-validation state; no network access. Omitting `--fixture` uses a
-**real** `RealCloudflareClient` authenticated from `CLOUDFLARE_API_TOKEN` /
-`CLOUDFLARE_ACCOUNT_ID` read from the environment (never a CLI flag, never
-logged) — this has been verified read-only against the live
-`curationsdev` Cloudflare account (see "API assumptions" below). The
-`validate-swa-*` steps are **not implemented** in real mode (Azure Static
-Web Apps hostname validation needs Azure credentials, out of scope for a
-Cloudflare-only token) — use `--fixture` for those, or wait for a real
-Azure SWA client. All the same safety gates (dry run default, `--apply` +
-exact `--confirm`, one mutation at a time, verify-after-each, rollback
-manifest) apply identically in real mode.
+hostname-validation state; no network access. Omitting `--fixture` uses
+`loadCloudflareClient`'s real-mode `ComposedRealClient`, which pairs two
+independent real clients behind one facade so callers never special-case
+which one handles a given method:
+
+- `RealCloudflareClient` — Cloudflare DNS/Workers, authenticated from
+  `CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID` read from the environment
+  (never a CLI flag, never logged) — this has been verified read-only
+  against the live `curationsdev` Cloudflare account (see "API
+  assumptions" below).
+- `RealAzureSwaHostnameClient` — the `validate-swa-*` steps, backed by the
+  already-authenticated `az` CLI (`az staticwebapp hostname set
+  --validation-method dns-txt-token --no-wait`, then `hostname show`
+  polling for the returned `validationToken`). This needs no Cloudflare
+  credential at all — it's a separate Azure resource concern — and feeds
+  the `dns-txt-token` value (not a secret; it is *designed* to be
+  published as a public DNS TXT record) directly into the exact same
+  `upsertDnsRecord(txtRecordName, { type: "TXT", content: validationToken })`
+  Cloudflare TXT-record path `--fixture` mode already exercises, without
+  ever logging the token itself. Overridable via `YOLO_STATIC_WEB_APP`/
+  `YOLO_RESOURCE_GROUP` env vars (matching `lib/config.sh`'s bash-side
+  defaults: `stapp-yolo-prod`/`rg-yolo-prod`).
+
+All the same safety gates (dry run default, `--apply` + exact `--confirm`,
+one mutation at a time, verify-after-each, rollback manifest) apply
+identically in real mode.
 
 **Apply-mode preflight:** immediately after the `--apply --confirm
 curations.dev` gate passes, and before the *first* mutation is attempted,
@@ -457,8 +493,21 @@ by default.
   accepts a credentials file containing `dns_cloudflare_api_token = ...`
   and a `--dns-cloudflare-credentials <path>` flag alongside
   `--config-dir`/`--work-dir`/`--logs-dir` (per its published
-  documentation) — not exercised against a real `pip install` or `certbot
-  certonly` run in this task, since that step is still deferred.
+  documentation), and that the pinned `certbot==2.11.0`/
+  `certbot-dns-cloudflare==2.11.0` versions are current, compatible
+  releases at install time — bump deliberately, not implicitly, once a
+  newer pinned pair is verified. Also assumes `az containerapp env
+  certificate upload` accepts `--certificate-name <name>` to pin the
+  resulting resource's name (confirmed against Azure CLI's published
+  reference, not against a live upload), and that
+  `--certificate-password` has no file-based alternative (an inherent
+  interface limitation, not a choice made here) — none of the
+  install/issue/upload/verify sequence has been exercised against real
+  PyPI/Let's Encrypt/Azure in this task; only against
+  `test/fixtures/bin/pip`/`test/fixtures/bin/certbot` and the fixture
+  `az` binary. Re-verify all of the above (including that the real
+  `certbot certonly` CLI's flag names/behavior exactly match what this
+  script assumes) once a real, authorized issuance is performed.
 - `cutover.mjs`'s `set-default-domain` step assumes that, as of this
   writing, the Azure CLI has **no documented command** for marking a
   Static Web Apps custom domain as the default (the setting that makes
@@ -488,16 +537,22 @@ by default.
   domain, and that AAAA add/remove timing is not necessarily instantaneous
   (hence the bounded polls in `cut-api` and rollback's `restore-api`) —
   neither of those has been exercised for real either.
-- `cutover.mjs`'s SWA prevalidation steps are designed against
-  `az staticwebapp hostname set --validation-method dns-txt-token` and
+- `cutover.mjs`'s `RealAzureSwaHostnameClient` targets `az staticwebapp
+  hostname set --validation-method dns-txt-token --no-wait` and
   `az staticwebapp hostname show` (to poll status and read the returned
-  validation token), and assume the TXT record name Azure expects is
+  `validationToken`), and assumes the TXT record name Azure expects is
   `_dnsauth.<hostname>` for both the apex and `www` (confirmed against
   Azure's Static Web Apps custom-domain documentation, but not against a
-  live `az staticwebapp` resource in this task). Add a real
-  `AzureSwaHostnameClient` implementing the same
-  `requestSwaHostnameValidation`/`getSwaHostnameStatus` shape as
-  `FixtureCloudflareClient` before any production run.
+  live `az staticwebapp` resource in this task). `validationToken`'s exact
+  format is also unconfirmed live — some Azure CLI/API versions have been
+  observed to return the bare token value, others the full
+  zone-file-style TXT line (e.g. `_dnsauth.host. IN TXT "token"`) —
+  `extractSwaValidationTokenValue` defensively extracts just the value in
+  the latter case, but this is unverified against a real resource. The
+  `status` field's real value vocabulary (this tool only checks for the
+  literal string `"Ready"`) is likewise assumed, not confirmed live.
+  Re-verify all of the above once a real `stapp-yolo-prod` Static Web App
+  resource exists.
 - `reconcile-scores.mjs`'s real Cosmos mode assumes `@azure/cosmos`'s
   `CosmosClient` accepts an `aadCredentials` option backed by a
   `TokenCredential` from `@azure/identity` (either

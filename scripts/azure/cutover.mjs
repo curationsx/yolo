@@ -87,20 +87,22 @@
 //                       a local JSON file standing in for both Cloudflare
 //                       zone state and Azure Static Web Apps
 //                       hostname-validation state. No network access.
-//   (no --fixture)     Real mode: authenticates to the real Cloudflare API
-//                       using `CLOUDFLARE_API_TOKEN` and
-//                       `CLOUDFLARE_ACCOUNT_ID` read from the environment
-//                       (never a CLI flag, never logged). The
-//                       `validate-swa-*` steps are NOT implemented in this
-//                       mode (Azure SWA hostname validation is out of
-//                       scope for a Cloudflare-only token) -- use
-//                       --fixture for those, or --rehearse against staging
-//                       hostnames, until a real Azure SWA client exists.
-//                       All the same safety gates (dry run default,
-//                       --apply + exact --confirm, one mutation at a time,
-//                       verify-after-each, rollback manifest) still apply
-//                       in real mode; nothing about them changes just
-//                       because real credentials are available.
+//   (no --fixture)     Real mode: DNS/Workers mutations authenticate to
+//                       the real Cloudflare API using `CLOUDFLARE_API_TOKEN`
+//                       and `CLOUDFLARE_ACCOUNT_ID` read from the
+//                       environment (never a CLI flag, never logged). The
+//                       `validate-swa-*` steps are handled by a separate,
+//                       composed `RealAzureSwaHostnameClient` (see below)
+//                       backed by the already-authenticated `az` CLI
+//                       (`az staticwebapp hostname set --no-wait` then
+//                       `hostname show` polling) -- an Azure Static Web
+//                       Apps concern, not a Cloudflare one, so it needs no
+//                       Cloudflare credential at all. All the same safety
+//                       gates (dry run default, --apply + exact --confirm,
+//                       one mutation at a time, verify-after-each, rollback
+//                       manifest) still apply in real mode; nothing about
+//                       them changes just because real credentials are
+//                       available.
 //
 // Usage:
 //   node scripts/azure/cutover.mjs --fixture <path> --acceptance <path>
@@ -110,8 +112,12 @@
 //   node scripts/azure/cutover.mjs --rollback <manifest-path> --fixture <path>
 //                        [--apply --confirm curations.dev] [--json]
 import fs from "node:fs";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { parseArgs, CliArgError } from "./lib/cli-args.mjs";
 import { resolveStateDir, writeManifest, readManifest, manifestFileName } from "./lib/manifest-store.mjs";
+
+const execFileAsync = promisify(execFile);
 
 export class CloudflareApiError extends Error {
   constructor(message, { status, errors } = {}) {
@@ -133,10 +139,10 @@ export class CloudflareApiError extends Error {
  *
  * SWA hostname prevalidation (`requestSwaHostnameValidation` /
  * `getSwaHostnameStatus`) is an Azure Static Web Apps concern, not a
- * Cloudflare one. This client intentionally does NOT fabricate that state
- * -- it throws a clear error directing the operator to `--fixture` for the
- * `validate-swa-*` steps until a real Azure SWA client exists (see the
- * README's "API assumptions").
+ * Cloudflare one -- this client intentionally does not implement it at
+ * all. See `RealAzureSwaHostnameClient` and `ComposedRealClient` below for
+ * the real (`az` CLI-backed) implementation `loadCloudflareClient`
+ * composes it with.
  */
 export class RealCloudflareClient {
   constructor({ apiToken, accountId, apexDomain = "curations.dev", fetchImpl = fetch } = {}) {
@@ -282,17 +288,158 @@ export class RealCloudflareClient {
       zoneId: created.zone_id,
     };
   }
+}
 
-  async requestSwaHostnameValidation() {
-    throw new Error(
-      "RealCloudflareClient does not implement Azure Static Web Apps hostname validation (that is an Azure, not Cloudflare, concern). Use --fixture for the validate-swa-* steps until a real Azure SWA client is built."
-    );
+/**
+ * Normalizes `az staticwebapp hostname show`'s `validationToken` field.
+ * Azure CLI/API versions have been observed to return either the bare
+ * dns-txt-token value, or the full zone-file-style TXT record line (e.g.
+ * `_dnsauth.host. IN TXT "token-value"`) -- extract just the value in the
+ * latter case so it can be published directly as a Cloudflare TXT record's
+ * `content` without any further parsing at the call site. Unverified
+ * against a live Azure Static Web Apps resource (see README "API
+ * assumptions"); this defensive extraction is a no-op (returns the input
+ * unchanged) for a bare-token response.
+ */
+export function extractSwaValidationTokenValue(rawValidationToken) {
+  if (typeof rawValidationToken !== "string") return rawValidationToken;
+  const match = rawValidationToken.match(/TXT\s+"?([^"\s]+)"?\s*$/i);
+  return match ? match[1] : rawValidationToken;
+}
+
+/**
+ * Real Azure Static Web Apps hostname-validation client, backed by the
+ * `az staticwebapp hostname set`/`show` CLI commands. This is a DIFFERENT
+ * Azure resource concern than RealCloudflareClient (Cloudflare DNS/Workers
+ * only) -- composed together by `loadCloudflareClient`'s real-mode branch
+ * (see ComposedRealClient below) into a single facade object so
+ * runCutover/runRollback never need to special-case which underlying
+ * client a given method call actually belongs to.
+ *
+ * Never reads, logs, or throws with a secret: the `dns-txt-token`
+ * validation token Azure returns is not a secret -- it is *designed* to be
+ * published as a public DNS TXT record, exactly the value this method
+ * feeds into the existing Cloudflare TXT-record path
+ * (`upsertDnsRecord(txtRecordName, { type: "TXT", content: validationToken })`)
+ * that `runCutover`'s `validate-swa-*` step already calls identically for
+ * both fixture and real clients.
+ */
+export class RealAzureSwaHostnameClient {
+  constructor({
+    staticWebAppName = "stapp-yolo-prod",
+    resourceGroup = "rg-yolo-prod",
+    execFileImpl = execFileAsync,
+  } = {}) {
+    this.staticWebAppName = staticWebAppName;
+    this.resourceGroup = resourceGroup;
+    this._execFile = execFileImpl;
   }
 
-  async getSwaHostnameStatus() {
-    throw new Error(
-      "RealCloudflareClient does not implement Azure Static Web Apps hostname status checks (that is an Azure, not Cloudflare, concern). Use --fixture for the validate-swa-* steps until a real Azure SWA client is built."
-    );
+  async _hostnameShow(hostname) {
+    try {
+      const { stdout } = await this._execFile("az", [
+        "staticwebapp",
+        "hostname",
+        "show",
+        "--name",
+        this.staticWebAppName,
+        "--resource-group",
+        this.resourceGroup,
+        "--hostname",
+        hostname,
+        "--output",
+        "json",
+      ]);
+      return JSON.parse(stdout);
+    } catch {
+      // `az` exits non-zero (a ResourceNotFound-shaped error) before this
+      // hostname has ever been registered via `hostname set` -- treat that
+      // as "not requested yet" rather than a hard failure, so the first
+      // requestSwaHostnameValidation call proceeds normally.
+      return null;
+    }
+  }
+
+  // `--no-wait`: this call must return as soon as Azure accepts the
+  // request and begins issuing a validation token, never block until
+  // validation completes -- that's what getSwaHostnameStatus's poll
+  // (waitForSwaHostnameReady) is for. Idempotent on Azure's side: calling
+  // this again for an already-pending hostname is a harmless no-op.
+  async requestSwaHostnameValidation(hostname) {
+    await this._execFile("az", [
+      "staticwebapp",
+      "hostname",
+      "set",
+      "--name",
+      this.staticWebAppName,
+      "--resource-group",
+      this.resourceGroup,
+      "--hostname",
+      hostname,
+      "--validation-method",
+      "dns-txt-token",
+      "--no-wait",
+    ]);
+
+    const existing = await this._hostnameShow(hostname);
+    const rawToken = existing && existing.validationToken;
+    if (!rawToken) {
+      throw new Error(
+        `Azure has not yet returned a dns-txt-token validation token for '${hostname}' (this is a normal, brief delay ` +
+          "after 'az staticwebapp hostname set --no-wait' -- retry shortly)."
+      );
+    }
+    return { validationToken: extractSwaValidationTokenValue(rawToken), txtRecordName: swaValidationRecordName(hostname) };
+  }
+
+  async getSwaHostnameStatus(hostname) {
+    const existing = await this._hostnameShow(hostname);
+    if (!existing) return "NotRequested";
+    return existing.status || "Validating";
+  }
+}
+
+/**
+ * Composes RealCloudflareClient (Cloudflare DNS/Workers) and
+ * RealAzureSwaHostnameClient (Azure Static Web Apps hostname validation)
+ * into one object implementing the full client interface
+ * runCutover/runRollback expect. These are two genuinely distinct
+ * Azure/Cloudflare resource concerns in production -- this facade exists
+ * purely so call sites never need to know or care which underlying client
+ * actually serves a given method (the same reason FixtureCloudflareClient
+ * combines both into one JSON file for local/offline convenience).
+ */
+export class ComposedRealClient {
+  constructor(cloudflareClient, swaClient) {
+    this.cloudflareClient = cloudflareClient;
+    this.swaClient = swaClient;
+  }
+  preflight() {
+    return this.cloudflareClient.preflight();
+  }
+  getDnsRecord(hostname) {
+    return this.cloudflareClient.getDnsRecord(hostname);
+  }
+  upsertDnsRecord(hostname, options) {
+    return this.cloudflareClient.upsertDnsRecord(hostname, options);
+  }
+  deleteDnsRecord(hostname) {
+    return this.cloudflareClient.deleteDnsRecord(hostname);
+  }
+  getWorkerCustomDomain(hostname) {
+    return this.cloudflareClient.getWorkerCustomDomain(hostname);
+  }
+  removeWorkerCustomDomain(hostname) {
+    return this.cloudflareClient.removeWorkerCustomDomain(hostname);
+  }
+  attachWorkerCustomDomain(hostname, options) {
+    return this.cloudflareClient.attachWorkerCustomDomain(hostname, options);
+  }
+  requestSwaHostnameValidation(hostname) {
+    return this.swaClient.requestSwaHostnameValidation(hostname);
+  }
+  getSwaHostnameStatus(hostname) {
+    return this.swaClient.getSwaHostnameStatus(hostname);
   }
 }
 
@@ -980,7 +1127,15 @@ export function loadCloudflareClient(values, env = process.env) {
   const apiToken = env.CLOUDFLARE_API_TOKEN;
   const accountId = env.CLOUDFLARE_ACCOUNT_ID;
   if (apiToken && accountId) {
-    return new RealCloudflareClient({ apiToken, accountId });
+    const cloudflareClient = new RealCloudflareClient({ apiToken, accountId });
+    // Matches lib/config.sh's YOLO_STATIC_WEB_APP/YOLO_RESOURCE_GROUP
+    // defaults exactly, and is overridable the same way for consistency
+    // across this lane's bash and Node tooling.
+    const swaClient = new RealAzureSwaHostnameClient({
+      staticWebAppName: env.YOLO_STATIC_WEB_APP || "stapp-yolo-prod",
+      resourceGroup: env.YOLO_RESOURCE_GROUP || "rg-yolo-prod",
+    });
+    return new ComposedRealClient(cloudflareClient, swaClient);
   }
   throw new Error(
     "Either --fixture <path>, or both CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID environment variables, are required."

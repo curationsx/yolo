@@ -645,21 +645,77 @@ assert_not_contains "certificate.sh --apply never prints a TXT challenge value" 
 after_apply_count=$(find "$SCRATCH" -maxdepth 1 -name 'yolo-cert.*' 2>/dev/null | wc -l | tr -d ' ')
 assert_exit_code "certificate.sh --apply cleans up its isolated working directory" "$before_count" "$after_apply_count"
 
-echo "-- --apply (Cloudflare token present) prepares an isolated venv + 0600 credentials file, never prints the token, and cleans up --"
+echo "-- --apply (Cloudflare token present) really installs pinned certbot, issues, packages, uploads, and verifies via fixtures -- never prints secrets, and cleans up --"
 before_cf_count=$(find "$SCRATCH" -maxdepth 1 -name 'yolo-cert.*' 2>/dev/null | wc -l | tr -d ' ')
 fake_token="fixture-cloudflare-token-$$-do-not-use"
-out="$(CLOUDFLARE_API_TOKEN="$fake_token" "${AZURE_DIR}/certificate.sh" --apply --confirm issue-api-curations-dev 2>&1)"
+ledger="${SCRATCH}/certificate-apply-cf.ledger"
+: > "$ledger"
+out="$(AZ_LEDGER="$ledger" \
+  CLOUDFLARE_API_TOKEN="$fake_token" \
+  YOLO_CERT_PIP_BIN="${TEST_DIR}/fixtures/bin/pip" \
+  YOLO_CERT_CERTBOT_BIN="${TEST_DIR}/fixtures/bin/certbot" \
+  AZ_CERT_THUMBPRINT="A33D7D8B3845319BF577C7040C06C1F007EABE60" \
+  "${AZURE_DIR}/certificate.sh" --apply --confirm issue-api-curations-dev 2>&1)"
 code=$?
-assert_exit_code "certificate.sh --apply (Cloudflare plugin, deferred) exits 0" 0 "$code"
+assert_exit_code "certificate.sh --apply (Cloudflare plugin) exits 0" 0 "$code"
 assert_contains "certificate.sh --apply detects CLOUDFLARE_API_TOKEN and prefers the plugin" "$out" "certbot-dns-cloudflare"
 assert_contains "certificate.sh --apply prepares an isolated venv" "$out" "virtual environment"
 assert_contains "certificate.sh --apply creates a 0600 Cloudflare credentials file" "$out" "cloudflare-credentials.ini"
+assert_contains "certificate.sh --apply installs the pinned certbot spec" "$(cat "$ledger")" "certbot==2.11.0"
+assert_contains "certificate.sh --apply installs the pinned certbot-dns-cloudflare spec" "$(cat "$ledger")" "certbot-dns-cloudflare==2.11.0"
+assert_contains "certificate.sh --apply issues via 'certbot certonly'" "$(cat "$ledger")" "certonly"
+assert_contains "certificate.sh --apply uploads the certificate to the Container Apps environment" "$(cat "$ledger")" "certificate upload"
+assert_contains "certificate.sh --apply verifies via 'certificate list'" "$(cat "$ledger")" "certificate list"
+assert_contains "certificate.sh --apply confirms the uploaded thumbprint matches the local PFX" "$out" "Verified: the uploaded certificate's thumbprint matches"
 assert_not_contains "certificate.sh --apply never prints the Cloudflare token value" "$out" "$fake_token"
 after_cf_count=$(find "$SCRATCH" -maxdepth 1 -name 'yolo-cert.*' 2>/dev/null | wc -l | tr -d ' ')
 assert_exit_code "certificate.sh --apply (Cloudflare plugin) cleans up its isolated working directory" "$before_cf_count" "$after_cf_count"
 
-echo "-- --apply --keep-workdir (Cloudflare token) writes a real 0600 credentials file with the correct content --"
-out="$(CLOUDFLARE_API_TOKEN="$fake_token" "${AZURE_DIR}/certificate.sh" --apply --confirm issue-api-curations-dev --keep-workdir 2>&1)"
+echo "-- --apply (Cloudflare token present) warns (but does not fail) when the reported thumbprint does not match --"
+ledger="${SCRATCH}/certificate-apply-cf-mismatch.ledger"
+: > "$ledger"
+out="$(AZ_LEDGER="$ledger" \
+  CLOUDFLARE_API_TOKEN="$fake_token" \
+  YOLO_CERT_PIP_BIN="${TEST_DIR}/fixtures/bin/pip" \
+  YOLO_CERT_CERTBOT_BIN="${TEST_DIR}/fixtures/bin/certbot" \
+  AZ_CERT_THUMBPRINT="0000000000000000000000000000000000000MISMATCH" \
+  "${AZURE_DIR}/certificate.sh" --apply --confirm issue-api-curations-dev 2>&1)"
+code=$?
+assert_exit_code "certificate.sh --apply still exits 0 on a thumbprint mismatch (non-fatal, operator must verify manually)" 0 "$code"
+assert_contains "certificate.sh --apply warns when the thumbprint does not match" "$out" "Could not confirm the uploaded certificate's thumbprint"
+
+echo "-- --apply (Cloudflare token present) surfaces a pip install failure clearly and never uploads anything --"
+ledger="${SCRATCH}/certificate-apply-cf-pipfail.ledger"
+: > "$ledger"
+out="$(AZ_LEDGER="$ledger" \
+  CLOUDFLARE_API_TOKEN="$fake_token" \
+  YOLO_CERT_PIP_BIN="${TEST_DIR}/fixtures/bin/pip" \
+  YOLO_CERT_CERTBOT_BIN="${TEST_DIR}/fixtures/bin/certbot" \
+  PIP_FIXTURE_FAIL=1 \
+  "${AZURE_DIR}/certificate.sh" --apply --confirm issue-api-curations-dev 2>&1)"
+code=$?
+assert_exit_code "certificate.sh --apply refuses when pinned pip install fails" 1 "$code"
+assert_not_contains "certificate.sh --apply never uploads after a failed pip install" "$(cat "$ledger")" "certificate upload"
+
+echo "-- --apply (Cloudflare token present) surfaces a certbot ACME failure clearly and never uploads anything --"
+ledger="${SCRATCH}/certificate-apply-cf-certbotfail.ledger"
+: > "$ledger"
+out="$(AZ_LEDGER="$ledger" \
+  CLOUDFLARE_API_TOKEN="$fake_token" \
+  YOLO_CERT_PIP_BIN="${TEST_DIR}/fixtures/bin/pip" \
+  YOLO_CERT_CERTBOT_BIN="${TEST_DIR}/fixtures/bin/certbot" \
+  CERTBOT_FIXTURE_FAIL=1 \
+  "${AZURE_DIR}/certificate.sh" --apply --confirm issue-api-curations-dev 2>&1)"
+code=$?
+assert_exit_code "certificate.sh --apply refuses when certbot issuance fails" 1 "$code"
+assert_not_contains "certificate.sh --apply never uploads after a failed certbot issuance" "$(cat "$ledger")" "certificate upload"
+
+echo "-- --apply --keep-workdir (Cloudflare token) writes a real 0600 credentials file, PFX, and password with the correct content --"
+out="$(CLOUDFLARE_API_TOKEN="$fake_token" \
+  YOLO_CERT_PIP_BIN="${TEST_DIR}/fixtures/bin/pip" \
+  YOLO_CERT_CERTBOT_BIN="${TEST_DIR}/fixtures/bin/certbot" \
+  AZ_CERT_THUMBPRINT="A33D7D8B3845319BF577C7040C06C1F007EABE60" \
+  "${AZURE_DIR}/certificate.sh" --apply --confirm issue-api-curations-dev --keep-workdir 2>&1)"
 kept_cert_dir="$(find "$SCRATCH" -maxdepth 1 -name 'yolo-cert.*' | tail -n1)"
 if [[ -n "$kept_cert_dir" && -f "${kept_cert_dir}/cloudflare-credentials.ini" ]]; then
   ok "certificate.sh --apply --keep-workdir leaves the Cloudflare credentials file behind"
@@ -670,6 +726,18 @@ if [[ -n "$kept_cert_dir" && -f "${kept_cert_dir}/cloudflare-credentials.ini" ]]
     ok "certificate.sh creates a real Python venv inside the working directory"
   else
     bad "certificate.sh should have created a real Python venv inside the working directory"
+  fi
+  pfx_file="$(find "$kept_cert_dir" -maxdepth 1 -name '*.pfx' | head -1)"
+  if [[ -n "$pfx_file" ]]; then
+    ok "certificate.sh --apply --keep-workdir leaves the packaged PFX behind"
+    assert_file_mode "certificate.sh PFX file is 0600" "$pfx_file" "600"
+  else
+    bad "certificate.sh --apply --keep-workdir should have left a packaged PFX behind"
+  fi
+  if [[ -f "${kept_cert_dir}/pfx.pass" ]]; then
+    assert_file_mode "certificate.sh PFX password file is 0600" "${kept_cert_dir}/pfx.pass" "600"
+  else
+    bad "certificate.sh --apply --keep-workdir should have left a PFX password file behind"
   fi
   rm -rf -- "$kept_cert_dir"
 else
