@@ -408,17 +408,26 @@ by default.
   `count`/`updated_at`, partitioned on `scope`. `target`/`viewerId`/
   `direction` are this tool's own internal, in-memory diff-computation
   names (`computeReconciliation`'s parameter shape) — they are translated
-  to/from the real field names at the query/upsert boundary in
-  `runCosmosMode` and never appear in a persisted document. An earlier
-  revision of the write-back path incorrectly persisted `{id, target,
-  count}` instead of `{id, scope: "global", target_id, count,
-  updated_at}`, which would have broken the container's partition-key
-  routing and made repeat reconciliation runs unable to read their own
-  prior writes back correctly — this has been corrected to match the
-  confirmed real shape exactly; still unexercised against a live Cosmos
-  account (`@azure/cosmos` is an intentional optional dependency, not
-  installed by default — see above), so re-verify field behavior against
-  a real container once `@azure/cosmos` is available.
+  to/from the real field names at the query/upsert boundary and never
+  appear in a persisted document. An earlier revision of the write-back
+  path incorrectly persisted `{id, target, count}` instead of `{id, scope:
+  "global", target_id, count, updated_at}`, which would have broken the
+  container's partition-key routing and made repeat reconciliation runs
+  unable to read their own prior writes back correctly — this has been
+  corrected to match the confirmed real shape exactly.
+  `runCosmosMode`'s query/diff/write logic is factored into three exported
+  functions — `fetchVotesFromContainer`, `fetchLegacyScoresFromContainer`,
+  `writeReconciledScores` (composed by `reconcileFromContainers`) —
+  specifically so `scripts/azure/test/reconcile-scores.test.mjs` can
+  exercise this exact query text (including the
+  `NOT IS_DEFINED(c.doc_type) OR c.doc_type = 'vote'` legacy-absorption
+  predicate) and the exact write-back shape against a lightweight fake
+  container (`test/helpers/fake-cosmos-container.mjs`) that seeds a true
+  legacy-shaped vote doc with no `doc_type` field at all and proves it is
+  absorbed — without installing `@azure/cosmos`/`@azure/identity` or
+  reaching a live account. Still unexercised against a **live** Cosmos
+  account; re-verify once `@azure/cosmos` is installed and a real account
+  exists.
 - `reconcile-scores.mjs`'s post-cutover wait gate assumes Cloudflare's
   proxied DNS TTL for `api.curations.dev` remains `300` seconds
   (`CLOUDFLARE_DNS_TTL_SECONDS`); re-check the live Cloudflare DNS record's

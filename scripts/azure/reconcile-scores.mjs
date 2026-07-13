@@ -230,6 +230,104 @@ async function runFixtureMode(values) {
   return report;
 }
 
+/**
+ * Fetches authoritative votes from a real (or fake, test-injected)
+ * `votes` container. Counts BOTH legacy Cloudflare-Worker-written vote
+ * documents -- shaped `{id, target_id, user_id, created_at}` with no
+ * `doc_type` field at all (agent-worker/src/vote-guard.ts:237-243) -- and
+ * Azure-native vote documents (`doc_type: "vote"`,
+ * agent-worker/src/platform/azure/community.ts), while excluding the
+ * same-partition score metadata document (`id: "score"`,
+ * `doc_type: "score"`). Filtering on `doc_type = 'vote'` alone would
+ * silently miss exactly the late legacy writes this reconciliation exists
+ * to absorb during the post-cutover DNS TTL race window. There is no
+ * stored "direction" in the real schema -- a vote document's mere
+ * existence is the vote (no downvote concept) -- so every match
+ * contributes +1; `direction` below is purely this tool's own internal
+ * diff-computation representation, never a persisted field.
+ */
+export async function fetchVotesFromContainer(votesContainer) {
+  const { resources } = await votesContainer.items
+    .query({
+      query:
+        "SELECT c.target_id AS target, c.user_id AS viewerId FROM c " +
+        "WHERE (NOT IS_DEFINED(c.doc_type) OR c.doc_type = @voteType) AND c.id != @scoreId",
+      parameters: [
+        { name: "@voteType", value: "vote" },
+        { name: "@scoreId", value: "score" },
+      ],
+    })
+    .fetchAll();
+  return resources.map((resource) => ({ target: resource.target, viewerId: resource.viewerId, direction: 1 }));
+}
+
+/**
+ * Fetches the legacy (Cloudflare rollback) `scores` mirror from a real (or
+ * fake, test-injected) `scores` container. Legacy/score-mirror documents
+ * use `target_id`, not `target` (agent-worker/src/community.ts's
+ * `ScoreDoc`; identical shape in
+ * agent-worker/src/platform/azure/community.ts's same-partition score
+ * metadata doc).
+ */
+export async function fetchLegacyScoresFromContainer(scoresContainer) {
+  const { resources } = await scoresContainer.items.query("SELECT c.target_id AS target, c.count FROM c").fetchAll();
+  return resources;
+}
+
+/**
+ * Writes reconciled counts back to the legacy `scores` container. Document
+ * shape and partition key MUST match the real legacy scores container
+ * exactly (agent-worker/src/community.ts's `ScoreDoc`; identical shape
+ * written by agent-worker/src/vote-guard.ts:272-280 and by
+ * agent-worker/src/platform/azure/community.ts's
+ * `reconcileLegacyScoresContainer`): `id` is the target id itself,
+ * `scope: "global"` is the (only) partition key value the container uses,
+ * `target_id` duplicates `id` as a queryable field, and `updated_at` is a
+ * plain ISO timestamp. Omitting `scope`/`target_id` would write a document
+ * the SDK cannot partition correctly and that the rest of the codebase can
+ * never read back -- this is the exact shape `fetchLegacyScoresFromContainer`
+ * reads above, so a repeat reconciliation run converges instead of
+ * drifting.
+ */
+export async function writeReconciledScores(scoresContainer, diffs) {
+  for (const diff of diffs) {
+    // One point write per corrected target; bounded, sequential, and
+    // idempotent (re-running converges on the same authoritative count,
+    // whether it's the first backfill, a post-cutover late-vote
+    // absorption pass, or a repeat of either).
+    await scoresContainer.items.upsert(
+      {
+        id: diff.target,
+        scope: "global",
+        target_id: diff.target,
+        count: diff.authoritativeCount,
+        updated_at: new Date().toISOString(),
+      },
+      { partitionKey: "global" }
+    );
+  }
+}
+
+/**
+ * Runs the full query -> diff -> optional-write reconciliation against
+ * already-constructed `votes`/`scores` container handles -- real Cosmos
+ * containers in production, or a lightweight fake in tests, so this exact
+ * logic (including the doc_type/legacy-absorption predicate above) is
+ * exercised without requiring a live Cosmos account or the optional
+ * `@azure/cosmos` dependency to be installed.
+ */
+export async function reconcileFromContainers(votesContainer, scoresContainer, { target, apply } = {}) {
+  const votes = await fetchVotesFromContainer(votesContainer);
+  const legacyScores = await fetchLegacyScoresFromContainer(scoresContainer);
+  const diffs = computeReconciliation(votes, legacyScores, target || undefined);
+  const report = { mode: "cosmos", dryRun: !apply, diffCount: diffs.length, diffs, applied: false };
+  if (apply) {
+    await writeReconciledScores(scoresContainer, diffs);
+    report.applied = true;
+  }
+  return report;
+}
+
 async function runCosmosMode(values) {
   if (!values["cosmos-endpoint"]) {
     throw new Error("--cosmos-endpoint (or --fixture) is required.");
@@ -259,79 +357,10 @@ async function runCosmosMode(values) {
   const votesContainer = database.container(values["votes-container"]);
   const scoresContainer = database.container(values["scores-container"]);
 
-  const votes = [];
-  {
-    // Real vote documents are shaped `{id, target_id, user_id, created_at}`
-    // (see agent-worker/src/vote-guard.ts:237-243, the legacy Cloudflare
-    // durable path) with no `doc_type` field at all, or `{..., doc_type:
-    // "vote"}` for documents written by the Azure gateway
-    // (agent-worker/src/platform/azure/community.ts). There is no stored
-    // "direction": a vote document's mere existence is the vote (there is
-    // no downvote concept in this schema), so it always contributes +1.
-    // The same-partition score metadata document (`id: "score", doc_type:
-    // "score"`) must never be counted as a vote.
-    const { resources } = await votesContainer.items
-      .query({
-        query:
-          "SELECT c.target_id AS target, c.user_id AS viewerId FROM c " +
-          "WHERE (NOT IS_DEFINED(c.doc_type) OR c.doc_type = @voteType) AND c.id != @scoreId",
-        parameters: [
-          { name: "@voteType", value: "vote" },
-          { name: "@scoreId", value: "score" },
-        ],
-      })
-      .fetchAll();
-    votes.push(...resources.map((resource) => ({ target: resource.target, viewerId: resource.viewerId, direction: 1 })));
-  }
-  const legacyScores = [];
-  {
-    // Legacy/score-mirror documents use `target_id`, not `target`
-    // (agent-worker/src/community.ts's `ScoreDoc`, `agent-worker/src/
-    // platform/azure/community.ts`'s same-partition score metadata doc).
-    const { resources } = await scoresContainer.items
-      .query("SELECT c.target_id AS target, c.count FROM c")
-      .fetchAll();
-    legacyScores.push(...resources);
-  }
-
-  const diffs = computeReconciliation(votes, legacyScores, values.target || undefined);
-  const report = { mode: "cosmos", dryRun: !values.apply, diffCount: diffs.length, diffs, applied: false };
-
-  if (values.apply) {
-    for (const diff of diffs) {
-      // One point write per corrected target; bounded, sequential, and
-      // idempotent (re-running converges on the same authoritative count,
-      // whether it's the first backfill, a post-cutover late-vote
-      // absorption pass, or a repeat of either).
-      //
-      // Document shape and partition key MUST match the real legacy
-      // scores container exactly (agent-worker/src/community.ts's
-      // `ScoreDoc`; identical shape written by
-      // agent-worker/src/vote-guard.ts:272-280 and by
-      // agent-worker/src/platform/azure/community.ts's
-      // `reconcileLegacyScoresContainer`): `id` is the target id itself,
-      // `scope: "global"` is the (only) partition key value the
-      // container uses, `target_id` duplicates `id` as a queryable
-      // field, and `updated_at` is a plain ISO timestamp. Omitting
-      // `scope`/`target_id` here previously wrote a document the SDK
-      // could not partition correctly and that the rest of the codebase
-      // could never read back — this is the exact shape read by
-      // `SELECT c.target_id AS target, c.count FROM c` above, so a
-      // repeat reconciliation run converges instead of drifting.
-      await scoresContainer.items.upsert(
-        {
-          id: diff.target,
-          scope: "global",
-          target_id: diff.target,
-          count: diff.authoritativeCount,
-          updated_at: new Date().toISOString(),
-        },
-        { partitionKey: "global" }
-      );
-    }
-    report.applied = true;
-  }
-  return report;
+  return reconcileFromContainers(votesContainer, scoresContainer, {
+    target: values.target || undefined,
+    apply: values.apply,
+  });
 }
 
 /**

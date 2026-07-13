@@ -5,7 +5,16 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
-import { computeReconciliation, checkMinimumWaitElapsed, resolveCutApiTimestamp, DEFAULT_POST_CUTOVER_MIN_WAIT_SECONDS } from "../reconcile-scores.mjs";
+import {
+  computeReconciliation,
+  checkMinimumWaitElapsed,
+  resolveCutApiTimestamp,
+  DEFAULT_POST_CUTOVER_MIN_WAIT_SECONDS,
+  fetchVotesFromContainer,
+  fetchLegacyScoresFromContainer,
+  reconcileFromContainers,
+} from "../reconcile-scores.mjs";
+import { FakeVotesContainer, FakeScoresContainer } from "./helpers/fake-cosmos-container.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SCRIPT = path.join(__dirname, "..", "reconcile-scores.mjs");
@@ -351,3 +360,97 @@ test("post-cutover reconciliation absorbs votes written late by the legacy Cloud
   );
   assert.equal(secondReport.diffCount, 0, "re-running after absorbing late votes must be idempotent");
 });
+
+// --- Real (non-fixture) Cosmos container schema tests ---------------------
+//
+// These exercise fetchVotesFromContainer/fetchLegacyScoresFromContainer/
+// reconcileFromContainers directly against a lightweight fake container
+// (see test/helpers/fake-cosmos-container.mjs), without needing the
+// optional @azure/cosmos/@azure/identity packages installed or a live
+// Cosmos account. This is the query/write logic runCosmosMode actually
+// runs in production -- the fixture-mode tests above exercise a fully
+// separate, self-contained JSON format and never touch this code path.
+
+test("fetchVotesFromContainer counts a true legacy-shaped vote doc (no doc_type field at all)", async () => {
+  const votes = new FakeVotesContainer().addLegacyVote("venue:the-wiltern", "user-1");
+  const result = await fetchVotesFromContainer(votes);
+  assert.deepEqual(result, [{ target: "venue:the-wiltern", viewerId: "user-1", direction: 1 }]);
+});
+
+test("fetchVotesFromContainer counts an Azure-native vote doc (doc_type: 'vote')", async () => {
+  const votes = new FakeVotesContainer().addAzureVote("venue:the-wiltern", "user-1");
+  const result = await fetchVotesFromContainer(votes);
+  assert.deepEqual(result, [{ target: "venue:the-wiltern", viewerId: "user-1", direction: 1 }]);
+});
+
+test("fetchVotesFromContainer counts legacy and Azure-native vote docs together, excluding the score metadata doc", async () => {
+  const votes = new FakeVotesContainer()
+    .addLegacyVote("venue:the-wiltern", "user-1")
+    .addAzureVote("venue:the-wiltern", "user-2")
+    .addScoreMetadataDoc("venue:the-wiltern", 999);
+  const result = await fetchVotesFromContainer(votes);
+  assert.equal(result.length, 2, "the score metadata document must never be counted as a vote");
+  const viewers = result.map((v) => v.viewerId).sort();
+  assert.deepEqual(viewers, ["user-1", "user-2"]);
+});
+
+test("reconcileFromContainers absorbs a true legacy-shaped (no doc_type) vote the legacy Cloudflare Worker wrote late", async () => {
+  const votes = new FakeVotesContainer()
+    .addAzureVote("venue:the-wiltern", "user-1")
+    .addAzureVote("venue:the-wiltern", "user-2");
+  const scores = new FakeScoresContainer([
+    { id: "venue:the-wiltern", scope: "global", target_id: "venue:the-wiltern", count: 2, updated_at: new Date().toISOString() },
+  ]);
+
+  // Pre-absorption: authoritative (2 Azure votes) already matches the mirror.
+  const before = await reconcileFromContainers(votes, scores, {});
+  assert.equal(before.diffCount, 0);
+
+  // The legacy Cloudflare Worker writes a genuinely legacy-shaped vote doc
+  // (no doc_type at all) during the post-cutover DNS TTL race window,
+  // without updating the score mirror.
+  votes.addLegacyVote("venue:the-wiltern", "user-3");
+
+  const after = await reconcileFromContainers(votes, scores, { apply: true });
+  assert.equal(after.diffCount, 1);
+  assert.equal(after.diffs[0].authoritativeCount, 3, "the late legacy-shaped vote must be counted");
+  assert.equal(after.applied, true);
+
+  const written = scores.docs.get("venue:the-wiltern");
+  assert.equal(written.count, 3);
+  assert.equal(written.scope, "global", "the write-back must carry the real partition key field");
+  assert.equal(written.target_id, "venue:the-wiltern", "the write-back must carry the real target_id field");
+
+  // Idempotent: re-running with no further votes must be a no-op that
+  // still reads back correctly (proves the write-back shape round-trips).
+  const again = await reconcileFromContainers(votes, scores, { apply: true });
+  assert.equal(again.diffCount, 0);
+});
+
+test("FakeScoresContainer rejects the old buggy write-back shape (regression guard for the missing-partition-key bug)", async () => {
+  // Proves the fake container would have caught the earlier bug where the
+  // write-back upserted {id, target, count} instead of the real
+  // {id, scope, target_id, count, updated_at} shape -- i.e. this test
+  // fails loudly if that regression is ever reintroduced.
+  const scores = new FakeScoresContainer();
+  await assert.rejects(
+    scores.items.upsert({ id: "venue:echoplex", target: "venue:echoplex", count: 3 }),
+    /missing the 'scope' partition key field/
+  );
+
+  // The actual (fixed) write-back path supplies the real shape and must
+  // succeed against the same container.
+  const votes = new FakeVotesContainer().addLegacyVote("venue:echoplex", "user-1");
+  const report = await reconcileFromContainers(votes, scores, { apply: true });
+  assert.equal(report.applied, true);
+  assert.equal(scores.docs.get("venue:echoplex").scope, "global");
+});
+
+test("fetchLegacyScoresFromContainer reads the real target_id-keyed legacy scores shape", async () => {
+  const scores = new FakeScoresContainer([
+    { id: "venue:echoplex", scope: "global", target_id: "venue:echoplex", count: 5, updated_at: new Date().toISOString() },
+  ]);
+  const result = await fetchLegacyScoresFromContainer(scores);
+  assert.deepEqual(result, [{ target: "venue:echoplex", count: 5 }]);
+});
+
