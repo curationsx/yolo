@@ -94,23 +94,26 @@ param foundryEndpoint string
 @description('Azure AI Foundry model deployment name, reused unchanged.')
 param foundryDeploymentName string = 'gpt-5.4-mini'
 
-@description('Cosmos SQL container name for community engagements. Matches agent-worker/wrangler.toml\'s COSMOS_CONTAINER.')
-param cosmosContainerName string = 'engagements'
+@description('Cosmos SQL container name for community engagements. Matches agent-worker/wrangler.toml\'s COSMOS_CONTAINER for production; routes to the isolated engagements-staging container (infra/modules/foundry-integration.bicep) for every non-production environmentName so no staging write can ever touch a live production engagement document.')
+param cosmosContainerName string = environmentName == 'production' ? 'engagements' : 'engagements-staging'
 
-@description('Cosmos SQL container name for votes. Matches wrangler.toml\'s COSMOS_VOTES_CONTAINER.')
-param cosmosVotesContainerName string = 'votes'
+@description('Cosmos SQL container name for votes. Matches wrangler.toml\'s COSMOS_VOTES_CONTAINER for production; routes to the isolated votes-staging container for every non-production environmentName -- see cosmosContainerName.')
+param cosmosVotesContainerName string = environmentName == 'production' ? 'votes' : 'votes-staging'
 
-@description('Cosmos SQL container name for score metadata. Matches wrangler.toml\'s COSMOS_SCORES_CONTAINER.')
-param cosmosScoresContainerName string = 'scores'
+@description('Cosmos SQL container name for score metadata. Matches wrangler.toml\'s COSMOS_SCORES_CONTAINER for production; routes to the isolated scores-staging container for every non-production environmentName -- see cosmosContainerName.')
+param cosmosScoresContainerName string = environmentName == 'production' ? 'scores' : 'scores-staging'
 
-@description('Cosmos SQL container name for community discussions. Matches wrangler.toml\'s COSMOS_DISCUSSIONS_CONTAINER.')
-param cosmosDiscussionsContainerName string = 'discussions'
+@description('Cosmos SQL container name for community discussions. Matches wrangler.toml\'s COSMOS_DISCUSSIONS_CONTAINER for production; routes to the isolated discussions-staging container for every non-production environmentName -- see cosmosContainerName.')
+param cosmosDiscussionsContainerName string = environmentName == 'production' ? 'discussions' : 'discussions-staging'
+
+@description('Cosmos SQL container name for gateway session/quota/grant state. Routes to the isolated gateway-state-staging container for every non-production environmentName -- see cosmosContainerName.')
+param cosmosGatewayStateContainerName string = environmentName == 'production' ? 'gateway-state' : 'gateway-state-staging'
 
 @description('Comma-separated software cookbook targets. Matches wrangler.toml\'s SOFTWARE_TARGETS exactly.')
 param softwareTargets string = 'zotero,ollama,hugging-face,n8n,langfuse,obsidian,sqlite,git,vs-code,pandoc,github,discourse,cloudflare,supabase'
 
-@description('Vote storage backend. Temporary sequencing gate: defaults to "kv" (legacy vote/scores path via managed-identity community binding) for every non-production environmentName, and "durable" only for production. Azure staging reuses the SAME live `votes` Cosmos container the production Cloudflare Worker reads today, and that Worker (as of this writing, confirmed via Cloudflare MCP) still runs an unfiltered `SELECT COUNT(1)` with no metadata-document exclusion predicate -- if azure-staging ran VOTE_BACKEND=durable, it would write co-located id:"score" metadata documents into that same container, and the still-unfixed Worker would miscount every vote query by counting those metadata docs as votes. Do not override this to "durable" for a non-production environmentName until ALL of: (1) PR #5 (the Worker fix) is merged, (2) the merged Worker is verified live in production with the exclusion predicate in place, and (3) any required metadata backfill has completed. Matches wrangler.toml\'s VOTE_BACKEND; config.ts only accepts "kv" or "durable".')
-param voteBackend string = environmentName == 'production' ? 'durable' : 'kv'
+@description('Vote storage backend. Always "durable" in every environment, including azure-staging: azure-staging now runs against its own fully isolated engagements-staging/votes-staging/scores-staging/discussions-staging/gateway-state-staging Cosmos containers (infra/modules/foundry-integration.bicep), never the shared production containers, so there is no live-data risk in exercising the real production durable transaction/CAS code path in staging too. (An earlier revision of this param temporarily gated staging to the legacy "kv" backend against the SHARED containers pending a Cloudflare Worker vote-count fix; that approach was superseded by container isolation, which is strictly safer and needs no such gate.) Matches wrangler.toml\'s VOTE_BACKEND; config.ts only accepts "kv" or "durable".')
+param voteBackend string = 'durable'
 
 @description('Copilot one-use grant connection TTL in seconds. Matches wrangler.toml\'s COPILOT_CONNECTION_TTL_SECONDS.')
 param copilotConnectionTtlSeconds string = '600'
@@ -173,6 +176,7 @@ module apps 'modules/apps.bicep' = {
     cosmosVotesContainerName: cosmosVotesContainerName
     cosmosScoresContainerName: cosmosScoresContainerName
     cosmosDiscussionsContainerName: cosmosDiscussionsContainerName
+    cosmosGatewayStateContainerName: cosmosGatewayStateContainerName
     softwareTargets: softwareTargets
     voteBackend: voteBackend
     copilotConnectionTtlSeconds: copilotConnectionTtlSeconds

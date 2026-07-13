@@ -61,19 +61,21 @@ name: AZURE DEPLOY
 # requests no Azure credential). No value is fabricated here; these do not
 # exist yet because rg-yolo-prod has not been created.
 #
-# VOTE_BACKEND sequencing gate (temporary, do not remove without reading
-# infra/runtime.bicep's voteBackend param description first): azure-staging
-# reuses the SAME live `votes` Cosmos container the production Cloudflare
-# Worker reads today. That Worker (confirmed via Cloudflare MCP as of this
-# writing) still runs an unfiltered `SELECT COUNT(1)` with no metadata
-# -document exclusion predicate. infra/runtime.bicep's voteBackend param
-# therefore defaults to "kv" (legacy path) for every non-production
-# environmentName and "durable" only for production -- this workflow does
-# not, and must not, pass an explicit voteBackend override for staging.
-# Durable mode may only become staging's default again after ALL of:
-# (1) PR #5 (the Worker fix) merges, (2) the merged Worker is verified live
-# in production with the exclusion predicate in place, and (3) any required
-# metadata backfill has completed.
+# Staging data isolation (do not remove without reading
+# infra/modules/foundry-integration.bicep's header comment first):
+# azure-staging never writes to the shared production
+# engagements/discussions/votes/scores/gateway-state Cosmos containers.
+# infra/runtime.bicep routes all five container-name parameters to their
+# own isolated *-staging containers whenever environmentName is not
+# "production" (engagements-staging, discussions-staging, votes-staging,
+# scores-staging, gateway-state-staging -- created by
+# infra/modules/foundry-integration.bicep). This is why VOTE_BACKEND can
+# safely stay "durable" in every environment, including staging: staging
+# now exercises the exact same production transaction/CAS code path, just
+# against data that can never affect a real production count or score.
+# This workflow does not, and must not, pass an explicit override for any
+# of the five container-name parameters or for voteBackend -- the Bicep
+# defaults are the single source of truth for this routing.
 
 on:
   pull_request:

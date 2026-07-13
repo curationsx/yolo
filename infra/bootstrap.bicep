@@ -321,6 +321,17 @@ output cosmosGatewayStateContainerId string = foundryIntegration.outputs.cosmosC
 output cosmosAccountEndpoint string = foundryIntegration.outputs.cosmosAccountEndpoint
 output foundryEndpoint string = foundryIntegration.outputs.cognitiveServicesEndpoint
 
+// Isolated azure-staging Cosmos containers -- see
+// infra/modules/foundry-integration.bicep for the full architecture
+// rationale (independent review correction: staging must never write to
+// the shared production engagements/discussions/votes/scores/gateway-state
+// containers, even under VOTE_BACKEND=kv).
+output cosmosEngagementsStagingContainerId string = foundryIntegration.outputs.cosmosEngagementsStagingContainerId
+output cosmosDiscussionsStagingContainerId string = foundryIntegration.outputs.cosmosDiscussionsStagingContainerId
+output cosmosVotesStagingContainerId string = foundryIntegration.outputs.cosmosVotesStagingContainerId
+output cosmosScoresStagingContainerId string = foundryIntegration.outputs.cosmosScoresStagingContainerId
+output cosmosGatewayStateStagingContainerId string = foundryIntegration.outputs.cosmosGatewayStateStagingContainerId
+
 output budgetDeployed bool = !empty(budgetContactEmails)
 // Explicit, machine-readable coverage status so nothing about budget
 // coverage is ever silently assumed by a script or a future reviewer:
