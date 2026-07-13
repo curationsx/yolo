@@ -814,3 +814,122 @@ test("RealCloudflareClient does not implement SWA hostname validation (Azure, no
   await assert.rejects(() => client.getSwaHostnameStatus("curations.dev"), /Azure Static Web Apps/);
 });
 
+// --- Cloudflare preflight: token/API access validated before any mutation ---
+
+test("RealCloudflareClient.preflight passes when both zone and account reads succeed", async () => {
+  const fetchImpl = mockCloudflareFetch((url) => {
+    if (url.pathname === "/client/v4/zones") return [{ id: "zone-123" }];
+    if (url.pathname === "/client/v4/accounts/acct-1/workers/domains") return [];
+    throw new Error(`unexpected path: ${url.pathname}`);
+  });
+  const client = new RealCloudflareClient({ apiToken: "t", accountId: "acct-1", fetchImpl });
+  const result = await client.preflight();
+  assert.equal(result.ok, true);
+  assert.equal(result.zoneId, "zone-123");
+  assert.equal(result.accountId, "acct-1");
+});
+
+test("RealCloudflareClient.preflight fails clearly (and never leaks the token) when zone access fails", async () => {
+  const secretToken = "cf-secret-preflight-token";
+  const fetchImpl = async () => ({ json: async () => ({ success: false, errors: [{ code: 1000, message: "Invalid API Token" }] }) });
+  const client = new RealCloudflareClient({ apiToken: secretToken, accountId: "acct-1", fetchImpl });
+  await assert.rejects(() => client.preflight(), /could not resolve the zone/);
+  let message = "";
+  try {
+    await client.preflight();
+  } catch (err) {
+    message = err.message;
+  }
+  assert.ok(!message.includes(secretToken));
+});
+
+test("RealCloudflareClient.preflight fails clearly when zone access works but account access does not", async () => {
+  const fetchImpl = async (url) => {
+    const parsed = new URL(url);
+    if (parsed.pathname === "/client/v4/zones") {
+      return { json: async () => ({ success: true, result: [{ id: "zone-123" }] }) };
+    }
+    return { json: async () => ({ success: false, errors: [{ code: 9109, message: "Missing Account:Read permission" }] }) };
+  };
+  const client = new RealCloudflareClient({ apiToken: "t", accountId: "acct-1", fetchImpl });
+  await assert.rejects(() => client.preflight(), /could not list Workers Custom Domains/);
+});
+
+test("FixtureCloudflareClient.preflight always succeeds (fixture account is always reachable)", async () => {
+  const fixture = freshZoneFixture("preflight-fixture.json");
+  const client = new FixtureCloudflareClient(fixture);
+  const result = await client.preflight();
+  assert.equal(result.ok, true);
+});
+
+test("runCutover apply calls preflight() before the first mutation, and refuses (no partial cutover) when it fails", async () => {
+  const fixture = freshZoneFixture("preflight-blocks-cutover.json");
+  const client = new FixtureCloudflareClient(fixture);
+  let preflightCalledAt = null;
+  let firstMutationAt = null;
+  let callCounter = 0;
+  client.preflight = async () => {
+    callCounter++;
+    preflightCalledAt = callCounter;
+    throw new Error("simulated preflight failure: token lacks required scope");
+  };
+  const originalUpsert = client.upsertDnsRecord.bind(client);
+  client.upsertDnsRecord = async (...args) => {
+    callCounter++;
+    if (firstMutationAt === null) firstMutationAt = callCounter;
+    return originalUpsert(...args);
+  };
+
+  const manifestDir = path.join(SCRATCH, "manifests-preflight-fail");
+  await assert.rejects(
+    () =>
+      runCutover(
+        { hostnames: HOSTNAMES, acceptancePath: ACCEPTANCE_READY, apply: true, confirm: PRODUCTION_CONFIRM_PHRASE, manifestDir },
+        { client }
+      ),
+    /simulated preflight failure/
+  );
+  assert.equal(preflightCalledAt, 1, "preflight must run before any mutation attempt");
+  assert.equal(firstMutationAt, null, "no mutation may be attempted when preflight fails");
+
+  const finalState = JSON.parse(fs.readFileSync(fixture, "utf8"));
+  assert.equal(finalState.records["curations.dev"].content, "curations-dev.pages.dev", "nothing must change when preflight fails");
+});
+
+test("runCutover apply proceeds normally once preflight succeeds", async () => {
+  const fixture = freshZoneFixture("preflight-passes.json");
+  const client = new FixtureCloudflareClient(fixture);
+  let preflightCalls = 0;
+  const originalPreflight = client.preflight.bind(client);
+  client.preflight = async (...args) => {
+    preflightCalls++;
+    return originalPreflight(...args);
+  };
+  const manifestDir = path.join(SCRATCH, "manifests-preflight-pass");
+  const report = await runCutover(
+    {
+      hostnames: HOSTNAMES,
+      acceptancePath: ACCEPTANCE_READY,
+      apply: true,
+      confirm: PRODUCTION_CONFIRM_PHRASE,
+      manifestDir,
+      confirmedManualSteps: [SET_DEFAULT_DOMAIN_STEP],
+    },
+    { client }
+  );
+  assert.equal(report.applied, true);
+  assert.equal(preflightCalls, 1);
+});
+
+test("runCutover dry run never calls preflight() (no need to touch Cloudflare beyond the read-only snapshot)", async () => {
+  const fixture = freshZoneFixture("preflight-dryrun.json");
+  const client = new FixtureCloudflareClient(fixture);
+  let preflightCalls = 0;
+  client.preflight = async () => {
+    preflightCalls++;
+    return { ok: true };
+  };
+  await runCutover({ hostnames: HOSTNAMES, acceptancePath: ACCEPTANCE_READY }, { client });
+  assert.equal(preflightCalls, 0);
+});
+

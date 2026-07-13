@@ -219,3 +219,25 @@ test("runVerification's --check-www-redirect fails (and the whole report fails) 
   assert.equal(redirectCheck.ok, false);
   assert.equal(report.ok, false, "an unconfirmed production-parity redirect must fail the overall report");
 });
+
+test("runVerification with --site-url only never attempts a gateway check (safe to run from any network, including CI)", async () => {
+  // The staging/production gateway is IP-restricted to Wyatt only; a
+  // GitHub-hosted runner must be able to verify just the public Static Web
+  // App site without ever needing (or being able) to reach the gateway.
+  let gatewayRouteRequested = false;
+  const fetchImpl = async (url) => {
+    if (String(url).includes("/api/")) gatewayRouteRequested = true;
+    return mockResponse({ status: 200, body: "<html></html>", headers: HEALTHY_SITE_HEADERS });
+  };
+  const report = await runVerification(
+    { siteUrl: "https://curations.dev/", siteRoutes: ["/"], skipTls: true },
+    { fetchImpl }
+  );
+  assert.equal(report.ok, true);
+  assert.equal(gatewayRouteRequested, false, "a site-only invocation must never touch any /api/* gateway route");
+  assert.ok(
+    report.checks.every((c) => c.name.startsWith("site:") || c.name.startsWith("tls:")),
+    "every check in a site-only run must be a site or TLS check, never a gateway check"
+  );
+});
+

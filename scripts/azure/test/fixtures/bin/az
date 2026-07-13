@@ -74,6 +74,23 @@ case "$1 $2" in
   "containerapp update")
     printf 'fixture: containerapp update executed (mutating)\n'
     ;;
+  "containerapp job")
+    # az containerapp job start ... / az containerapp job execution show ...
+    case "${3:-}" in
+      start)
+        printf '%s\n' "${AZ_JOB_EXECUTION_NAME:-fixture-exec-001}"
+        ;;
+      execution)
+        printf '%s\n' "${AZ_JOB_EXECUTION_STATUS:-Succeeded}"
+        ;;
+      logs)
+        printf 'fixture: no logs\n'
+        ;;
+      *)
+        fail "fixture az: unhandled containerapp job subcommand: $*"
+        ;;
+    esac
+    ;;
   "acr build")
     printf 'fixture: acr build executed (mutating)\n'
     ;;

@@ -13,11 +13,33 @@
 // a production write of any kind, matching the plan's "no production
 // writes by default" requirement -- there is no flag that changes this.
 //
+// IMPORTANT -- the staging (and production) gateway's ingress is
+// restricted to an explicit IP allow-list (Wyatt's current IP only; plan
+// Sec. "Network boundaries"). NEVER invoke this tool with --gateway-url
+// pointing at that gateway from a GitHub-hosted runner or any other
+// non-allow-listed network -- the call will simply be blocked, and the
+// wrong fix is to weaken that ingress restriction "to make CI work".
+// Gateway health checks from CI/deploy tooling must run *inside* Azure via
+// the `caj-yolo-ops` Container Apps Job (see deploy.sh's
+// --verify-gateway), not by calling this script against the public
+// gateway URL from outside. --gateway-url here is for an operator running
+// from an allow-listed IP, or for verifying a hostname that is not
+// IP-restricted. `--site-url` alone (no --gateway-url at all) is always
+// safe to run from anywhere -- the Static Web App has no IP restriction --
+// and is the correct way to verify just the public site from CI. Passing
+// neither URL, or an invalid flag combination (e.g. --check-www-redirect
+// without both --www-url and --site-url), fails immediately with a clear,
+// specific error rather than silently doing nothing or crashing obscurely.
+//
 // Usage:
 //   node scripts/azure/verify.mjs --gateway-url https://<gateway-host> \
 //     --site-url https://<static-site-host> \
 //     [--api-routes /api/live,/api/ready,/api/health] \
 //     [--site-routes /] [--timeout 10000] [--skip-tls] [--json]
+//
+//   node scripts/azure/verify.mjs --site-url https://<static-site-host>
+//     -- site-only invocation, safe to run from any network (CI included);
+//     no gateway check is attempted and none is required.
 //
 //   node scripts/azure/verify.mjs --check-www-redirect \
 //     --www-url https://www.curations.dev/ --site-url https://curations.dev/

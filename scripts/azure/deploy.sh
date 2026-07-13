@@ -6,11 +6,27 @@
 # -- it only applies infra/runtime.bicep and publishes already-built,
 # immutable image references plus the Astro static site artifact.
 #
+# Gateway verification (--verify-gateway): the staging gateway's ingress is
+# restricted to Wyatt's IP only (plan Sec. "Network boundaries"). This
+# script therefore NEVER performs a direct external HTTP call to the
+# gateway itself -- not even for a post-deploy health check -- because a
+# GitHub-hosted (or any non-whitelisted) runner would either be blocked
+# outright or, worse, tempt someone into weakening that ingress rule to
+# "make CI work". Instead, --verify-gateway triggers the `caj-yolo-ops`
+# Container Apps Job (`az containerapp job start`), which runs *inside* the
+# same Container Apps environment and can reach the gateway without
+# touching the public IP restriction at all, then polls the job execution
+# to completion. For any check that genuinely needs to run from outside
+# Azure (the public Static Web Apps site, or an operator explicitly working
+# from an allow-listed IP), use scripts/azure/verify.mjs directly instead.
+#
 # Usage:
 #   scripts/azure/deploy.sh --gateway-image <ref> --copilot-image <ref>
 #                            [--apply] [--sha <sha>] [--site-dist <path>]
 #                            [--swa-deployment-token-env <VAR_NAME>]
-#                            [--environment azure-staging|production] [--json]
+#                            [--environment azure-staging|production]
+#                            [--verify-gateway] [--gateway-verify-timeout <secs>] [--gateway-verify-poll-interval <secs>]
+#                            [--json]
 #
 # Default mode is a dry run that prints the exact `az containerapp update`
 # and static site publish commands without executing them. Pass --apply to
@@ -33,6 +49,9 @@ SITE_DIST="${REPO_ROOT}/catalog-site/dist"
 SWA_TOKEN_ENV="SWA_DEPLOYMENT_TOKEN"
 ENVIRONMENT="azure-staging"
 JSON_OUTPUT=0
+VERIFY_GATEWAY=0
+GATEWAY_VERIFY_TIMEOUT_SECONDS=180
+GATEWAY_VERIFY_POLL_SECONDS=5
 RUNTIME_BICEP="${REPO_ROOT}/infra/runtime.bicep"
 BOOTSTRAP_BICEP="${REPO_ROOT}/infra/bootstrap.bicep"
 
@@ -41,10 +60,16 @@ usage() {
 Usage: $(basename "$0") --gateway-image <ref> --copilot-image <ref>
                         [--apply] [--sha <sha>] [--site-dist <path>]
                         [--swa-deployment-token-env <VAR_NAME>]
-                        [--environment azure-staging|production] [--json] [--help]
+                        [--environment azure-staging|production]
+                        [--verify-gateway] [--gateway-verify-timeout <secs>] [--gateway-verify-poll-interval <secs>]
+                        [--json] [--help]
 
 Contributor-safe runtime deployment only. Never invokes Owner bootstrap.
 Dry run by default; pass --apply to execute.
+
+--verify-gateway triggers the caj-yolo-ops Container Apps Job to check
+gateway health *from inside Azure* -- this script never calls the
+IP-restricted gateway directly over the public internet.
 EOF
 }
 
@@ -69,6 +94,13 @@ while [[ $# -gt 0 ]]; do
     --environment)
       require_flag_value "--environment" "${2-}"
       ENVIRONMENT="$2"; shift 2 ;;
+    --verify-gateway) VERIFY_GATEWAY=1; shift ;;
+    --gateway-verify-timeout)
+      require_flag_value "--gateway-verify-timeout" "${2-}"
+      GATEWAY_VERIFY_TIMEOUT_SECONDS="$2"; shift 2 ;;
+    --gateway-verify-poll-interval)
+      require_flag_value "--gateway-verify-poll-interval" "${2-}"
+      GATEWAY_VERIFY_POLL_SECONDS="$2"; shift 2 ;;
     --json) JSON_OUTPUT=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) log_error "Unknown argument: $1"; usage; exit 2 ;;
@@ -178,6 +210,59 @@ deploy_static_site() {
   swa deploy "$SITE_DIST" --deployment-token "${!SWA_TOKEN_ENV}" --env "$ENVIRONMENT"
 }
 
+# Triggers gateway health verification from *inside* Azure via the
+# caj-yolo-ops Container Apps Job, then polls its execution to completion.
+# This script must never call the gateway's public URL directly -- the
+# staging gateway's ingress allows only Wyatt's IP (plan Sec. "Network
+# boundaries"), and a GitHub-hosted runner is never on that allow-list.
+# `az containerapp job start` runs the job's container inside the same
+# Container Apps environment as the gateway, so it can reach it without
+# touching (or needing to weaken) that restriction at all.
+trigger_gateway_verification() {
+  if [[ "$VERIFY_GATEWAY" != "1" ]]; then
+    return
+  fi
+
+  log_step "Triggering gateway health verification via $YOLO_OPS_JOB (runs inside Azure -- this script never calls the IP-restricted gateway directly)"
+
+  if [[ "$APPLY" != "1" ]]; then
+    print_dry_run_banner "starting Container Apps job $YOLO_OPS_JOB for gateway verification"
+    log_info "Would run: az containerapp job start --name $YOLO_OPS_JOB --resource-group $YOLO_RESOURCE_GROUP"
+    return
+  fi
+
+  require_cmd az
+  local execution_name
+  execution_name="$(az containerapp job start \
+    --name "$YOLO_OPS_JOB" \
+    --resource-group "$YOLO_RESOURCE_GROUP" \
+    --query "name" -o tsv)"
+  if [[ -z "$execution_name" ]]; then
+    die "Failed to start $YOLO_OPS_JOB; no execution name was returned."
+  fi
+  log_info "Started $YOLO_OPS_JOB execution: $execution_name"
+
+  local waited=0 status="Running"
+  while [[ "$status" == "Running" && "$waited" -lt "$GATEWAY_VERIFY_TIMEOUT_SECONDS" ]]; do
+    sleep "$GATEWAY_VERIFY_POLL_SECONDS"
+    waited=$((waited + GATEWAY_VERIFY_POLL_SECONDS))
+    status="$(az containerapp job execution show \
+      --name "$YOLO_OPS_JOB" \
+      --resource-group "$YOLO_RESOURCE_GROUP" \
+      --job-execution-name "$execution_name" \
+      --query "properties.status" -o tsv 2>/dev/null || echo "Unknown")"
+  done
+
+  case "$status" in
+    Succeeded)
+      log_info "Gateway verification succeeded ($YOLO_OPS_JOB execution $execution_name)." ;;
+    Running)
+      die "Gateway verification timed out after ${GATEWAY_VERIFY_TIMEOUT_SECONDS}s (execution $execution_name still running). Check with: az containerapp job execution show --name $YOLO_OPS_JOB --resource-group $YOLO_RESOURCE_GROUP --job-execution-name $execution_name" ;;
+    *)
+      die "Gateway verification failed (status=$status, execution $execution_name). Check logs with: az containerapp job logs show --name $YOLO_OPS_JOB --resource-group $YOLO_RESOURCE_GROUP" ;;
+  esac
+}
+
 main() {
   assert_never_calls_bootstrap
   require_clean_worktree "$REPO_ROOT"
@@ -192,11 +277,13 @@ main() {
   deploy_gateway
   deploy_copilot_runtime
   deploy_static_site
+  trigger_gateway_verification
 
   if [[ "$JSON_OUTPUT" == "1" ]]; then
-    printf '{"applied":%s,"environment":"%s","gatewayImage":"%s","copilotImage":"%s"}\n' \
+    printf '{"applied":%s,"environment":"%s","gatewayImage":"%s","copilotImage":"%s","gatewayVerification":%s}\n' \
       "$( [[ $APPLY -eq 1 ]] && echo true || echo false )" \
-      "$ENVIRONMENT" "$GATEWAY_IMAGE" "$COPILOT_IMAGE"
+      "$ENVIRONMENT" "$GATEWAY_IMAGE" "$COPILOT_IMAGE" \
+      "$( [[ $VERIFY_GATEWAY -eq 1 ]] && echo true || echo false )"
   fi
 }
 

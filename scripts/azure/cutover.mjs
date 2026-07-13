@@ -188,6 +188,40 @@ export class RealCloudflareClient {
     return this._zoneId;
   }
 
+  /**
+   * Preflight check: confirms the token actually has both zone-scoped (DNS
+   * records) and account-scoped (Workers Custom Domains) read access before
+   * cutover.mjs performs its first mutation. This matters because a token
+   * can be valid-but-narrowly-scoped -- e.g. `GET /user/tokens/verify` can
+   * 401 for a token that nonetheless has full Zone/Account permissions, so
+   * that endpoint is deliberately NOT used here. Exercising the exact two
+   * read paths this tool actually depends on gives an accurate, specific
+   * answer instead of a generic and potentially misleading self-check.
+   * Never called mid-cutover -- always before the first write.
+   */
+  async preflight() {
+    let zoneId;
+    try {
+      zoneId = await this._resolveZoneId();
+    } catch (err) {
+      throw new CloudflareApiError(
+        `Cloudflare preflight failed: could not resolve the zone for '${this._apexDomain}'. ` +
+          `The token may be invalid or missing Zone:Read permission for this zone. ` +
+          `No changes were made. Underlying error: ${err && err.message ? err.message : err}`
+      );
+    }
+    try {
+      await this._request(`/accounts/${this._accountId}/workers/domains`);
+    } catch (err) {
+      throw new CloudflareApiError(
+        `Cloudflare preflight failed: could not list Workers Custom Domains for account '${this._accountId}'. ` +
+          `The token may be missing Workers Routes/Account:Read permission, or the account id may be wrong. ` +
+          `No changes were made. Underlying error: ${err && err.message ? err.message : err}`
+      );
+    }
+    return { ok: true, zoneId, accountId: this._accountId };
+  }
+
   async getDnsRecord(hostname) {
     const zoneId = await this._resolveZoneId();
     const records = await this._request(`/zones/${zoneId}/dns_records?name=${encodeURIComponent(hostname)}`);
@@ -372,6 +406,13 @@ export class FixtureCloudflareClient {
 
   _persist() {
     fs.writeFileSync(this.fixturePath, JSON.stringify(this.state, null, 2));
+  }
+
+  // The fixture stands in for a Cloudflare account that is always
+  // reachable; mirrors RealCloudflareClient.preflight()'s shape so callers
+  // never need to special-case which client implementation they hold.
+  async preflight() {
+    return { ok: true, zoneId: "fixture-zone-id", accountId: "fixture-account-id" };
   }
 
   async getDnsRecord(hostname) {
@@ -762,6 +803,20 @@ export async function runCutover(options, deps) {
       plan,
       reason: apply ? `--confirm must exactly equal '${expectedConfirm}'` : "dry run (pass --apply to execute)",
     };
+  }
+
+  // Preflight: confirm the Cloudflare token/account actually has the access
+  // this cutover needs BEFORE the first mutation. A token can look valid
+  // (reads succeed during the snapshot above) yet still be missing a scope
+  // needed for a write, or -- in the case observed with the token
+  // currently inherited in this environment -- a self-check endpoint like
+  // `GET /user/tokens/verify` can return 401 even though the zone/account
+  // reads this tool depends on work fine. Running the exact real-mode
+  // client's preflight() here (a no-op for the fixture client) surfaces a
+  // clear, specific failure before any DNS record or Worker Custom Domain
+  // is touched, rather than discovering an auth problem partway through.
+  if (typeof client.preflight === "function") {
+    await client.preflight();
   }
 
   const workerBinding = snapshot.workerDomain;

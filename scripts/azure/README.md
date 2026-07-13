@@ -98,6 +98,20 @@ updates the two Container Apps to caller-supplied **immutable** image refs
 and publishes the Astro `dist/` artifact to Static Web Apps. Structurally
 refuses to ever invoke Owner bootstrap. Dry run by default.
 
+`--verify-gateway [--gateway-verify-timeout <secs>] [--gateway-verify-poll-interval <secs>]`
+triggers post-deploy gateway health verification — but **never** by calling
+the gateway's URL directly. The staging (and production) gateway's ingress
+is restricted to an explicit IP allow-list (plan Sec. "Network
+boundaries"), so a GitHub-hosted runner can neither reach it nor should it
+try — the only acceptable "fix" for a blocked check is *not weakening that
+restriction*. Instead, this triggers the `caj-yolo-ops` Container Apps Job
+(`az containerapp job start`), which runs *inside* the same Container Apps
+environment and can reach the gateway without touching the IP restriction
+at all, then polls the job execution to completion and fails clearly if it
+doesn't succeed. For checks that genuinely need to run from outside Azure
+(the public Static Web App, or an operator on an allow-listed IP), use
+`verify.mjs` directly instead — see below.
+
 ### certificate.sh
 
 Prepares the temporary ACME DNS-01 certificate workflow for
@@ -153,6 +167,18 @@ Read-only verification against any configurable `--gateway-url`/`--site-url`
 certificate validity, required security headers, and a secret-leak scan of
 every response body. Only issues `GET`/`HEAD`/`OPTIONS`; there is no flag
 that allows a write. Exit code reflects overall pass/fail for CI use.
+
+**`--gateway-url` and the staging IP restriction:** the staging (and
+production) gateway only accepts traffic from Wyatt's IP. Never invoke this
+tool with `--gateway-url` against that gateway from a GitHub-hosted runner
+or any other non-allow-listed network — see `deploy.sh --verify-gateway`
+for the correct way to check gateway health from CI (it runs from *inside*
+Azure via the `caj-yolo-ops` job instead). `--site-url` **alone** — no
+`--gateway-url` at all — never touches the gateway and is always safe to
+run from anywhere, including CI, since the Static Web App has no IP
+restriction. Passing neither URL, or an invalid combination (e.g.
+`--check-www-redirect` without both `--www-url` and `--site-url`), fails
+immediately with a specific error rather than doing nothing silently.
 
 `--check-www-redirect --www-url <url> --site-url <url>` additionally
 confirms production parity: `https://www.curations.dev/` must still return
@@ -279,6 +305,21 @@ Azure SWA client. All the same safety gates (dry run default, `--apply` +
 exact `--confirm`, one mutation at a time, verify-after-each, rollback
 manifest) apply identically in real mode.
 
+**Apply-mode preflight:** immediately after the `--apply --confirm
+curations.dev` gate passes, and before the *first* mutation is attempted,
+`runCutover` calls `client.preflight()`. On `RealCloudflareClient` this
+independently checks (a) zone-scoped access by resolving the zone ID for
+`curations.dev`, and (b) account-scoped access by listing Workers Custom
+Domains for the account — reporting a specific, actionable error naming
+which of the two failed. This deliberately does **not** call Cloudflare's
+`GET /user/tokens/verify` endpoint: a token can be fully valid and
+correctly scoped for both of the reads above yet still 401 on
+`/user/tokens/verify` (observed live against the real
+`CLOUDFLARE_API_TOKEN` in this environment — a known Cloudflare quirk, not
+a broken token), so self-verify would produce a false negative. Dry runs
+never call `preflight()`; `FixtureCloudflareClient.preflight()` is a
+no-op success so fixture-driven tests stay hermetic.
+
 `--rollback <manifest>` reverses `cut-api` precisely: delete the Azure
 CNAME, reattach the Worker Custom Domain with
 `PUT /accounts/{account_id}/workers/domains` (hostname/service/environment/
@@ -369,3 +410,20 @@ by default.
 - `deploy.sh` assumes the SWA publish path uses the `swa` CLI
   (`@azure/static-web-apps-cli`) with a deployment token; confirm this
   matches whatever `.github/workflows/azure-deploy.yml` ultimately uses.
+- `deploy.sh --verify-gateway`'s `trigger_gateway_verification()` assumes
+  `az containerapp job start --name caj-yolo-ops ...` returns an object
+  with `.name` (the execution name to poll) and that
+  `az containerapp job execution show` exposes completion state at
+  `.properties.status` with values including `Succeeded`/`Failed`. Neither
+  has been exercised against a real Container Apps Job in this task (only
+  the fixture `az` binary) — confirm exact field names once `caj-yolo-ops`
+  exists for real, and adjust the `jq`-style field extraction if Azure's
+  actual schema differs.
+- `cutover.mjs`'s `RealCloudflareClient.preflight()` assumes
+  `GET /zones?name=<zone>` and `GET /accounts/:account_id/workers/domains`
+  are sufficient, minimal, side-effect-free probes for confirming a
+  token's real zone- and account-level access respectively, and
+  deliberately avoids `GET /user/tokens/verify` (observed live to 401 for
+  the environment's actual `CLOUDFLARE_API_TOKEN` even though both probe
+  endpoints above succeed for it) — re-confirm this quirk hasn't changed
+  before relying on `preflight()` as the sole apply-mode access gate.

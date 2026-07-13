@@ -68,10 +68,11 @@ make_fixture_repo() {
   git -C "$dir" config user.email "fixture@example.com"
   git -C "$dir" config user.name "Fixture"
   echo "fixture" > "$dir/README.md"
-  mkdir -p "$dir/agent-worker/copilot-runtime" "$dir/catalog-site/dist"
+  mkdir -p "$dir/agent-worker/copilot-runtime" "$dir/catalog-site/dist" "$dir/infra"
   echo "FROM scratch" > "$dir/agent-worker/Dockerfile.azure"
   echo "FROM scratch" > "$dir/agent-worker/copilot-runtime/Dockerfile"
   echo "<html></html>" > "$dir/catalog-site/dist/index.html"
+  echo "// fixture stub, not real Bicep" > "$dir/infra/runtime.bicep"
   git -C "$dir" add -A
   git -C "$dir" commit -q -m "fixture: initial commit"
 }
@@ -377,6 +378,44 @@ out="$(YOLO_INTERNAL_CALL_BOOTSTRAP=1 run_script "$ledger" "${AZURE_DIR}/deploy.
   --copilot-image "yolocurationsprod.azurecr.io/yolo/copilot-runtime:${GATEWAY_SHA}" 2>&1)"
 code=$?
 assert_exit_code "deploy.sh refuses if bootstrap invocation is attempted" 1 "$code"
+
+echo "-- --verify-gateway dry run never calls the gateway directly, only previews the ops job trigger --"
+ledger="${SCRATCH}/deploy-verifygateway-dryrun.ledger"
+: > "$ledger"
+out="$(run_script "$ledger" "${AZURE_DIR}/deploy.sh" \
+  --gateway-image "yolocurationsprod.azurecr.io/yolo/gateway:${GATEWAY_SHA}" \
+  --copilot-image "yolocurationsprod.azurecr.io/yolo/copilot-runtime:${GATEWAY_SHA}" \
+  --verify-gateway --json 2>&1)"
+code=$?
+assert_exit_code "deploy.sh --verify-gateway dry run exits 0" 0 "$code"
+assert_contains "deploy.sh --verify-gateway dry run mentions caj-yolo-ops" "$out" "caj-yolo-ops"
+assert_not_contains "deploy.sh --verify-gateway dry run never starts the job" "$(cat "$ledger")" "job start"
+assert_not_contains "deploy.sh never fetches the gateway URL directly (no curl/http client invocation logged)" "$(cat "$ledger")" "curl"
+
+echo "-- --verify-gateway --apply triggers caj-yolo-ops and reports success without a direct gateway call --"
+ledger="${SCRATCH}/deploy-verifygateway-apply.ledger"
+: > "$ledger"
+out="$(AZ_JOB_EXECUTION_STATUS=Succeeded SWA_DEPLOYMENT_TOKEN=fixture-swa-token run_script "$ledger" "${AZURE_DIR}/deploy.sh" \
+  --gateway-image "yolocurationsprod.azurecr.io/yolo/gateway:${GATEWAY_SHA}" \
+  --copilot-image "yolocurationsprod.azurecr.io/yolo/copilot-runtime:${GATEWAY_SHA}" \
+  --site-dist "${SCRATCH}/no-such-site-dist" \
+  --verify-gateway --gateway-verify-poll-interval 1 --apply --json 2>&1)"
+code=$?
+assert_exit_code "deploy.sh --verify-gateway --apply exits 0 on success" 0 "$code"
+assert_contains "deploy.sh --verify-gateway --apply started the caj-yolo-ops job" "$(cat "$ledger")" "containerapp job start"
+assert_contains "deploy.sh --verify-gateway --apply reports gatewayVerification true in JSON" "$out" "\"gatewayVerification\":true"
+
+echo "-- --verify-gateway --apply fails clearly when the ops job execution fails --"
+ledger="${SCRATCH}/deploy-verifygateway-fail.ledger"
+: > "$ledger"
+out="$(AZ_JOB_EXECUTION_STATUS=Failed SWA_DEPLOYMENT_TOKEN=fixture-swa-token run_script "$ledger" "${AZURE_DIR}/deploy.sh" \
+  --gateway-image "yolocurationsprod.azurecr.io/yolo/gateway:${GATEWAY_SHA}" \
+  --copilot-image "yolocurationsprod.azurecr.io/yolo/copilot-runtime:${GATEWAY_SHA}" \
+  --site-dist "${SCRATCH}/no-such-site-dist" \
+  --verify-gateway --gateway-verify-poll-interval 1 --apply 2>&1)"
+code=$?
+assert_exit_code "deploy.sh --verify-gateway --apply refuses (exit 1) when the job fails" 1 "$code"
+assert_contains "deploy.sh explains the gateway verification failure" "$out" "Gateway verification failed"
 
 echo
 echo "== certificate.sh =="
