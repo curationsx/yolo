@@ -35,6 +35,13 @@ fi
 : "${YOLO_GITHUB_IDENTITY:=id-yolo-github}"
 : "${YOLO_BUDGET:=budget-yolo-prod}"
 : "${YOLO_BUDGET_AMOUNT:=8}"
+# Non-secret (but not committed to any params file): infra/bootstrap.bicep's
+# budgetContactEmails defaults to an empty array, which intentionally
+# skips creating the $8 budget entirely (see budgetContactEmails's
+# @description). bootstrap.sh requires this to be supplied at apply time
+# via --budget-contact-email or this env var, then passes it inline to
+# `az deployment sub create` -- it is never written to source control.
+: "${YOLO_BUDGET_CONTACT_EMAIL:=}"
 
 : "${YOLO_FOUNDRY_ACCOUNT:=yolo-foundry}"
 : "${YOLO_COSMOS_ACCOUNT:=yolo-curations-feed}"
@@ -58,7 +65,7 @@ export YOLO_RESOURCE_GROUP YOLO_FOUNDRY_RESOURCE_GROUP
 export YOLO_STATIC_WEB_APP YOLO_CONTAINERAPPS_ENV YOLO_GATEWAY_APP YOLO_COPILOT_APP
 export YOLO_OPS_JOB YOLO_ACR_NAME YOLO_KEY_VAULT YOLO_LOG_WORKSPACE
 export YOLO_GATEWAY_IDENTITY YOLO_COPILOT_IDENTITY YOLO_GITHUB_IDENTITY
-export YOLO_BUDGET YOLO_BUDGET_AMOUNT
+export YOLO_BUDGET YOLO_BUDGET_AMOUNT YOLO_BUDGET_CONTACT_EMAIL
 export YOLO_FOUNDRY_ACCOUNT YOLO_COSMOS_ACCOUNT YOLO_COSMOS_DATABASE
 export YOLO_COSMOS_VOTES_CONTAINER YOLO_COSMOS_SCORES_CONTAINER YOLO_COSMOS_GATEWAY_STATE_CONTAINER
 export YOLO_PRODUCTION_DOMAIN YOLO_PRODUCTION_WWW_DOMAIN YOLO_API_DOMAIN YOLO_PAGES_TARGET

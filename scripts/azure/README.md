@@ -52,10 +52,26 @@ API — see `cutover.mjs` below).
 Owner-only, one-time bootstrap wrapper. Runs every prerequisite check
 (`az`/`azd`/`git`/`jq`/`gh` present, signed-in Owner role, required resource
 providers registered, ACR/Key Vault name availability, Container Apps
-consumption-core quota, GitHub environment branch policies — see below) and
-only invokes `az deployment sub create --template-file infra/bootstrap.bicep
-...` when given both `--apply` and `--confirm bootstrap-<resource-group>`.
-Refuses on a dirty git worktree. Never printed: any secret value.
+consumption-core quota, budget contact email configured, GitHub environment
+branch policies — see below) and only invokes `az deployment sub create
+--template-file infra/bootstrap.bicep ...` when given both `--apply` and
+`--confirm bootstrap-<resource-group>`. Refuses on a dirty git worktree.
+Never printed: any secret value.
+
+**Budget contact email (plan acceptance criterion "Azure budget active"):**
+`infra/bootstrap.bicep`'s `budgetContactEmails` parameter defaults to an
+empty array, and the committed `infra/main.parameters.json` intentionally
+leaves it empty — an email address is not something to commit to source
+control — which makes the Bicep template **skip creating the
+`$YOLO_BUDGET_AMOUNT` budget entirely**. `--budget-contact-email
+<email[,email...]>` (or the `$YOLO_BUDGET_CONTACT_EMAIL` env var) supplies
+it at apply time instead: `--apply` **refuses to run** without one
+configured, and when applying, the address(es) are passed inline as
+`--parameters budgetContactEmails=[...]` directly to `az deployment sub
+create` — never written to any committed file. Dry run reports only
+*whether* a contact is configured (`budget:contact-email` check,
+pass/skip) — the address itself is never printed, in dry run, `--json`
+output, or the apply-time log line.
 
 **GitHub environment branch policies (OIDC hardening):** an
 environment-scoped federated subject
@@ -485,6 +501,15 @@ by default.
   Cores"` (falling back to `"Cores"`) from
   `az containerapp env list-usages`; confirm the exact `name.value` string
   Azure returns once a real Container Apps environment exists.
+- `bootstrap.sh`'s `apply_bootstrap` passes `budgetContactEmails` to
+  `az deployment sub create` as `--parameters budgetContactEmails=<json-array>`
+  (a JSON-array-shaped string built by `jq`, e.g. `["a@b.com"]`), which is
+  the standard Azure CLI convention for overriding an `array`-typed Bicep
+  parameter inline — confirmed against Azure CLI's documented `--parameters`
+  behavior but not exercised against a real `az deployment sub create`
+  call in this task (only the fixture `az` binary, which just records the
+  literal argument). Re-verify once a real Owner bootstrap run is
+  authorized.
 - `deploy.sh` publishes via `npx --yes @azure/static-web-apps-cli@2.0.9`
   (pinned) with a deployment token, hardcoding the SWA CLI's own `--env` to
   `production` regardless of this script's `--environment` GitHub

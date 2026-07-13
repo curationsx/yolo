@@ -18,6 +18,7 @@
 # Usage:
 #   scripts/azure/bootstrap.sh [--apply] [--confirm bootstrap-yolo-prod]
 #                              [--subscription <id>] [--location <region>]
+#                              [--budget-contact-email <email[,email...]>]
 #                              [--skip-quota-check] [--json]
 #
 # Exit codes:
@@ -44,16 +45,32 @@ BOOTSTRAP_CONFIRM_PHRASE="bootstrap-${YOLO_RESOURCE_GROUP}"
 GITHUB_CONFIGURE_CONFIRM_PHRASE="configure-github-environments"
 BICEP_ENTRY_POINT="${REPO_ROOT}/infra/bootstrap.bicep"
 STAGING_BRANCHES_OVERRIDE=""
+# Non-secret (never printed by this script), but never committed to source
+# control either: infra/bootstrap.bicep's budgetContactEmails defaults to
+# an empty array and SKIPS creating the $YOLO_BUDGET_AMOUNT budget
+# entirely when empty (see infra/bootstrap.bicep's budgetContactEmails
+# @description) -- required so the plan's "Azure budget active" acceptance
+# criterion is actually met. Comma-separated for multiple recipients.
+BUDGET_CONTACT_EMAIL="${YOLO_BUDGET_CONTACT_EMAIL:-}"
 
 usage() {
   cat <<EOF
 Usage: $(basename "$0") [--apply] [--confirm ${BOOTSTRAP_CONFIRM_PHRASE}]
                         [--subscription <id>] [--location <region>]
+                        [--budget-contact-email <email[,email...]>]
                         [--skip-quota-check] [--json] [--help]
        $(basename "$0") --configure-github-environments --confirm ${GITHUB_CONFIGURE_CONFIRM_PHRASE}
                         [--staging-branches <comma,list>]
 
 Owner-only, one-time Azure bootstrap for rg-yolo-prod. Dry run by default.
+
+--budget-contact-email (or \$YOLO_BUDGET_CONTACT_EMAIL) is REQUIRED before
+--apply: infra/bootstrap.bicep skips creating the \$${YOLO_BUDGET_AMOUNT}
+budget entirely when budgetContactEmails is empty, and the committed
+parameters intentionally leave it empty. The address is passed inline to
+'az deployment sub create' and is never written to a committed params
+file or printed by this script -- dry run reports only whether a contact
+is configured, never the address itself.
 
 --configure-github-environments applies GitHub's deployment branch policies
 (a GitHub API resource, not Azure/Bicep): 'production' restricted to 'main'
@@ -78,6 +95,9 @@ while [[ $# -gt 0 ]]; do
     --staging-branches)
       require_flag_value "--staging-branches" "${2-}"
       STAGING_BRANCHES_OVERRIDE="$2"; shift 2 ;;
+    --budget-contact-email)
+      require_flag_value "--budget-contact-email" "${2-}"
+      BUDGET_CONTACT_EMAIL="$2"; shift 2 ;;
     --skip-quota-check) SKIP_QUOTA_CHECK=1; shift ;;
     --json) JSON_OUTPUT=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -296,6 +316,25 @@ check_bicep_entry_point() {
   fi
 }
 
+# infra/bootstrap.bicep's budgetContactEmails param defaults to an empty
+# array and the committed infra/main.parameters.json intentionally leaves
+# it empty (an email address is not something to commit to source
+# control) -- so the $YOLO_BUDGET_AMOUNT budget (plan acceptance criterion
+# "Azure budget active") is silently skipped unless this script supplies
+# one at apply time. Reports presence only; the address itself is never
+# logged, even in dry run or --json output.
+check_budget_contact_email() {
+  log_step "Checking budget contact email configuration"
+  if [[ -n "$BUDGET_CONTACT_EMAIL" ]]; then
+    record_check "budget:contact-email" pass "configured"
+  elif [[ "$APPLY" == "1" ]]; then
+    record_check "budget:contact-email" fail "no budget contact email configured; pass --budget-contact-email <email> or set \$YOLO_BUDGET_CONTACT_EMAIL before --apply (required for plan acceptance criterion 'Azure budget active' -- infra/bootstrap.bicep skips the \$${YOLO_BUDGET_AMOUNT} budget entirely when budgetContactEmails is empty)"
+    FAILED=1
+  else
+    record_check "budget:contact-email" skip "not configured yet (informational for dry run; required before --apply so the \$${YOLO_BUDGET_AMOUNT} budget is actually created)"
+  fi
+}
+
 current_git_branch() {
   git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo ""
 }
@@ -403,7 +442,19 @@ run_checks() {
   check_name_availability
   check_quota
   check_bicep_entry_point
+  check_budget_contact_email
   check_github_environment_branch_policies
+}
+
+# Converts a comma-separated email list into a compact JSON array string
+# (e.g. "a@b.com,c@d.com" -> ["a@b.com","c@d.com"]) via jq, so each address
+# is safely JSON-encoded rather than hand-quoted in bash. Never logged by
+# any caller -- only passed directly as an `az` parameter value.
+budget_contact_emails_json() {
+  local csv="$1"
+  local -a emails
+  IFS=',' read -r -a emails <<< "$csv"
+  printf '%s\n' "${emails[@]}" | jq -R . | jq -s -c .
 }
 
 apply_bootstrap() {
@@ -413,13 +464,23 @@ apply_bootstrap() {
   if [[ ! -f "${REPO_ROOT}/infra/main.parameters.json" ]]; then
     die "Missing ${REPO_ROOT}/infra/main.parameters.json; cannot apply without parameters committed to source control."
   fi
+  if [[ -z "$BUDGET_CONTACT_EMAIL" ]]; then
+    # Defense in depth: check_budget_contact_email (run_checks) already
+    # fails closed before main() ever reaches here, but this function must
+    # never assume that ordering on its own.
+    die "No budget contact email configured; pass --budget-contact-email <email> or set \$YOLO_BUDGET_CONTACT_EMAIL before --apply."
+  fi
 
-  log_info "Invoking: az deployment sub create --location $LOCATION --template-file $BICEP_ENTRY_POINT --parameters @${REPO_ROOT}/infra/main.parameters.json"
+  local budget_emails_json
+  budget_emails_json="$(budget_contact_emails_json "$BUDGET_CONTACT_EMAIL")"
+
+  log_info "Invoking: az deployment sub create --location $LOCATION --template-file $BICEP_ENTRY_POINT --parameters @${REPO_ROOT}/infra/main.parameters.json --parameters budgetContactEmails=<redacted: configured>"
   az deployment sub create \
     --location "$LOCATION" \
     --template-file "$BICEP_ENTRY_POINT" \
     --parameters "@${REPO_ROOT}/infra/main.parameters.json" \
-    --parameters resourceGroupName="$YOLO_RESOURCE_GROUP"
+    --parameters resourceGroupName="$YOLO_RESOURCE_GROUP" \
+    --parameters budgetContactEmails="$budget_emails_json"
 
   log_info "Bootstrap deployment submitted. Secrets are never echoed by this script; retrieve them from Key Vault via 'az keyvault secret show' when needed."
 }

@@ -73,6 +73,14 @@ make_fixture_repo() {
   echo "FROM scratch" > "$dir/agent-worker/copilot-runtime/Dockerfile"
   echo "<html></html>" > "$dir/catalog-site/dist/index.html"
   echo "// fixture stub, not real Bicep" > "$dir/infra/runtime.bicep"
+  echo "// fixture stub, not real Bicep" > "$dir/infra/bootstrap.bicep"
+  # Intentionally does NOT include budgetContactEmails -- mirrors the real
+  # committed infra/main.parameters.json, which leaves it empty on
+  # purpose. bootstrap.sh must supply it inline via --budget-contact-email
+  # instead, never by committing it here.
+  cat > "$dir/infra/main.parameters.json" <<'EOF'
+{"$schema":"https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#","contentVersion":"1.0.0.0","parameters":{}}
+EOF
   git -C "$dir" add -A
   git -C "$dir" commit -q -m "fixture: initial commit"
 }
@@ -181,6 +189,73 @@ out="$(AZ_LOGIN=1 AZ_OWNER_ROLE=1 AZ_PROVIDERS_REGISTERED=0 AZ_ACR_AVAILABLE=1 A
   run_script "$ledger" "${AZURE_DIR}/bootstrap.sh" 2>&1)"
 code=$?
 assert_exit_code "bootstrap refuses when providers unregistered" 1 "$code"
+
+echo "-- budget contact email: dry run reports presence only, never the address, and never fails a dry run --"
+ledger="${SCRATCH}/bootstrap-budget-dryrun-missing.ledger"
+: > "$ledger"
+gh_state="${GH_STATE_DIR}/budget-dryrun-missing.json"
+make_compliant_gh_state "$gh_state"
+out="$(AZ_LOGIN=1 AZ_OWNER_ROLE=1 AZ_PROVIDERS_REGISTERED=1 AZ_ACR_AVAILABLE=1 AZ_KV_EXISTS=0 AZ_ENV_EXISTS=0 \
+  GH_AUTHENTICATED=1 GH_FIXTURE_STATE_FILE="$gh_state" YOLO_BUDGET_CONTACT_EMAIL="" \
+  run_script "$ledger" "${AZURE_DIR}/bootstrap.sh" --json 2>&1)"
+code=$?
+assert_exit_code "bootstrap dry run without a budget contact email still exits 0" 0 "$code"
+assert_contains "bootstrap dry run reports the budget contact email check by name" "$out" "budget:contact-email"
+assert_not_contains "bootstrap dry run never calls 'deployment sub create'" "$(cat "$ledger")" "deployment sub"
+
+ledger="${SCRATCH}/bootstrap-budget-dryrun-configured.ledger"
+: > "$ledger"
+gh_state="${GH_STATE_DIR}/budget-dryrun-configured.json"
+make_compliant_gh_state "$gh_state"
+out="$(AZ_LOGIN=1 AZ_OWNER_ROLE=1 AZ_PROVIDERS_REGISTERED=1 AZ_ACR_AVAILABLE=1 AZ_KV_EXISTS=0 AZ_ENV_EXISTS=0 \
+  GH_AUTHENTICATED=1 GH_FIXTURE_STATE_FILE="$gh_state" \
+  run_script "$ledger" "${AZURE_DIR}/bootstrap.sh" --budget-contact-email "ops-budget-alerts@example.test" --json 2>&1)"
+code=$?
+assert_exit_code "bootstrap dry run with a budget contact email exits 0" 0 "$code"
+assert_contains "bootstrap dry run reports budget:contact-email as pass" "$out" '"name":"budget:contact-email","status":"pass"'
+assert_not_contains "bootstrap dry run never echoes the configured budget contact email address" "$out" "ops-budget-alerts@example.test"
+
+echo "-- budget contact email: required for --apply, refuses before any Azure mutation when missing --"
+ledger="${SCRATCH}/bootstrap-budget-apply-missing.ledger"
+: > "$ledger"
+gh_state="${GH_STATE_DIR}/budget-apply-missing.json"
+make_compliant_gh_state "$gh_state"
+out="$(AZ_LOGIN=1 AZ_OWNER_ROLE=1 AZ_PROVIDERS_REGISTERED=1 AZ_ACR_AVAILABLE=1 AZ_KV_EXISTS=0 AZ_ENV_EXISTS=0 \
+  GH_AUTHENTICATED=1 GH_FIXTURE_STATE_FILE="$gh_state" YOLO_BUDGET_CONTACT_EMAIL="" \
+  run_script "$ledger" "${AZURE_DIR}/bootstrap.sh" --apply --confirm "bootstrap-rg-yolo-prod" 2>&1)"
+code=$?
+assert_exit_code "bootstrap --apply without a budget contact email refuses" 1 "$code"
+assert_contains "bootstrap explains the budget contact email is required" "$out" "budget contact email"
+assert_not_contains "bootstrap --apply without a budget contact email performs no mutation" "$(cat "$ledger")" "deployment sub"
+
+echo "-- budget contact email: --apply with the flag succeeds, passes budgetContactEmails inline, never echoes the address --"
+ledger="${SCRATCH}/bootstrap-budget-apply-ok.ledger"
+: > "$ledger"
+gh_state="${GH_STATE_DIR}/budget-apply-ok.json"
+make_compliant_gh_state "$gh_state"
+out="$(AZ_LOGIN=1 AZ_OWNER_ROLE=1 AZ_PROVIDERS_REGISTERED=1 AZ_ACR_AVAILABLE=1 AZ_KV_EXISTS=0 AZ_ENV_EXISTS=0 \
+  GH_AUTHENTICATED=1 GH_FIXTURE_STATE_FILE="$gh_state" \
+  run_script "$ledger" "${AZURE_DIR}/bootstrap.sh" \
+  --budget-contact-email "ops-budget-alerts@example.test" \
+  --apply --confirm "bootstrap-rg-yolo-prod" --json 2>&1)"
+code=$?
+assert_exit_code "bootstrap --apply with a budget contact email succeeds" 0 "$code"
+assert_contains "bootstrap --apply invokes 'deployment sub create'" "$(cat "$ledger")" "deployment sub"
+assert_contains "bootstrap --apply passes budgetContactEmails inline to az" "$(cat "$ledger")" "budgetContactEmails="
+assert_not_contains "bootstrap --apply never echoes the budget contact email to its own stdout/stderr" "$out" "ops-budget-alerts@example.test"
+
+echo "-- budget contact email: \$YOLO_BUDGET_CONTACT_EMAIL env var alone satisfies the requirement (no flag needed) --"
+ledger="${SCRATCH}/bootstrap-budget-envvar.ledger"
+: > "$ledger"
+gh_state="${GH_STATE_DIR}/budget-envvar.json"
+make_compliant_gh_state "$gh_state"
+out="$(AZ_LOGIN=1 AZ_OWNER_ROLE=1 AZ_PROVIDERS_REGISTERED=1 AZ_ACR_AVAILABLE=1 AZ_KV_EXISTS=0 AZ_ENV_EXISTS=0 \
+  GH_AUTHENTICATED=1 GH_FIXTURE_STATE_FILE="$gh_state" YOLO_BUDGET_CONTACT_EMAIL="ops-via-env@example.test" \
+  run_script "$ledger" "${AZURE_DIR}/bootstrap.sh" --apply --confirm "bootstrap-rg-yolo-prod" --json 2>&1)"
+code=$?
+assert_exit_code "bootstrap --apply succeeds via \$YOLO_BUDGET_CONTACT_EMAIL alone" 0 "$code"
+assert_contains "bootstrap --apply (env var) invokes 'deployment sub create'" "$(cat "$ledger")" "deployment sub"
+assert_not_contains "bootstrap --apply (env var) never echoes the budget contact email" "$out" "ops-via-env@example.test"
 
 echo "-- never prints secret-shaped values --"
 ledger="${SCRATCH}/bootstrap-secretcheck.ledger"
