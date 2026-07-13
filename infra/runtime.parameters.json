@@ -33,7 +33,16 @@
       "value": true
     },
     "wyattStagingIpCidr": {
-      "value": ""
+      "value": "${WYATT_STAGING_IP_CIDR}"
+    },
+    "gatewayImageTag": {
+      "value": "${GATEWAY_IMAGE_TAG}"
+    },
+    "copilotImageTag": {
+      "value": "${COPILOT_IMAGE_TAG}"
+    },
+    "deploymentRevision": {
+      "value": "${DEPLOYMENT_REVISION}"
     }
   }
 }

@@ -18,6 +18,32 @@
 # `az deployment sub create --template-file infra/bootstrap.bicep` under an
 # Owner-authenticated session — see the header comment in that file.
 #
+# Before running `azd provision` locally, two things must be set in the azd
+# environment (verified with the non-mutating `azd provision --preview
+# --no-prompt`, which fails fast and lists exactly what is missing):
+#
+#   1. Target resource group. infra/runtime.bicep is resource-group-scoped
+#      and takes no resourceGroupName parameter, so azd's default naming
+#      convention would target `rg-<azd-env-name>` -- NOT the real
+#      `rg-yolo-prod` created by Stage 1 bootstrap. Set:
+#        azd env set AZURE_RESOURCE_GROUP rg-yolo-prod
+#
+#   2. Per-deploy values with no committed default, resolved from the azd
+#      environment via infra/runtime.parameters.json's `${VAR}`
+#      interpolation (never hard-coded, since these are either immutable
+#      per-commit image SHAs, a required-unique revision marker, or an
+#      operator's personal IP):
+#        azd env set GATEWAY_IMAGE_TAG   <acr>.azurecr.io/yolo/gateway:<sha>
+#        azd env set COPILOT_IMAGE_TAG   <acr>.azurecr.io/yolo/copilot-runtime:<sha>
+#        azd env set DEPLOYMENT_REVISION <any value unique to this run>
+#        azd env set WYATT_STAGING_IP_CIDR <your current IP>/32
+#
+# .github/workflows/azure-deploy.yml does not depend on any of the above:
+# it always passes explicit `--parameters key=value` overrides to the
+# underlying `az deployment group` calls, which take precedence over
+# whatever is in the parameters file (resolved or not). This section only
+# documents the local `azd provision` path.
+#
 # No operator GitHub Copilot token is injected anywhere in this file or its
 # hooks. "Use My Copilot" and "Run in My Terminal" both use end-user
 # delegated authorization (see AGENTS.md §4); this project intentionally
