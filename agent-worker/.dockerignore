@@ -14,5 +14,4 @@ personas/*.md
 *.test.mjs
 README.md
 wrangler.toml
-Dockerfile.azure
 Dockerfile

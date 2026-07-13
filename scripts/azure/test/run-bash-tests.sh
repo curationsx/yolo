@@ -70,6 +70,7 @@ SOURCE_ROOT="$(cd -- "${AZURE_DIR}/../.." >/dev/null 2>&1 && pwd -P)"
 identity_rbac_bicep="$(cat "${SOURCE_ROOT}/infra/modules/identity-rbac.bicep")"
 bootstrap_bicep="$(cat "${SOURCE_ROOT}/infra/bootstrap.bicep")"
 azure_deploy_workflow="$(cat "${SOURCE_ROOT}/.github/workflows/azure-deploy.yml")"
+gateway_dockerignore="$(cat "${SOURCE_ROOT}/agent-worker/.dockerignore")"
 assert_contains "GitHub federated credentials deploy serially beneath one managed identity" \
   "$identity_rbac_bicep" $'@batchSize(1)\nresource githubFederatedCredentials'
 assert_contains "first-time budget start defaults to the current UTC month" \
@@ -80,6 +81,8 @@ assert_equal "both runtime deployment steps validate a non-empty gateway FQDN" "
   "$(printf '%s' "$azure_deploy_workflow" | grep -Fc 'gateway_fqdn="$(jq -er')"
 assert_equal "both runtime deployment steps clean their temporary output file" "2" \
   "$(printf '%s' "$azure_deploy_workflow" | grep -Fc "trap 'rm -f -- \"\$outputs_file\"' EXIT")"
+assert_equal "ACR build context does not exclude the custom gateway Dockerfile" "0" \
+  "$(printf '%s\n' "$gateway_dockerignore" | grep -Fxc 'Dockerfile.azure')"
 
 # --- fixture git repo -----------------------------------------------------
 
