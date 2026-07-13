@@ -235,7 +235,8 @@ jobs:
             --parameters copilotImageTag="${{ steps.build_images.outputs.copilot_image }}" \
             --parameters wyattStagingIpCidr="${{ vars.WYATT_STAGING_IP_CIDR }}" \
             --parameters enableStagingIpRestriction=true \
-            --parameters stagingSiteOrigin="${{ steps.swa_site.outputs.origin }}"
+            --parameters stagingSiteOrigin="${{ steps.swa_site.outputs.origin }}" \
+            --parameters deploymentRevision="${{ github.run_id }}"
 
       - name: az deployment group create — infra/runtime.bicep
         id: deploy_infra
@@ -251,6 +252,7 @@ jobs:
             --parameters wyattStagingIpCidr="${{ vars.WYATT_STAGING_IP_CIDR }}" \
             --parameters enableStagingIpRestriction=true \
             --parameters stagingSiteOrigin="${{ steps.swa_site.outputs.origin }}" \
+            --parameters deploymentRevision="${{ github.run_id }}" \
             --query "properties.outputs" -o json | tee deploy-outputs.json
           echo "gateway_fqdn=$(jq -r '.gatewayFqdn.value' deploy-outputs.json)" >> "$GITHUB_OUTPUT"
           rm -f deploy-outputs.json
@@ -404,14 +406,22 @@ jobs:
             --parameters environmentName=production \
             --parameters gatewayImageTag="${{ steps.build_images.outputs.gateway_image }}" \
             --parameters copilotImageTag="${{ steps.build_images.outputs.copilot_image }}" \
-            --parameters enableStagingIpRestriction=false
+            --parameters enableStagingIpRestriction=false \
+            --parameters deploymentRevision="${{ github.run_id }}"
 
       - name: az deployment group create — infra/runtime.bicep (production)
         id: deploy_infra
         # enableStagingIpRestriction is only ever set to false here, in the
         # environment explicitly gated by GitHub's `production` protection
         # rules, and only after every prior acceptance check has passed per
-        # .azure/deployment-plan.md Stage 5.
+        # .azure/deployment-plan.md Stage 5. deploymentRevision is always
+        # this run's unique github.run_id -- staging and production commonly
+        # deploy the identical image SHA, and this forces a genuinely new
+        # Container Apps revision so the versionless github-client-id/
+        # github-client-secret Key Vault references are re-read from
+        # whatever their latest version is at production cutover time,
+        # rather than potentially reusing a revision still running with
+        # staging's already-loaded OAuth secret values.
         run: |
           az deployment group create \
             --name "yolo-runtime-production-${{ github.run_id }}" \
@@ -422,6 +432,7 @@ jobs:
             --parameters gatewayImageTag="${{ steps.build_images.outputs.gateway_image }}" \
             --parameters copilotImageTag="${{ steps.build_images.outputs.copilot_image }}" \
             --parameters enableStagingIpRestriction=false \
+            --parameters deploymentRevision="${{ github.run_id }}" \
             --query "properties.outputs" -o json | tee deploy-outputs.json
           echo "gateway_fqdn=$(jq -r '.gatewayFqdn.value' deploy-outputs.json)" >> "$GITHUB_OUTPUT"
           rm -f deploy-outputs.json

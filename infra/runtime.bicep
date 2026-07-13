@@ -66,6 +66,9 @@ param copilotImageTag string
 @description('Immutable ACR image reference for caj-yolo-ops. Defaults to the gateway image, which carries the same operational tooling.')
 param opsImageTag string = gatewayImageTag
 
+@description('Non-secret marker (the GitHub Actions run ID) forcing a fresh Container Apps revision on every deployment, so versionless Key Vault secret references (github-client-id/github-client-secret in particular) are always re-read rather than possibly served by a still-running revision cached from a prior deploy. No default: every real deploy must supply a genuinely unique value.')
+param deploymentRevision string
+
 @description('Exact, no-wildcard CORS origin for the generated Azure Static Web Apps hostname (e.g. https://stapp-yolo-prod.azurestaticapps.net), queried by the workflow via `az staticwebapp show` immediately before this deployment. Only folded into corsAllowedOrigins default when environmentName is not production; leave empty to fall back to localhost-only. Never a wildcard.')
 param stagingSiteOrigin string = ''
 
@@ -159,6 +162,7 @@ module apps 'modules/apps.bicep' = {
     gatewayImageTag: gatewayImageTag
     copilotImageTag: copilotImageTag
     opsImageTag: opsImageTag
+    deploymentRevision: deploymentRevision
     corsAllowedOrigins: corsAllowedOrigins
     environmentName: environmentName
     cosmosEndpoint: cosmosEndpoint

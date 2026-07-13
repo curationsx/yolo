@@ -39,6 +39,9 @@ param copilotImageTag string
 @description('Immutable ACR image reference for caj-yolo-ops. Defaults to the gateway image, which carries the same operational tooling.')
 param opsImageTag string = gatewayImageTag
 
+@description('Non-secret marker (e.g. the GitHub Actions run ID) forcing a fresh Container Apps revision on every deployment. Staging and production commonly deploy the same image SHA, and the GitHub OAuth Key Vault references (github-client-id/github-client-secret) are deliberately versionless -- without a genuinely new revision, Container Apps can reuse a still-running revision whose secret values were already read from Key Vault at a previous (e.g. staging) version, silently keeping the stale OAuth secret cached through a production rollout. Passed as this template\'s revisionSuffix (the supported Container Apps mechanism for exactly this) on both ca-yolo-gateway and ca-yolo-copilot, and also surfaced as a DEPLOYMENT_REVISION env var for observability. The Key Vault secret URLs themselves are never version-pinned; a fresh revision simply guarantees each deploy actually re-reads whatever the latest version currently is.')
+param deploymentRevision string
+
 @description('Allowed CORS origins for the public gateway: production, generated Azure staging, and localhost only.')
 param corsAllowedOrigins array
 
@@ -98,6 +101,11 @@ param tags object = {}
 // landed yet as of this writing).
 var gatewayTargetPort = 8080
 var copilotTargetPort = 8080
+
+// Container Apps revisionSuffix must be lowercase alphanumeric/hyphens and
+// start with a letter. github.run_id is always purely numeric, so prefix
+// with a stable letter and lowercase defensively for any other caller.
+var sanitizedRevisionSuffix = toLower('r${deploymentRevision}')
 
 var stagingIpRestrictions = enableStagingIpRestriction ? [
   {
@@ -159,6 +167,7 @@ resource gatewayApp 'Microsoft.App/containerApps@2025-01-01' = {
       ]
     }
     template: {
+      revisionSuffix: sanitizedRevisionSuffix
       containers: [
         {
           name: 'gateway'
@@ -171,6 +180,7 @@ resource gatewayApp 'Microsoft.App/containerApps@2025-01-01' = {
             { name: 'AZURE_CLIENT_ID', value: gatewayIdentityClientId }
             { name: 'PORT', value: string(gatewayTargetPort) }
             { name: 'ENVIRONMENT_NAME', value: environmentName }
+            { name: 'DEPLOYMENT_REVISION', value: deploymentRevision }
             // Env var names below are aligned exactly with the
             // Cloudflare-compatible contract in agent-worker/wrangler.toml
             // and enforced (fail-fast on start-up) by
@@ -269,6 +279,7 @@ resource copilotApp 'Microsoft.App/containerApps@2025-01-01' = {
       ]
     }
     template: {
+      revisionSuffix: sanitizedRevisionSuffix
       containers: [
         {
           name: 'copilot-runtime'
@@ -281,6 +292,7 @@ resource copilotApp 'Microsoft.App/containerApps@2025-01-01' = {
             { name: 'AZURE_CLIENT_ID', value: copilotIdentityClientId }
             { name: 'PORT', value: string(copilotTargetPort) }
             { name: 'ENVIRONMENT_NAME', value: environmentName }
+            { name: 'DEPLOYMENT_REVISION', value: deploymentRevision }
             { name: 'COPILOT_RUNTIME_SHARED_SECRET', secretRef: 'copilot-runtime-shared-secret' }
           ]
           // agent-worker/copilot-runtime/server.mjs (confirmed as of this
