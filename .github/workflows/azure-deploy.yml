@@ -5,9 +5,10 @@ name: AZURE DEPLOY
 # is applied out-of-band by a human with subscription Owner / User Access
 # Administrator rights, via scripts/azure/bootstrap.sh. Every job here uses
 # the Contributor-scoped id-yolo-github OIDC identity, federated only to the
-# `azure-staging` and `production` GitHub environments (never a branch
-# wildcard), and never a long-lived Azure credential (no client secret, no
-# publish profile).
+# `azure-staging` and `production` GitHub environments plus one narrow
+# `repo:curationsx/yolo:pull_request` subject for the read-only PR verify
+# job below (never a branch wildcard, never a long-lived Azure credential —
+# no client secret, no publish profile).
 #
 # OIDC hardening note: an environment-scoped federated subject
 # (repo:curationsx/yolo:environment:<name>) only narrows *which token* a job
@@ -21,7 +22,15 @@ name: AZURE DEPLOY
 #                          later feature branches here as needed, remove them
 #                          once merged).
 # Verify with: gh api repos/curationsx/yolo/environments/<name>/deployment-branch-policies
-# Neither environment is left callable from an arbitrary branch.
+# Neither environment is left callable from an arbitrary branch. The `verify`
+# job below intentionally does NOT attach a GitHub Environment at all — a
+# pull_request event's ref is always the synthetic `refs/pull/<n>/merge` ref,
+# which can never satisfy a branch-name policy (confirmed live: GitHub
+# rejects such jobs with "Branch ... is not allowed to deploy to
+# <environment> due to environment protection rules" before any step runs).
+# It instead uses the separate `repo:curationsx/yolo:pull_request` federated
+# subject (infra/modules/identity-rbac.bicep's enablePullRequestFederation),
+# which has no environment — and therefore no branch policy — attached.
 #
 # Production is intentionally workflow_dispatch/manual only -- there is no
 # push-to-main auto-trigger for the production job. A human must explicitly
@@ -36,6 +45,16 @@ name: AZURE DEPLOY
 # is applied directly by this workflow whenever infra-level configuration
 # (scale, ingress, secrets, environment variables) needs to change, using
 # the same image references build-images.sh produced.
+#
+# Operational note (pending Stage 1 Owner bootstrap): AZURE_GITHUB_CLIENT_ID,
+# AZURE_TENANT_ID, and AZURE_SUBSCRIPTION_ID must be configured as
+# REPOSITORY-level (not environment-scoped) Actions variables once
+# infra/bootstrap.bicep has run, using its githubIdentityClientId output plus
+# the subscription/tenant IDs in .azure/deployment-plan.md. Repository-level
+# (not environment-scoped) is required specifically because the pull_request
+# verify job above has no environment context to read environment-scoped
+# variables from. No value is fabricated here; these do not exist yet
+# because rg-yolo-prod has not been created.
 
 on:
   pull_request:
@@ -82,13 +101,23 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    environment: azure-staging
+    # Deliberately NOT bound to the `azure-staging` GitHub Environment. A
+    # `pull_request` event's git ref is always the synthetic
+    # `refs/pull/<n>/merge` ref, which can never satisfy a branch-name
+    # deployment-branch-policy (confirmed in production: GitHub rejects the
+    # job outright with "Branch \"refs/pull/<n>/merge\" is not allowed to
+    # deploy to azure-staging due to environment protection rules" before a
+    # single step runs). This job instead authenticates via the separate
+    # `repo:curationsx/yolo:pull_request` OIDC subject (see
+    # infra/modules/identity-rbac.bicep's enablePullRequestFederation),
+    # which has no GitHub Environment — and therefore no branch policy —
+    # attached to it at all.
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
 
-      - name: Log in to Azure (OIDC, azure-staging environment)
+      - name: Log in to Azure (OIDC, pull_request subject)
         uses: azure/login@v2
         with:
           client-id: ${{ vars.AZURE_GITHUB_CLIENT_ID }}

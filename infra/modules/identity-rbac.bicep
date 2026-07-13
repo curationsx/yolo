@@ -28,6 +28,9 @@ param githubEnvironments array = [
   'production'
 ]
 
+@description('Also federate the `repo:<org>/<repo>:pull_request` subject, in addition to the per-environment subjects above. Required for the PR-triggered read-only "verify" job: a `pull_request` event\'s ref is always the synthetic `refs/pull/<n>/merge` ref, which can never satisfy any branch-name deployment-branch-policy configured on a GitHub Environment (confirmed in production: GitHub rejects it with "Branch \\"refs/pull/<n>/merge\\" is not allowed to deploy to <environment> due to environment protection rules"). This subject is still narrowly scoped to this exact repository and only to pull_request events — never a branch wildcard — and is only ever used for bicep build/what-if (no Azure mutation).')
+param enablePullRequestFederation bool = true
+
 @description('Existing Key Vault name (created by modules/foundation.bicep in the same bootstrap deployment).')
 param keyVaultName string
 
@@ -86,6 +89,26 @@ resource githubFederatedCredentials 'Microsoft.ManagedIdentity/userAssignedIdent
     ]
   }
 }]
+
+// See enablePullRequestFederation description above: pull_request-triggered
+// jobs cannot use an environment-scoped subject if that environment has a
+// deployment branch policy, because the PR merge ref never matches a branch
+// name. This credential is scoped to pull_request events on this exact
+// repository only — read-only CI (bicep build / what-if), no Azure
+// mutation, no GitHub Environment attached, so no branch policy applies to
+// it (there is nothing broader being granted here than "this repo's PRs may
+// run read-only validation").
+resource githubPullRequestFederatedCredential 'Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials@2024-11-30' = if (enablePullRequestFederation) {
+  parent: githubIdentity
+  name: 'gh-pull-request'
+  properties: {
+    issuer: 'https://token.actions.githubusercontent.com'
+    subject: 'repo:${githubRepo}:pull_request'
+    audiences: [
+      'api://AzureADTokenExchange'
+    ]
+  }
+}
 
 resource keyVault 'Microsoft.KeyVault/vaults@2024-11-01' existing = {
   name: keyVaultName
