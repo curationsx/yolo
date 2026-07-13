@@ -9,8 +9,12 @@ import {
   computeReconciliation,
   checkMinimumWaitElapsed,
   resolveCutApiTimestamp,
+  validateMode,
   DEFAULT_POST_CUTOVER_MIN_WAIT_SECONDS,
+  RECONCILE_MODES,
   fetchVotesFromContainer,
+  fetchAzureScoreMetadataFromContainer,
+  writeAzureScoreMetadata,
   fetchLegacyScoresFromContainer,
   reconcileFromContainers,
 } from "../reconcile-scores.mjs";
@@ -74,8 +78,27 @@ test("computeReconciliation respects an onlyTarget filter", () => {
   assert.equal(diffs[0].target, "a");
 });
 
+test("validateMode accepts each of the three real phases and rejects anything else", () => {
+  for (const mode of RECONCILE_MODES) {
+    assert.doesNotThrow(() => validateMode(mode));
+  }
+  assert.throws(() => validateMode(""), /--mode is required/);
+  assert.throws(() => validateMode("bogus"), /--mode is required and must be one of/);
+});
+
+test("CLI: --mode is required", () => {
+  let stderr = "";
+  try {
+    execFileSync("node", [SCRIPT, "--fixture", FIXTURE, "--json"], { encoding: "utf8", stdio: "pipe" });
+    assert.fail("expected non-zero exit");
+  } catch (err) {
+    stderr = err.stderr.toString();
+  }
+  assert.match(stderr, /--mode is required/);
+});
+
 test("CLI: fixture mode dry run reports diffs and writes nothing", () => {
-  const out = execFileSync("node", [SCRIPT, "--fixture", FIXTURE, "--json"], { encoding: "utf8" });
+  const out = execFileSync("node", [SCRIPT, "--mode", "backfill", "--fixture", FIXTURE, "--json"], { encoding: "utf8" });
   const report = JSON.parse(out);
   assert.equal(report.dryRun, true);
   assert.equal(report.applied, false);
@@ -86,17 +109,21 @@ test("CLI: fixture mode dry run reports diffs and writes nothing", () => {
 
 test("CLI: fixture mode refuses --apply without --confirm", () => {
   assert.throws(() => {
-    execFileSync("node", [SCRIPT, "--fixture", FIXTURE, "--apply", "--json"], { encoding: "utf8", stdio: "pipe" });
+    execFileSync("node", [SCRIPT, "--mode", "backfill", "--fixture", FIXTURE, "--apply", "--json"], {
+      encoding: "utf8",
+      stdio: "pipe",
+    });
   }, /Command failed/);
 });
 
 test("CLI: fixture mode refuses --apply with the wrong --confirm value", () => {
   let stderr = "";
   try {
-    execFileSync("node", [SCRIPT, "--fixture", FIXTURE, "--apply", "--confirm", "nope", "--json"], {
-      encoding: "utf8",
-      stdio: "pipe",
-    });
+    execFileSync(
+      "node",
+      [SCRIPT, "--mode", "backfill", "--fixture", FIXTURE, "--apply", "--confirm", "nope", "--json"],
+      { encoding: "utf8", stdio: "pipe" }
+    );
     assert.fail("expected non-zero exit");
   } catch (err) {
     stderr = err.stderr.toString();
@@ -108,7 +135,19 @@ test("CLI: fixture mode applies and writes a reconciled output file when confirm
   const outPath = path.join(SCRATCH, "reconciled.json");
   const out = execFileSync(
     "node",
-    [SCRIPT, "--fixture", FIXTURE, "--fixture-out", outPath, "--apply", "--confirm", "reconcile-scores", "--json"],
+    [
+      SCRIPT,
+      "--mode",
+      "backfill",
+      "--fixture",
+      FIXTURE,
+      "--fixture-out",
+      outPath,
+      "--apply",
+      "--confirm",
+      "reconcile-scores",
+      "--json",
+    ],
     { encoding: "utf8" }
   );
   const report = JSON.parse(out);
@@ -124,7 +163,7 @@ test("CLI: fixture mode applies and writes a reconciled output file when confirm
 test("CLI: cosmos mode without --fixture requires --cosmos-endpoint", () => {
   let stderr = "";
   try {
-    execFileSync("node", [SCRIPT, "--json"], { encoding: "utf8", stdio: "pipe" });
+    execFileSync("node", [SCRIPT, "--mode", "backfill", "--json"], { encoding: "utf8", stdio: "pipe" });
     assert.fail("expected non-zero exit");
   } catch (err) {
     stderr = err.stderr.toString();
@@ -137,7 +176,7 @@ test("CLI: cosmos mode refuses --apply without --confirm before ever importing @
   try {
     execFileSync(
       "node",
-      [SCRIPT, "--cosmos-endpoint", "https://fixture.example", "--apply", "--json"],
+      [SCRIPT, "--mode", "backfill", "--cosmos-endpoint", "https://fixture.example", "--apply", "--json"],
       { encoding: "utf8", stdio: "pipe" }
     );
     assert.fail("expected non-zero exit");
@@ -145,6 +184,63 @@ test("CLI: cosmos mode refuses --apply without --confirm before ever importing @
     stderr = err.stderr.toString();
   }
   assert.match(stderr, /must exactly equal 'reconcile-scores'/);
+});
+
+// --- --mode / wait-gate cross-validation -------------------------------
+
+test("CLI: --cutover-manifest with --mode backfill is refused (only post-cutover is time-gated)", () => {
+  const manifestPath = path.join(SCRATCH, "cross-validate-manifest.json");
+  fs.writeFileSync(manifestPath, JSON.stringify({ steps: [{ name: "cut-api", appliedAt: new Date().toISOString() }] }));
+  let stderr = "";
+  try {
+    execFileSync(
+      "node",
+      [SCRIPT, "--mode", "backfill", "--fixture", FIXTURE, "--cutover-manifest", manifestPath, "--json"],
+      { encoding: "utf8", stdio: "pipe" }
+    );
+    assert.fail("expected non-zero exit");
+  } catch (err) {
+    stderr = err.stderr.toString();
+  }
+  assert.match(stderr, /only apply to --mode post-cutover/);
+});
+
+test("CLI: --since with --mode pre-rollback is refused (only post-cutover is time-gated)", () => {
+  let stderr = "";
+  try {
+    execFileSync(
+      "node",
+      [SCRIPT, "--mode", "pre-rollback", "--fixture", FIXTURE, "--since", new Date().toISOString(), "--json"],
+      { encoding: "utf8", stdio: "pipe" }
+    );
+    assert.fail("expected non-zero exit");
+  } catch (err) {
+    stderr = err.stderr.toString();
+  }
+  assert.match(stderr, /only apply to --mode post-cutover/);
+});
+
+test("CLI: --mode post-cutover --apply without --cutover-manifest or --since is refused", () => {
+  let stderr = "";
+  try {
+    execFileSync(
+      "node",
+      [SCRIPT, "--mode", "post-cutover", "--fixture", FIXTURE, "--apply", "--confirm", "reconcile-scores", "--json"],
+      { encoding: "utf8", stdio: "pipe" }
+    );
+    assert.fail("expected non-zero exit");
+  } catch (err) {
+    stderr = err.stderr.toString();
+  }
+  assert.match(stderr, /requires --cutover-manifest .* or --since/);
+});
+
+test("CLI: --mode post-cutover dry run is allowed without --cutover-manifest or --since", () => {
+  const out = JSON.parse(
+    execFileSync("node", [SCRIPT, "--mode", "post-cutover", "--fixture", FIXTURE, "--json"], { encoding: "utf8" })
+  );
+  assert.equal(out.dryRun, true);
+  assert.equal(out.mode, "post-cutover");
 });
 
 // --- post-cutover wait gate (Cloudflare DNS TTL race) -----------------
@@ -195,14 +291,18 @@ test("resolveCutApiTimestamp refuses a manifest with no recorded cut-api step", 
   assert.throws(() => resolveCutApiTimestamp(manifestPath), /no recorded 'cut-api' step/);
 });
 
-test("CLI: --apply with --since too recent refuses to write (dry run still allowed)", () => {
+test("CLI: --mode post-cutover --apply with --since too recent refuses to write (dry run still allowed)", () => {
   const fixture = path.join(SCRATCH, "wait-gate-recent.json");
   fs.writeFileSync(fixture, fs.readFileSync(FIXTURE));
   const recentTimestamp = new Date().toISOString();
 
   // Dry run is never gated -- it must still compute and report the diff.
   const dryOut = JSON.parse(
-    execFileSync("node", [SCRIPT, "--fixture", fixture, "--since", recentTimestamp, "--json"], { encoding: "utf8" })
+    execFileSync(
+      "node",
+      [SCRIPT, "--mode", "post-cutover", "--fixture", fixture, "--since", recentTimestamp, "--json"],
+      { encoding: "utf8" }
+    )
   );
   assert.equal(dryOut.dryRun, true);
   assert.equal(dryOut.diffCount, 2);
@@ -211,7 +311,19 @@ test("CLI: --apply with --since too recent refuses to write (dry run still allow
   try {
     execFileSync(
       "node",
-      [SCRIPT, "--fixture", fixture, "--since", recentTimestamp, "--apply", "--confirm", "reconcile-scores", "--json"],
+      [
+        SCRIPT,
+        "--mode",
+        "post-cutover",
+        "--fixture",
+        fixture,
+        "--since",
+        recentTimestamp,
+        "--apply",
+        "--confirm",
+        "reconcile-scores",
+        "--json",
+      ],
       { encoding: "utf8", stdio: "pipe" }
     );
     assert.fail("expected non-zero exit");
@@ -222,7 +334,7 @@ test("CLI: --apply with --since too recent refuses to write (dry run still allow
   assert.equal(fs.existsSync(`${fixture}.reconciled.json`), false, "must not write when the wait gate refuses");
 });
 
-test("CLI: --apply with --since old enough proceeds and writes", () => {
+test("CLI: --mode post-cutover --apply with --since old enough proceeds and writes", () => {
   const fixture = path.join(SCRATCH, "wait-gate-old.json");
   fs.writeFileSync(fixture, fs.readFileSync(FIXTURE));
   const oldTimestamp = new Date(Date.now() - 700_000).toISOString();
@@ -230,7 +342,19 @@ test("CLI: --apply with --since old enough proceeds and writes", () => {
   const out = JSON.parse(
     execFileSync(
       "node",
-      [SCRIPT, "--fixture", fixture, "--since", oldTimestamp, "--apply", "--confirm", "reconcile-scores", "--json"],
+      [
+        SCRIPT,
+        "--mode",
+        "post-cutover",
+        "--fixture",
+        fixture,
+        "--since",
+        oldTimestamp,
+        "--apply",
+        "--confirm",
+        "reconcile-scores",
+        "--json",
+      ],
       { encoding: "utf8" }
     )
   );
@@ -238,7 +362,7 @@ test("CLI: --apply with --since old enough proceeds and writes", () => {
   assert.ok(fs.existsSync(out.outputPath));
 });
 
-test("CLI: --apply gated by --cutover-manifest's cut-api timestamp", () => {
+test("CLI: --mode post-cutover --apply gated by --cutover-manifest's cut-api timestamp", () => {
   const fixture = path.join(SCRATCH, "wait-gate-manifest.json");
   fs.writeFileSync(fixture, fs.readFileSync(FIXTURE));
 
@@ -248,7 +372,18 @@ test("CLI: --apply gated by --cutover-manifest's cut-api timestamp", () => {
   try {
     execFileSync(
       "node",
-      [SCRIPT, "--fixture", fixture, "--cutover-manifest", recentManifest, "--apply", "--confirm", "reconcile-scores"],
+      [
+        SCRIPT,
+        "--mode",
+        "post-cutover",
+        "--fixture",
+        fixture,
+        "--cutover-manifest",
+        recentManifest,
+        "--apply",
+        "--confirm",
+        "reconcile-scores",
+      ],
       { encoding: "utf8", stdio: "pipe" }
     );
     assert.fail("expected non-zero exit");
@@ -265,7 +400,19 @@ test("CLI: --apply gated by --cutover-manifest's cut-api timestamp", () => {
   const out = JSON.parse(
     execFileSync(
       "node",
-      [SCRIPT, "--fixture", fixture, "--cutover-manifest", oldManifest, "--apply", "--confirm", "reconcile-scores", "--json"],
+      [
+        SCRIPT,
+        "--mode",
+        "post-cutover",
+        "--fixture",
+        fixture,
+        "--cutover-manifest",
+        oldManifest,
+        "--apply",
+        "--confirm",
+        "reconcile-scores",
+        "--json",
+      ],
       { encoding: "utf8" }
     )
   );
@@ -281,7 +428,7 @@ test("reconciliation is idempotent: re-applying immediately produces zero furthe
   const firstOut = JSON.parse(
     execFileSync(
       "node",
-      [SCRIPT, "--fixture", fixture, "--apply", "--confirm", "reconcile-scores", "--json"],
+      [SCRIPT, "--mode", "backfill", "--fixture", fixture, "--apply", "--confirm", "reconcile-scores", "--json"],
       { encoding: "utf8" }
     )
   );
@@ -296,7 +443,7 @@ test("reconciliation is idempotent: re-applying immediately produces zero furthe
   fs.writeFileSync(convergedFixture, JSON.stringify({ votes: originalFixture.votes, scores: reconciledScores.scores }));
 
   const secondOut = JSON.parse(
-    execFileSync("node", [SCRIPT, "--fixture", convergedFixture, "--json"], { encoding: "utf8" })
+    execFileSync("node", [SCRIPT, "--mode", "backfill", "--fixture", convergedFixture, "--json"], { encoding: "utf8" })
   );
   assert.equal(secondOut.diffCount, 0, "a converged mirror must produce zero further diffs");
 });
@@ -330,6 +477,8 @@ test("post-cutover reconciliation absorbs votes written late by the legacy Cloud
       "node",
       [
         SCRIPT,
+        "--mode",
+        "post-cutover",
         "--fixture",
         raceFixture,
         "--cutover-manifest",
@@ -356,15 +505,16 @@ test("post-cutover reconciliation absorbs votes written late by the legacy Cloud
   const secondRaceFixture = path.join(SCRATCH, "race-window-converged.json");
   fs.writeFileSync(secondRaceFixture, JSON.stringify({ votes: lateVotes, scores: written.scores }));
   const secondReport = JSON.parse(
-    execFileSync("node", [SCRIPT, "--fixture", secondRaceFixture, "--json"], { encoding: "utf8" })
+    execFileSync("node", [SCRIPT, "--mode", "post-cutover", "--fixture", secondRaceFixture, "--json"], { encoding: "utf8" })
   );
   assert.equal(secondReport.diffCount, 0, "re-running after absorbing late votes must be idempotent");
 });
 
-// --- Real (non-fixture) Cosmos container schema tests ---------------------
+// --- Real (non-fixture) Cosmos container schema tests, all three phases ---
 //
-// These exercise fetchVotesFromContainer/fetchLegacyScoresFromContainer/
-// reconcileFromContainers directly against a lightweight fake container
+// These exercise fetchVotesFromContainer/fetchAzureScoreMetadataFromContainer/
+// writeAzureScoreMetadata/fetchLegacyScoresFromContainer/
+// reconcileFromContainers directly against lightweight fake containers
 // (see test/helpers/fake-cosmos-container.mjs), without needing the
 // optional @azure/cosmos/@azure/identity packages installed or a live
 // Cosmos account. This is the query/write logic runCosmosMode actually
@@ -394,16 +544,42 @@ test("fetchVotesFromContainer counts legacy and Azure-native vote docs together,
   assert.deepEqual(viewers, ["user-1", "user-2"]);
 });
 
-test("reconcileFromContainers absorbs a true legacy-shaped (no doc_type) vote the legacy Cloudflare Worker wrote late", async () => {
+test("fetchAzureScoreMetadataFromContainer reads only the same-partition score doc, never a vote doc", async () => {
   const votes = new FakeVotesContainer()
     .addAzureVote("venue:the-wiltern", "user-1")
-    .addAzureVote("venue:the-wiltern", "user-2");
-  const scores = new FakeScoresContainer([
-    { id: "venue:the-wiltern", scope: "global", target_id: "venue:the-wiltern", count: 2, updated_at: new Date().toISOString() },
-  ]);
+    .addLegacyVote("venue:the-wiltern", "user-2")
+    .addScoreMetadataDoc("venue:the-wiltern", 7);
+  const result = await fetchAzureScoreMetadataFromContainer(votes);
+  assert.deepEqual(result, [{ target: "venue:the-wiltern", count: 7 }]);
+});
+
+test("--mode backfill: reconcileFromContainers absorbs a true legacy-shaped (no doc_type) vote against the same-partition Azure score metadata mirror", async () => {
+  const votes = new FakeVotesContainer().addLegacyVote("venue:the-wiltern", "user-1").addLegacyVote("venue:the-wiltern", "user-2");
+  // No score metadata doc exists yet -- this is the very first backfill.
+  const report = await reconcileFromContainers(votes, votes, { mode: "backfill", apply: true });
+  assert.equal(report.mode, "backfill");
+  assert.equal(report.diffCount, 1);
+  assert.equal(report.diffs[0].authoritativeCount, 2);
+  assert.equal(report.applied, true);
+
+  const written = votes.getScoreMetadataDoc("venue:the-wiltern");
+  assert.equal(written.count, 2);
+  assert.equal(written.doc_type, "score", "the write-back must carry the real doc_type field");
+  assert.equal(written.target_id, "venue:the-wiltern", "the write-back must carry the real target_id field");
+
+  // Idempotent: re-running with no further votes must be a no-op.
+  const again = await reconcileFromContainers(votes, votes, { mode: "backfill", apply: true });
+  assert.equal(again.diffCount, 0);
+});
+
+test("--mode post-cutover: reconcileFromContainers absorbs a true legacy-shaped (no doc_type) vote written late, against the same same-partition Azure score metadata mirror as backfill", async () => {
+  const votes = new FakeVotesContainer()
+    .addAzureVote("venue:the-wiltern", "user-1")
+    .addAzureVote("venue:the-wiltern", "user-2")
+    .addScoreMetadataDoc("venue:the-wiltern", 2);
 
   // Pre-absorption: authoritative (2 Azure votes) already matches the mirror.
-  const before = await reconcileFromContainers(votes, scores, {});
+  const before = await reconcileFromContainers(votes, votes, { mode: "post-cutover" });
   assert.equal(before.diffCount, 0);
 
   // The legacy Cloudflare Worker writes a genuinely legacy-shaped vote doc
@@ -411,7 +587,36 @@ test("reconcileFromContainers absorbs a true legacy-shaped (no doc_type) vote th
   // without updating the score mirror.
   votes.addLegacyVote("venue:the-wiltern", "user-3");
 
-  const after = await reconcileFromContainers(votes, scores, { apply: true });
+  const after = await reconcileFromContainers(votes, votes, { mode: "post-cutover", apply: true });
+  assert.equal(after.diffCount, 1);
+  assert.equal(after.diffs[0].authoritativeCount, 3, "the late legacy-shaped vote must be counted");
+  assert.equal(after.applied, true);
+
+  const written = votes.getScoreMetadataDoc("venue:the-wiltern");
+  assert.equal(written.count, 3);
+  assert.equal(written.target_id, "venue:the-wiltern");
+
+  // Idempotent: re-running with no further votes must be a no-op that
+  // still reads back correctly (proves the write-back shape round-trips).
+  const again = await reconcileFromContainers(votes, votes, { mode: "post-cutover", apply: true });
+  assert.equal(again.diffCount, 0);
+});
+
+test("--mode pre-rollback: reconcileFromContainers absorbs a true legacy-shaped (no doc_type) vote against the separate legacy scores container mirror", async () => {
+  const votes = new FakeVotesContainer()
+    .addAzureVote("venue:the-wiltern", "user-1")
+    .addAzureVote("venue:the-wiltern", "user-2");
+  const scores = new FakeScoresContainer([
+    { id: "venue:the-wiltern", scope: "global", target_id: "venue:the-wiltern", count: 2, updated_at: new Date().toISOString() },
+  ]);
+
+  const before = await reconcileFromContainers(votes, scores, { mode: "pre-rollback" });
+  assert.equal(before.diffCount, 0);
+
+  // A true legacy-shaped vote (no doc_type) lands right before rollback.
+  votes.addLegacyVote("venue:the-wiltern", "user-3");
+
+  const after = await reconcileFromContainers(votes, scores, { mode: "pre-rollback", apply: true });
   assert.equal(after.diffCount, 1);
   assert.equal(after.diffs[0].authoritativeCount, 3, "the late legacy-shaped vote must be counted");
   assert.equal(after.applied, true);
@@ -421,10 +626,27 @@ test("reconcileFromContainers absorbs a true legacy-shaped (no doc_type) vote th
   assert.equal(written.scope, "global", "the write-back must carry the real partition key field");
   assert.equal(written.target_id, "venue:the-wiltern", "the write-back must carry the real target_id field");
 
-  // Idempotent: re-running with no further votes must be a no-op that
-  // still reads back correctly (proves the write-back shape round-trips).
-  const again = await reconcileFromContainers(votes, scores, { apply: true });
+  // Idempotent: re-running with no further votes must be a no-op.
+  const again = await reconcileFromContainers(votes, scores, { mode: "pre-rollback", apply: true });
   assert.equal(again.diffCount, 0);
+});
+
+test("reconcileFromContainers requires a valid --mode and never guesses which mirror to use", async () => {
+  const votes = new FakeVotesContainer();
+  const scores = new FakeScoresContainer();
+  await assert.rejects(reconcileFromContainers(votes, scores, {}), /--mode is required/);
+  await assert.rejects(reconcileFromContainers(votes, scores, { mode: "bogus" }), /--mode is required and must be one of/);
+});
+
+test("writeAzureScoreMetadata is rejected by a real-shaped votes container if the target_id partition key is dropped (regression guard)", async () => {
+  const votes = new FakeVotesContainer();
+  await assert.rejects(
+    votes.items.upsert({ id: "score", doc_type: "score", count: 3 }),
+    /missing the 'target_id' partition key field/
+  );
+  // The actual write path always supplies target_id and must succeed.
+  await writeAzureScoreMetadata(votes, [{ target: "venue:echoplex", authoritativeCount: 1 }]);
+  assert.equal(votes.getScoreMetadataDoc("venue:echoplex").count, 1);
 });
 
 test("FakeScoresContainer rejects the old buggy write-back shape (regression guard for the missing-partition-key bug)", async () => {
@@ -441,7 +663,7 @@ test("FakeScoresContainer rejects the old buggy write-back shape (regression gua
   // The actual (fixed) write-back path supplies the real shape and must
   // succeed against the same container.
   const votes = new FakeVotesContainer().addLegacyVote("venue:echoplex", "user-1");
-  const report = await reconcileFromContainers(votes, scores, { apply: true });
+  const report = await reconcileFromContainers(votes, scores, { mode: "pre-rollback", apply: true });
   assert.equal(report.applied, true);
   assert.equal(scores.docs.get("venue:echoplex").scope, "global");
 });
@@ -453,4 +675,3 @@ test("fetchLegacyScoresFromContainer reads the real target_id-keyed legacy score
   const result = await fetchLegacyScoresFromContainer(scores);
   assert.deepEqual(result, [{ target: "venue:echoplex", count: 5 }]);
 });
-

@@ -4,29 +4,57 @@
 // Implements the approved reconciliation path from .azure/deployment-plan.md
 // ("Azure State Model" / caj-yolo-ops). The `votes` container is always the
 // authoritative source of truth; this tool rebuilds a target mirror's
-// per-partition counts from it. The same computation serves three distinct
-// procedural phases described in the plan:
+// per-partition counts from it. There are TWO DISTINCT MIRRORS, never
+// interchangeable, each tied to a specific phase via the required
+// `--mode` flag:
 //
-//   1. Pre-cutover backfill -- before Azure ever serves traffic, backfill
-//      Azure's score-metadata counts from the vote documents that already
-//      exist. No timing gate; run whenever the infra lane needs it.
-//   2. Post-cutover reconciliation (this task) -- after api.curations.dev's
-//      DNS is cut to Azure, Cloudflare's proxied DNS TTL (300s) means some
-//      resolvers/clients keep reaching the legacy Cloudflare Worker for a
-//      while. The legacy Worker can still write `votes` + the legacy
-//      `scores` container during that window WITHOUT updating Azure's
-//      score metadata. Re-running this same reconciliation after the race
-//      window has closed absorbs those late votes. Pass
-//      --cutover-manifest <path> (or --since <iso-timestamp>) with --apply
-//      and this tool REFUSES to write until at least
-//      `--min-wait-seconds` (default 600s -- one old-DNS TTL, and per
-//      explicit preference never less than 10 minutes) has elapsed since
-//      the cutover's recorded `cut-api` step. Dry run is never gated by
-//      this -- only --apply is.
-//   3. Pre-rollback reconciliation -- before falling back to Cloudflare,
-//      reconcile the legacy `scores` container from the authoritative vote
-//      partitions so Cloudflare's compatibility store is correct again. No
-//      timing gate; run immediately before rollback.
+//   --mode backfill       Pre-cutover backfill (no timing gate). Writes the
+//                          SAME-PARTITION Azure score metadata document --
+//                          `{id: "score", doc_type: "score", target_id,
+//                          count, updated_at}` -- living in the `votes`
+//                          container itself, partitioned by `target_id`
+//                          (see agent-worker/src/platform/azure/
+//                          community.ts's ScoreDoc/reconcileScoreFromVotes).
+//   --mode post-cutover    Post-cutover reconciliation. Writes the SAME
+//                          same-partition Azure score metadata mirror as
+//                          --mode backfill (it is the same read/write
+//                          target -- just re-run after the DNS TTL race
+//                          window has closed to absorb late legacy votes).
+//                          This is the ONLY mode with a timing gate: with
+//                          --apply, --cutover-manifest <path> (or --since
+//                          <iso-timestamp>) is REQUIRED, and the tool
+//                          refuses to write until at least
+//                          --min-wait-seconds (default 600s -- one old-DNS
+//                          TTL, never less than 10 minutes) has elapsed
+//                          since the cutover's recorded `cut-api` step.
+//                          Dry run is never gated by this.
+//   --mode pre-rollback    Pre-rollback reconciliation (no timing gate).
+//                          Writes the SEPARATE legacy `scores` container --
+//                          `{id: target_id, scope: "global", target_id,
+//                          count, updated_at}`, partitioned by the single
+//                          `scope: "global"` value (see agent-worker/src/
+//                          community.ts's ScoreDoc,
+//                          agent-worker/src/vote-guard.ts, and
+//                          reconcileLegacyScoresContainer) -- so
+//                          Cloudflare's compatibility store is correct
+//                          again before falling back.
+//
+// --cutover-manifest/--since/--min-wait-seconds are only meaningful for
+// --mode post-cutover; supplying them with --mode backfill or
+// --mode pre-rollback is a hard error (those phases are never time-gated).
+//
+// Vote counting (shared by all three modes): the authoritative `votes`
+// container query counts BOTH legacy Cloudflare-Worker-written vote
+// documents -- shaped `{id, target_id, user_id, created_at}` with NO
+// `doc_type` field at all (agent-worker/src/vote-guard.ts:237-243) -- and
+// Azure-native vote documents (`doc_type: "vote"`,
+// agent-worker/src/platform/azure/community.ts), excluding the
+// same-partition score metadata document (`id: "score"`). Filtering on
+// `doc_type = 'vote'` alone would silently miss exactly the late legacy
+// writes reconciliation exists to absorb during the post-cutover DNS TTL
+// race window. There is no stored "direction" in the real schema -- a
+// vote document's mere existence is the vote (no downvote concept) -- so
+// every match contributes +1.
 //
 // The reconciliation itself is idempotent by construction: it always
 // computes "authoritative count now vs. mirror count now" and writes only
@@ -40,32 +68,34 @@
 // passed. This mirrors bootstrap.sh/cutover.mjs's confirmation-gate design
 // so a single flag can never trigger a production write by accident.
 //
-// Two operating modes:
+// Two operating modes ("store", distinct from the required --mode phase
+// selector above):
 //   --fixture <path>   Offline/test mode: reads a local JSON fixture
 //                       describing vote partitions and the target mirror
-//                       (score metadata or legacy scores -- structurally
-//                       identical, just a list of {target, count}),
-//                       computes the diff, and (with --apply) writes the
-//                       reconciled result back to a local output file.
-//                       Never touches real Azure. This is the mode used by
-//                       scripts/azure/test/** and by this task, which
-//                       forbids real production mutation.
+//                       (whichever of the two real mirrors --mode selects
+//                       -- structurally identical from this tool's own
+//                       abstracted point of view, just a list of
+//                       {target, count}), computes the diff, and (with
+//                       --apply) writes the reconciled result back to a
+//                       local output file. Never touches real Azure. This
+//                       is the store used by scripts/azure/test/** and by
+//                       this task, which forbids real production mutation.
 //   (no --fixture)     Real mode: connects to the existing Cosmos account
 //                       via managed identity using @azure/identity +
 //                       @azure/cosmos. These packages are an intentional
 //                       *optional* dependency -- they are only imported
-//                       when this mode actually runs, so scripts/azure has
-//                       no install requirement for dry-run/fixture use.
-//                       Install them (`npm install @azure/cosmos
-//                       @azure/identity` in the ops job's own package) before
-//                       using this mode for real.
+//                       when this store actually runs, so scripts/azure
+//                       has no install requirement for dry-run/fixture
+//                       use. Install them (`npm install @azure/cosmos
+//                       @azure/identity` in the ops job's own package)
+//                       before using this store for real.
 //
 // Usage:
-//   node scripts/azure/reconcile-scores.mjs --fixture path/to/fixture.json [--apply --confirm reconcile-scores] [--json]
-//   node scripts/azure/reconcile-scores.mjs --fixture path/to/fixture.json \
+//   node scripts/azure/reconcile-scores.mjs --mode backfill --fixture path/to/fixture.json [--apply --confirm reconcile-scores] [--json]
+//   node scripts/azure/reconcile-scores.mjs --mode post-cutover --fixture path/to/fixture.json \
 //     --cutover-manifest path/to/cutover-manifest.json \
 //     [--min-wait-seconds 600] [--apply --confirm reconcile-scores] [--json]
-//   node scripts/azure/reconcile-scores.mjs --cosmos-endpoint <uri> --database curations \
+//   node scripts/azure/reconcile-scores.mjs --mode pre-rollback --cosmos-endpoint <uri> --database curations \
 //     --votes-container votes --scores-container scores \
 //     [--apply --confirm reconcile-scores] [--json]
 import fs from "node:fs";
@@ -82,7 +112,14 @@ export const CLOUDFLARE_DNS_TTL_SECONDS = 300;
 // old-DNS TTL, and never less than 10 minutes per explicit preference.
 export const DEFAULT_POST_CUTOVER_MIN_WAIT_SECONDS = Math.max(CLOUDFLARE_DNS_TTL_SECONDS, 600);
 
+// The three procedural phases from .azure/deployment-plan.md. Each phase
+// determines which of the two real mirrors this tool reads/writes -- see
+// the module header above. This selector is required (no default) so a
+// caller can never accidentally reconcile the wrong store.
+export const RECONCILE_MODES = ["backfill", "post-cutover", "pre-rollback"];
+
 const ARG_SPEC = {
+  mode: { type: "string", default: "" },
   fixture: { type: "string", default: "" },
   "fixture-out": { type: "string", default: "" },
   "cosmos-endpoint": { type: "string", default: "" },
@@ -100,19 +137,30 @@ const ARG_SPEC = {
 };
 
 function usage() {
-  return `Usage: node scripts/azure/reconcile-scores.mjs --fixture <path> [--apply --confirm ${CONFIRM_PHRASE}] [--json]
-       node scripts/azure/reconcile-scores.mjs --fixture <path> --cutover-manifest <path>
+  return `Usage: node scripts/azure/reconcile-scores.mjs --mode ${RECONCILE_MODES.join("|")} --fixture <path> [--apply --confirm ${CONFIRM_PHRASE}] [--json]
+       node scripts/azure/reconcile-scores.mjs --mode post-cutover --fixture <path> --cutover-manifest <path>
                         [--min-wait-seconds ${DEFAULT_POST_CUTOVER_MIN_WAIT_SECONDS}] [--apply --confirm ${CONFIRM_PHRASE}] [--json]
-       node scripts/azure/reconcile-scores.mjs --cosmos-endpoint <uri> [--database curations]
+       node scripts/azure/reconcile-scores.mjs --mode ${RECONCILE_MODES.join("|")} --cosmos-endpoint <uri> [--database curations]
                         [--votes-container votes] [--scores-container scores]
                         [--target <scope>] [--apply --confirm ${CONFIRM_PHRASE}] [--json]
 
-Rebuilds a target mirror's score counts from authoritative vote partitions.
-Dry run by default; requires both --apply and --confirm ${CONFIRM_PHRASE} to write.
-Idempotent: safe to re-run any number of times, including to absorb votes
-written late by the legacy Cloudflare Worker during the DNS TTL race window.
-When --cutover-manifest or --since is given, --apply refuses to write until
---min-wait-seconds (default ${DEFAULT_POST_CUTOVER_MIN_WAIT_SECONDS}) have elapsed since cut-api.`;
+--mode is REQUIRED and selects which of the two real mirrors this tool
+reconciles: 'backfill'/'post-cutover' both target the same-partition Azure
+score metadata document inside the 'votes' container itself; 'pre-rollback'
+targets the separate legacy 'scores' container. See this file's header
+comment for the exact persisted document shapes.
+
+Rebuilds the selected mirror's score counts from authoritative vote
+partitions. Dry run by default; requires both --apply and --confirm
+${CONFIRM_PHRASE} to write. Idempotent: safe to re-run any number of times,
+including to absorb votes written late by the legacy Cloudflare Worker
+during the DNS TTL race window.
+
+--cutover-manifest/--since/--min-wait-seconds are ONLY valid with
+--mode post-cutover (the only phase with a timing gate); supplying them
+with another --mode is an error. With --mode post-cutover and --apply, one
+of --cutover-manifest or --since is REQUIRED, and --apply refuses to write
+until --min-wait-seconds (default ${DEFAULT_POST_CUTOVER_MIN_WAIT_SECONDS}) have elapsed since cut-api.`;
 }
 
 export class ReconcileConfirmError extends Error {
@@ -129,29 +177,45 @@ export class PostCutoverWaitError extends Error {
   }
 }
 
+export class InvalidModeError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "InvalidModeError";
+  }
+}
+
+/** Throws InvalidModeError unless `mode` is one of RECONCILE_MODES. */
+export function validateMode(mode) {
+  if (!RECONCILE_MODES.includes(mode)) {
+    throw new InvalidModeError(
+      `--mode is required and must be one of: ${RECONCILE_MODES.join(", ")} (got '${mode || "<empty>"}')`
+    );
+  }
+}
+
 /**
  * Pure diff computation: given authoritative vote documents (one per
  * viewer, grouped by target) and a target mirror's current counts, returns
  * the set of documents that must be created/updated to match reality.
  * @param {Array<{ target: string, viewerId: string, direction: 1|-1 }>} votes
- * @param {Array<{ target: string, count: number }>} legacyScores
+ * @param {Array<{ target: string, count: number }>} mirrorScores
  * @param {string} [onlyTarget]
  */
-export function computeReconciliation(votes, legacyScores, onlyTarget) {
+export function computeReconciliation(votes, mirrorScores, onlyTarget) {
   const authoritative = new Map();
   for (const vote of votes) {
     if (onlyTarget && vote.target !== onlyTarget) continue;
     const current = authoritative.get(vote.target) || 0;
     authoritative.set(vote.target, current + (vote.direction >= 0 ? 1 : -1));
   }
-  const legacyByTarget = new Map(legacyScores.map((s) => [s.target, s.count]));
+  const mirrorByTarget = new Map(mirrorScores.map((s) => [s.target, s.count]));
 
-  const allTargets = new Set([...authoritative.keys(), ...legacyByTarget.keys()]);
+  const allTargets = new Set([...authoritative.keys(), ...mirrorByTarget.keys()]);
   const diffs = [];
   for (const target of allTargets) {
     if (onlyTarget && target !== onlyTarget) continue;
     const authoritativeCount = authoritative.get(target) ?? 0;
-    const legacyCount = legacyByTarget.get(target) ?? 0;
+    const legacyCount = mirrorByTarget.get(target) ?? 0;
     if (authoritativeCount !== legacyCount) {
       diffs.push({ target, legacyCount, authoritativeCount, delta: authoritativeCount - legacyCount });
     }
@@ -198,11 +262,12 @@ async function runFixtureMode(values) {
   }
   const fixture = JSON.parse(fs.readFileSync(values.fixture, "utf8"));
   const votes = fixture.votes || [];
-  const legacyScores = fixture.scores || [];
-  const diffs = computeReconciliation(votes, legacyScores, values.target || undefined);
+  const mirrorScores = fixture.scores || [];
+  const diffs = computeReconciliation(votes, mirrorScores, values.target || undefined);
 
   const report = {
-    mode: "fixture",
+    store: "fixture",
+    mode: values.mode,
     source: values.fixture,
     dryRun: !values.apply,
     diffCount: diffs.length,
@@ -215,7 +280,7 @@ async function runFixtureMode(values) {
         `Refusing to apply: --confirm must exactly equal '${CONFIRM_PHRASE}' (got '${values.confirm || "<empty>"}')`
       );
     }
-    const reconciled = new Map(legacyScores.map((s) => [s.target, s.count]));
+    const reconciled = new Map(mirrorScores.map((s) => [s.target, s.count]));
     for (const diff of diffs) {
       reconciled.set(diff.target, diff.authoritativeCount);
     }
@@ -262,12 +327,62 @@ export async function fetchVotesFromContainer(votesContainer) {
 }
 
 /**
+ * Fetches the same-partition Azure score metadata mirror from the `votes`
+ * container itself -- the mirror `--mode backfill`/`--mode post-cutover`
+ * reconcile against (agent-worker/src/platform/azure/community.ts's
+ * `ScoreDoc`/`reconcileScoreFromVotes`: `{id: "score", doc_type: "score",
+ * target_id, count, updated_at}`, one per target's own partition). This is
+ * a DIFFERENT container role than `fetchLegacyScoresFromContainer` below,
+ * even though both are invoked with a container argument named similarly
+ * by callers -- never conflate the two.
+ */
+export async function fetchAzureScoreMetadataFromContainer(votesContainer) {
+  const { resources } = await votesContainer.items
+    .query({
+      query: "SELECT c.target_id AS target, c.count FROM c WHERE c.id = @scoreId AND c.doc_type = @scoreType",
+      parameters: [
+        { name: "@scoreId", value: "score" },
+        { name: "@scoreType", value: "score" },
+      ],
+    })
+    .fetchAll();
+  return resources;
+}
+
+/**
+ * Writes the same-partition Azure score metadata mirror back into the
+ * `votes` container for `--mode backfill`/`--mode post-cutover`. Document
+ * shape and partition key MUST match the real shape exactly
+ * (agent-worker/src/platform/azure/community.ts's `ScoreDoc`/
+ * `reconcileScoreFromVotes`): `id: "score"`, `doc_type: "score"`,
+ * `target_id`, `count`, `updated_at`, partitioned by `target_id` (NOT
+ * `scope: "global"` -- that partition key belongs only to the separate
+ * legacy scores container written by `writeLegacyScores` below).
+ */
+export async function writeAzureScoreMetadata(votesContainer, diffs) {
+  for (const diff of diffs) {
+    // One point write per corrected target; bounded, sequential, and
+    // idempotent (re-running converges on the same authoritative count,
+    // whether it's the first backfill, a post-cutover late-vote
+    // absorption pass, or a repeat of either).
+    await votesContainer.items.upsert(
+      {
+        id: "score",
+        doc_type: "score",
+        target_id: diff.target,
+        count: diff.authoritativeCount,
+        updated_at: new Date().toISOString(),
+      },
+      { partitionKey: diff.target }
+    );
+  }
+}
+
+/**
  * Fetches the legacy (Cloudflare rollback) `scores` mirror from a real (or
- * fake, test-injected) `scores` container. Legacy/score-mirror documents
- * use `target_id`, not `target` (agent-worker/src/community.ts's
- * `ScoreDoc`; identical shape in
- * agent-worker/src/platform/azure/community.ts's same-partition score
- * metadata doc).
+ * fake, test-injected) `scores` container -- the mirror `--mode
+ * pre-rollback` reconciles against. Legacy/score-mirror documents use
+ * `target_id`, not `target` (agent-worker/src/community.ts's `ScoreDoc`).
  */
 export async function fetchLegacyScoresFromContainer(scoresContainer) {
   const { resources } = await scoresContainer.items.query("SELECT c.target_id AS target, c.count FROM c").fetchAll();
@@ -275,10 +390,11 @@ export async function fetchLegacyScoresFromContainer(scoresContainer) {
 }
 
 /**
- * Writes reconciled counts back to the legacy `scores` container. Document
- * shape and partition key MUST match the real legacy scores container
- * exactly (agent-worker/src/community.ts's `ScoreDoc`; identical shape
- * written by agent-worker/src/vote-guard.ts:272-280 and by
+ * Writes reconciled counts back to the legacy `scores` container for
+ * `--mode pre-rollback`. Document shape and partition key MUST match the
+ * real legacy scores container exactly (agent-worker/src/community.ts's
+ * `ScoreDoc`; identical shape written by
+ * agent-worker/src/vote-guard.ts:272-280 and by
  * agent-worker/src/platform/azure/community.ts's
  * `reconcileLegacyScoresContainer`): `id` is the target id itself,
  * `scope: "global"` is the (only) partition key value the container uses,
@@ -289,12 +405,10 @@ export async function fetchLegacyScoresFromContainer(scoresContainer) {
  * reads above, so a repeat reconciliation run converges instead of
  * drifting.
  */
-export async function writeReconciledScores(scoresContainer, diffs) {
+export async function writeLegacyScores(scoresContainer, diffs) {
   for (const diff of diffs) {
     // One point write per corrected target; bounded, sequential, and
-    // idempotent (re-running converges on the same authoritative count,
-    // whether it's the first backfill, a post-cutover late-vote
-    // absorption pass, or a repeat of either).
+    // idempotent (re-running converges on the same authoritative count).
     await scoresContainer.items.upsert(
       {
         id: diff.target,
@@ -310,19 +424,35 @@ export async function writeReconciledScores(scoresContainer, diffs) {
 
 /**
  * Runs the full query -> diff -> optional-write reconciliation against
- * already-constructed `votes`/`scores` container handles -- real Cosmos
- * containers in production, or a lightweight fake in tests, so this exact
- * logic (including the doc_type/legacy-absorption predicate above) is
- * exercised without requiring a live Cosmos account or the optional
- * `@azure/cosmos` dependency to be installed.
+ * already-constructed Cosmos container handles -- real Cosmos containers
+ * in production, or a lightweight fake in tests -- so this exact logic
+ * (including the doc_type/legacy-absorption predicate and the two
+ * distinct mirror shapes above) is exercised without requiring a live
+ * Cosmos account or the optional `@azure/cosmos` dependency to be
+ * installed.
+ *
+ * `votesContainer` is always the authoritative `votes` container.
+ * `targetContainer` is mode-dependent: for `backfill`/`post-cutover` it
+ * MUST be the SAME `votes` container handle (the mirror lives in the same
+ * partition); for `pre-rollback` it MUST be the separate legacy `scores`
+ * container handle. Passing the wrong one silently reconciles against the
+ * wrong mirror, so `mode` is required and validated up front.
  */
-export async function reconcileFromContainers(votesContainer, scoresContainer, { target, apply } = {}) {
+export async function reconcileFromContainers(votesContainer, targetContainer, { mode, target, apply } = {}) {
+  validateMode(mode);
   const votes = await fetchVotesFromContainer(votesContainer);
-  const legacyScores = await fetchLegacyScoresFromContainer(scoresContainer);
-  const diffs = computeReconciliation(votes, legacyScores, target || undefined);
-  const report = { mode: "cosmos", dryRun: !apply, diffCount: diffs.length, diffs, applied: false };
+  const mirrorScores =
+    mode === "pre-rollback"
+      ? await fetchLegacyScoresFromContainer(targetContainer)
+      : await fetchAzureScoreMetadataFromContainer(targetContainer);
+  const diffs = computeReconciliation(votes, mirrorScores, target || undefined);
+  const report = { store: "cosmos", mode, dryRun: !apply, diffCount: diffs.length, diffs, applied: false };
   if (apply) {
-    await writeReconciledScores(scoresContainer, diffs);
+    if (mode === "pre-rollback") {
+      await writeLegacyScores(targetContainer, diffs);
+    } else {
+      await writeAzureScoreMetadata(targetContainer, diffs);
+    }
     report.applied = true;
   }
   return report;
@@ -355,9 +485,13 @@ async function runCosmosMode(values) {
   const client = new CosmosClient({ endpoint: values["cosmos-endpoint"], aadCredentials: credential });
   const database = client.database(values.database);
   const votesContainer = database.container(values["votes-container"]);
-  const scoresContainer = database.container(values["scores-container"]);
+  // backfill/post-cutover reconcile the same-partition score metadata doc
+  // living in the votes container itself; only pre-rollback targets the
+  // separate legacy scores container.
+  const targetContainer = values.mode === "pre-rollback" ? database.container(values["scores-container"]) : votesContainer;
 
-  return reconcileFromContainers(votesContainer, scoresContainer, {
+  return reconcileFromContainers(votesContainer, targetContainer, {
+    mode: values.mode,
     target: values.target || undefined,
     apply: values.apply,
   });
@@ -366,8 +500,7 @@ async function runCosmosMode(values) {
 /**
  * Resolves the post-cutover wait-gate reference timestamp from CLI values,
  * preferring an explicit --since over --cutover-manifest, and returns null
- * when neither is given (pre-cutover backfill and pre-rollback
- * reconciliation runs are never gated).
+ * when neither is given.
  */
 function resolveWaitGateReference(values) {
   if (values.since) return values.since;
@@ -394,18 +527,31 @@ async function main() {
   }
 
   try {
-    if (values.apply) {
-      const waitGateReference = resolveWaitGateReference(values);
-      if (waitGateReference) {
-        const minWaitSeconds = Number(values["min-wait-seconds"]);
-        const gate = checkMinimumWaitElapsed(waitGateReference, minWaitSeconds);
-        if (!gate.ok) {
-          throw new PostCutoverWaitError(
-            `Refusing to apply: only ${Math.floor(gate.elapsedSeconds)}s have elapsed since cut-api (${waitGateReference}); ` +
-              `at least ${gate.requiredSeconds}s must pass (Cloudflare's ${CLOUDFLARE_DNS_TTL_SECONDS}s proxied DNS TTL, per policy) ` +
-              "so votes written late by the legacy Cloudflare Worker have time to land before this reconciliation absorbs them."
-          );
-        }
+    validateMode(values.mode);
+
+    const waitGateReference = resolveWaitGateReference(values);
+    if (values.mode !== "post-cutover") {
+      if (waitGateReference !== null) {
+        throw new Error(
+          `--cutover-manifest/--since only apply to --mode post-cutover (the only phase with a DNS TTL wait gate); ` +
+            `got --mode ${values.mode}. Omit them for backfill/pre-rollback runs, which are never time-gated.`
+        );
+      }
+    } else if (values.apply) {
+      if (waitGateReference === null) {
+        throw new PostCutoverWaitError(
+          "--mode post-cutover --apply requires --cutover-manifest <path> or --since <iso-timestamp> to prove the " +
+            "Cloudflare DNS TTL wait gate has elapsed. Dry runs may omit this."
+        );
+      }
+      const minWaitSeconds = Number(values["min-wait-seconds"]);
+      const gate = checkMinimumWaitElapsed(waitGateReference, minWaitSeconds);
+      if (!gate.ok) {
+        throw new PostCutoverWaitError(
+          `Refusing to apply: only ${Math.floor(gate.elapsedSeconds)}s have elapsed since cut-api (${waitGateReference}); ` +
+            `at least ${gate.requiredSeconds}s must pass (Cloudflare's ${CLOUDFLARE_DNS_TTL_SECONDS}s proxied DNS TTL, per policy) ` +
+            "so votes written late by the legacy Cloudflare Worker have time to land before this reconciliation absorbs them."
+        );
       }
     }
 
@@ -413,7 +559,7 @@ async function main() {
     if (values.json) {
       console.log(JSON.stringify(report, null, 2));
     } else {
-      console.log(`Mode: ${report.mode}  dryRun: ${report.dryRun}  diffs: ${report.diffCount}`);
+      console.log(`Store: ${report.store}  Mode: ${report.mode}  dryRun: ${report.dryRun}  diffs: ${report.diffCount}`);
       for (const diff of report.diffs) {
         console.log(
           `  ${diff.target}: legacy=${diff.legacyCount} authoritative=${diff.authoritativeCount} delta=${diff.delta}`

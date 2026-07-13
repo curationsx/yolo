@@ -98,6 +98,21 @@ updates the two Container Apps to caller-supplied **immutable** image refs
 and publishes the Astro `dist/` artifact to Static Web Apps. Structurally
 refuses to ever invoke Owner bootstrap. Dry run by default.
 
+**Static Web Apps publish:** invoked via `npx --yes @azure/static-web-apps-cli@2.0.9`
+— a pinned version, never a bare `swa` binary — since neither this
+script's own dependencies nor the workflow that calls it install the `swa`
+CLI globally; a bare `swa` call would fail with "command not found" the
+first time this actually runs in CI. The SWA CLI's own `--env` flag (a
+*preview environment* selector, unrelated to this script's own
+`--environment azure-staging|production` GitHub Environment label used for
+the Container Apps image deploy above) is **always** hardcoded to
+`production` regardless of `--environment` — the Static Web Apps resource
+itself does not yet have a separate staging deployment slot or
+custom-domain-live staging host, so both `azure-staging` and `production`
+runs must publish to the same SWA resource's production/default
+environment for the generated default hostname (used for human review, and
+queried by `verify.mjs`) to actually serve the build.
+
 `--verify-gateway [--gateway-verify-timeout <secs>] [--gateway-verify-poll-interval <secs>]`
 triggers post-deploy gateway health verification — but **never** by calling
 the gateway's URL directly. The staging (and production) gateway's ingress
@@ -195,39 +210,64 @@ following disabled (`redirect: "manual"`) — still read-only.
 
 ### reconcile-scores.mjs
 
-Rebuilds a target mirror's `scores` counts from authoritative `votes`
-partitions (see plan's "Azure State Model"). The same tool serves three
-procedural phases:
+Rebuilds a target mirror's score counts from authoritative `votes`
+partitions (see plan's "Azure State Model"). There are **two distinct
+mirrors**, never interchangeable, selected by the **required** `--mode`
+flag (no default — the tool refuses to run without it):
 
-1. **Pre-cutover backfill** — before Azure serves any traffic, backfill
-   Azure's score-metadata counts from existing vote documents. No timing
-   gate.
-2. **Post-cutover reconciliation** — after `api.curations.dev`'s DNS is cut
-   to Azure, Cloudflare's proxied DNS TTL (`300s`) means some
+1. **`--mode backfill`** — pre-cutover, before Azure serves any traffic.
+   Writes the **same-partition Azure score metadata document** living
+   *inside the `votes` container itself* — `{id: "score",
+   doc_type: "score", target_id, count, updated_at}`, partitioned by
+   `target_id` (matches `agent-worker/src/platform/azure/community.ts`'s
+   `ScoreDoc`/`reconcileScoreFromVotes` exactly). No timing gate.
+2. **`--mode post-cutover`** — after `api.curations.dev`'s DNS is cut to
+   Azure, Cloudflare's proxied DNS TTL (`300s`) means some
    resolvers/clients keep reaching the legacy Cloudflare Worker for a
-   while, which can still write `votes` + the legacy `scores` container
-   *without* updating Azure's score metadata. Passing
-   `--cutover-manifest <path>` (a `cutover.mjs` rollback manifest — its
-   recorded `cut-api` step timestamp is used) or an explicit
-   `--since <iso-timestamp>` makes `--apply` **refuse to write** until at
-   least `--min-wait-seconds` (default `600` — one full old-DNS TTL, and
-   per explicit preference never less than 10 minutes) have elapsed since
-   the API was cut. Dry run is **never** gated by this — only `--apply` is,
-   so the diff is always visible for review. The reconciliation is
-   idempotent by construction (always "authoritative count now vs. mirror
-   count now", written as an upsert), so re-running it — including more
-   than once, if even later votes trickle in — safely absorbs whatever
-   landed during the race window without double-counting.
-3. **Pre-rollback reconciliation** — immediately before falling back to
-   Cloudflare, reconcile the legacy `scores` container from the
-   authoritative vote partitions so Cloudflare's compatibility store is
-   correct again. No timing gate.
+   while, which can still write `votes` *without* updating Azure's score
+   metadata. This targets the **same same-partition mirror as
+   `--mode backfill`** (it's the same read/write target, just re-run after
+   the race window closes). This is the **only** mode with a timing gate:
+   `--apply` **requires** either `--cutover-manifest <path>` (a
+   `cutover.mjs` rollback manifest — its recorded `cut-api` step timestamp
+   is used) or an explicit `--since <iso-timestamp>`, and refuses to write
+   until at least `--min-wait-seconds` (default `600` — one full old-DNS
+   TTL, never less than 10 minutes) have elapsed since the API was cut.
+   Dry run is **never** gated by this. Supplying `--cutover-manifest`/
+   `--since` with any other `--mode` is a hard error — those phases are
+   never time-gated.
+3. **`--mode pre-rollback`** — immediately before falling back to
+   Cloudflare. Writes the **separate legacy `scores` container** —
+   `{id: target_id, scope: "global", target_id, count, updated_at}`,
+   partitioned by the single `scope: "global"` value (matches
+   `agent-worker/src/community.ts`'s `ScoreDoc`,
+   `agent-worker/src/vote-guard.ts`, and
+   `reconcileLegacyScoresContainer`) — so Cloudflare's compatibility store
+   is correct again before rollback. No timing gate.
+
+All three modes share the same authoritative `votes` read
+(`fetchVotesFromContainer`): it counts BOTH legacy Cloudflare-Worker vote
+documents (`{id, target_id, user_id, created_at}`, **no** `doc_type` field
+at all) and Azure-native vote documents (`doc_type: "vote"`), excluding the
+same-partition score metadata document (`id: "score"`) — this is what lets
+every phase absorb a true legacy-shaped vote correctly. The reconciliation
+is idempotent by construction (always "authoritative count now vs. mirror
+count now", written as an upsert), so re-running any mode any number of
+times — including back-to-back, or repeatedly if even later votes trickle
+in during the post-cutover race window — safely converges without
+double-counting.
 
 `--fixture <path>` mode is fully offline (reads/writes local JSON, used by
-this task and by the test suite). Real Cosmos mode requires
-`--cosmos-endpoint` and dynamically imports `@azure/cosmos` + `@azure/identity`
-only when actually connecting (**not installed by default** — install them
-before using real mode). Dry run always reports the diff; `--apply --confirm reconcile-scores` writes (subject to the post-cutover wait gate above).
+this task and by most of the test suite — its `{votes, scores}` shape is
+this tool's own generic abstraction and applies identically regardless of
+which real mirror `--mode` would select). Real Cosmos mode requires
+`--cosmos-endpoint` and dynamically imports `@azure/cosmos` +
+`@azure/identity` only when actually connecting (**not installed by
+default** — install them before using real mode); it automatically targets
+the `votes` container itself for `backfill`/`post-cutover`, or the separate
+`--scores-container` for `pre-rollback`. Dry run always reports the diff;
+`--apply --confirm reconcile-scores` writes (subject to the post-cutover
+wait gate above).
 
 ### cutover.mjs
 
@@ -403,31 +443,40 @@ by default.
   real fields are `id`/`target_id`/`user_id`/`created_at` (plus optional
   `doc_type: "vote"`; legacy Cloudflare-Worker-written vote docs have no
   `doc_type` at all — a vote document's mere existence is the vote, there
-  is no downvote/`direction` concept in this schema), and the legacy
-  `scores` container's real fields are `id`/`scope: "global"`/`target_id`/
-  `count`/`updated_at`, partitioned on `scope`. `target`/`viewerId`/
-  `direction` are this tool's own internal, in-memory diff-computation
-  names (`computeReconciliation`'s parameter shape) — they are translated
-  to/from the real field names at the query/upsert boundary and never
-  appear in a persisted document. An earlier revision of the write-back
+  is no downvote/`direction` concept in this schema); the same-partition
+  Azure score metadata document (backfill/post-cutover mirror) is
+  `id`/`doc_type: "score"`/`target_id`/`count`/`updated_at`, partitioned by
+  `target_id`; and the separate legacy `scores` container's (pre-rollback
+  mirror) real fields are `id`/`scope: "global"`/`target_id`/`count`/
+  `updated_at`, partitioned on `scope`. `target`/`viewerId`/`direction` are
+  this tool's own internal, in-memory diff-computation names
+  (`computeReconciliation`'s parameter shape) — they are translated to/from
+  the real field names at the query/upsert boundary and never appear in a
+  persisted document. An earlier revision of the pre-rollback write-back
   path incorrectly persisted `{id, target, count}` instead of `{id, scope:
   "global", target_id, count, updated_at}`, which would have broken the
   container's partition-key routing and made repeat reconciliation runs
   unable to read their own prior writes back correctly — this has been
-  corrected to match the confirmed real shape exactly.
-  `runCosmosMode`'s query/diff/write logic is factored into three exported
-  functions — `fetchVotesFromContainer`, `fetchLegacyScoresFromContainer`,
-  `writeReconciledScores` (composed by `reconcileFromContainers`) —
-  specifically so `scripts/azure/test/reconcile-scores.test.mjs` can
-  exercise this exact query text (including the
+  corrected to match the confirmed real shape exactly, and an earlier
+  revision conflated the two distinct mirrors entirely (there was no
+  `--mode` selector and no same-partition Azure score metadata read/write
+  path at all) — this has also been corrected: `--mode` is now required
+  and selects the correct mirror explicitly.
+  `runCosmosMode`'s query/diff/write logic is factored into five exported
+  functions — `fetchVotesFromContainer`,
+  `fetchAzureScoreMetadataFromContainer`, `writeAzureScoreMetadata`,
+  `fetchLegacyScoresFromContainer`, `writeLegacyScores` (composed by
+  `reconcileFromContainers`) — specifically so
+  `scripts/azure/test/reconcile-scores.test.mjs` can exercise this exact
+  query text (including the
   `NOT IS_DEFINED(c.doc_type) OR c.doc_type = 'vote'` legacy-absorption
-  predicate) and the exact write-back shape against a lightweight fake
-  container (`test/helpers/fake-cosmos-container.mjs`) that seeds a true
-  legacy-shaped vote doc with no `doc_type` field at all and proves it is
-  absorbed — without installing `@azure/cosmos`/`@azure/identity` or
-  reaching a live account. Still unexercised against a **live** Cosmos
-  account; re-verify once `@azure/cosmos` is installed and a real account
-  exists.
+  predicate) and both exact write-back shapes against lightweight fake
+  containers (`test/helpers/fake-cosmos-container.mjs`) that seed a true
+  legacy-shaped vote doc with no `doc_type` field at all and prove it is
+  absorbed in all three modes — without installing
+  `@azure/cosmos`/`@azure/identity` or reaching a live account. Still
+  unexercised against a **live** Cosmos account; re-verify once
+  `@azure/cosmos` is installed and a real account exists.
 - `reconcile-scores.mjs`'s post-cutover wait gate assumes Cloudflare's
   proxied DNS TTL for `api.curations.dev` remains `300` seconds
   (`CLOUDFLARE_DNS_TTL_SECONDS`); re-check the live Cloudflare DNS record's
@@ -436,9 +485,16 @@ by default.
   Cores"` (falling back to `"Cores"`) from
   `az containerapp env list-usages`; confirm the exact `name.value` string
   Azure returns once a real Container Apps environment exists.
-- `deploy.sh` assumes the SWA publish path uses the `swa` CLI
-  (`@azure/static-web-apps-cli`) with a deployment token; confirm this
-  matches whatever `.github/workflows/azure-deploy.yml` ultimately uses.
+- `deploy.sh` publishes via `npx --yes @azure/static-web-apps-cli@2.0.9`
+  (pinned) with a deployment token, hardcoding the SWA CLI's own `--env` to
+  `production` regardless of this script's `--environment` GitHub
+  Environment label (see the `deploy.sh` section above for the full
+  rationale). `npx --yes` fetching/caching this pinned version on first use
+  in CI is a reasonable, standard assumption but has not been exercised
+  against a real GitHub Actions runner in this task; confirm the runner has
+  network access to the npm registry (or a private mirror/proxy) and that
+  this matches whatever `.github/workflows/azure-deploy.yml` ultimately
+  uses.
 - `deploy.sh --verify-gateway`'s `trigger_gateway_verification()` assumes
   `az containerapp job start --name caj-yolo-ops ...` returns an object
   with `.name` (the execution name to poll) and that

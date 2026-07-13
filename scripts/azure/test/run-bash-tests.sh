@@ -417,6 +417,35 @@ code=$?
 assert_exit_code "deploy.sh --verify-gateway --apply refuses (exit 1) when the job fails" 1 "$code"
 assert_contains "deploy.sh explains the gateway verification failure" "$out" "Gateway verification failed"
 
+echo "-- static site publish uses the pinned npx-invoked SWA CLI, never a bare 'swa' binary, and always targets the SWA production environment regardless of --environment --"
+FAKE_SITE_DIST="${SCRATCH}/fake-site-dist"
+mkdir -p "$FAKE_SITE_DIST"
+echo "<html></html>" > "${FAKE_SITE_DIST}/index.html"
+
+ledger="${SCRATCH}/deploy-swa-staging.ledger"
+: > "$ledger"
+out="$(run_script "$ledger" "${AZURE_DIR}/deploy.sh" \
+  --gateway-image "yolocurationsprod.azurecr.io/yolo/gateway:${GATEWAY_SHA}" \
+  --copilot-image "yolocurationsprod.azurecr.io/yolo/copilot-runtime:${GATEWAY_SHA}" \
+  --site-dist "$FAKE_SITE_DIST" \
+  --environment azure-staging 2>&1)"
+code=$?
+assert_exit_code "deploy.sh --environment azure-staging dry run exits 0" 0 "$code"
+assert_contains "deploy.sh dry run uses the pinned npx SWA CLI package" "$out" "npx --yes @azure/static-web-apps-cli@2.0.9 deploy"
+assert_contains "deploy.sh --environment azure-staging still targets SWA CLI --env production" "$out" "--env production"
+assert_not_contains "deploy.sh dry run never actually shells out to npx" "$(cat "$ledger")" "npx"
+
+ledger="${SCRATCH}/deploy-swa-production.ledger"
+: > "$ledger"
+out="$(run_script "$ledger" "${AZURE_DIR}/deploy.sh" \
+  --gateway-image "yolocurationsprod.azurecr.io/yolo/gateway:${GATEWAY_SHA}" \
+  --copilot-image "yolocurationsprod.azurecr.io/yolo/copilot-runtime:${GATEWAY_SHA}" \
+  --site-dist "$FAKE_SITE_DIST" \
+  --environment production 2>&1)"
+code=$?
+assert_exit_code "deploy.sh --environment production dry run exits 0" 0 "$code"
+assert_contains "deploy.sh --environment production also targets SWA CLI --env production" "$out" "--env production"
+
 echo
 echo "== certificate.sh =="
 

@@ -55,6 +55,17 @@ GATEWAY_VERIFY_POLL_SECONDS=5
 RUNTIME_BICEP="${REPO_ROOT}/infra/runtime.bicep"
 BOOTSTRAP_BICEP="${REPO_ROOT}/infra/bootstrap.bicep"
 
+# Pinned Static Web Apps CLI version, invoked via `npx --yes` rather than a
+# bare `swa` binary. Neither this script's own dependencies nor the
+# workflow that calls it install the `swa` CLI globally -- a bare `swa`
+# call would fail with "command not found" the first time this actually
+# runs in CI. `npx --yes <pkg>@<version>` fetches (and caches) the exact
+# pinned version on demand without requiring a pre-installed global binary
+# or a package.json dependency in this directory, and --yes suppresses
+# npx's interactive "ok to install" prompt so this stays non-interactive
+# in CI.
+SWA_CLI_PACKAGE="@azure/static-web-apps-cli@2.0.9"
+
 usage() {
   cat <<EOF
 Usage: $(basename "$0") --gateway-image <ref> --copilot-image <ref>
@@ -198,16 +209,29 @@ deploy_static_site() {
     log_warn "Environment variable \$$SWA_TOKEN_ENV is not set (fine for dry run; required for --apply)."
   fi
 
-  local cmd=(swa deploy "$SITE_DIST"
+  # SWA CLI's own --env flag is a *preview environment* selector, entirely
+  # separate from this script's own --environment (azure-staging|production
+  # GitHub Environment label used for the Container Apps image deploy
+  # above). The Static Web Apps *resource* itself does not yet have a
+  # separate staging deployment slot or custom-domain-live staging host --
+  # both our azure-staging and production labels must publish to the same
+  # SWA resource's production/default environment so the generated default
+  # hostname (queried by verify.mjs / used for human review) actually
+  # serves the build. Passing our own $ENVIRONMENT value here would have
+  # tried to deploy "azure-staging" as if it were a named SWA preview
+  # environment, which does not exist. This is intentionally hardcoded,
+  # not derived from $ENVIRONMENT.
+  local swa_cli_env="production"
+  local cmd=(npx --yes "$SWA_CLI_PACKAGE" deploy "$SITE_DIST"
     --deployment-token "<redacted:\$$SWA_TOKEN_ENV>"
-    --env "$ENVIRONMENT")
+    --env "$swa_cli_env")
   if [[ "$APPLY" != "1" ]]; then
-    print_dry_run_banner "Static Web Apps publish from $SITE_DIST (env=$ENVIRONMENT)"
+    print_dry_run_banner "Static Web Apps publish from $SITE_DIST (github-environment=$ENVIRONMENT, swa-cli-env=$swa_cli_env)"
     log_info "Would run: $(join_spaces "${cmd[@]}")"
     return
   fi
-  log_step "Publishing static site artifact from $SITE_DIST to $ENVIRONMENT"
-  swa deploy "$SITE_DIST" --deployment-token "${!SWA_TOKEN_ENV}" --env "$ENVIRONMENT"
+  log_step "Publishing static site artifact from $SITE_DIST (github-environment=$ENVIRONMENT, swa-cli-env=$swa_cli_env)"
+  npx --yes "$SWA_CLI_PACKAGE" deploy "$SITE_DIST" --deployment-token "${!SWA_TOKEN_ENV}" --env "$swa_cli_env"
 }
 
 # Triggers gateway health verification from *inside* Azure via the
