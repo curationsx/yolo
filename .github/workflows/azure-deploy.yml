@@ -302,7 +302,8 @@ jobs:
               --gateway-image "${{ steps.build_images.outputs.gateway_image }}" \
               --copilot-image "${{ steps.build_images.outputs.copilot_image }}" \
               --sha "${{ github.sha }}" \
-              --environment azure-staging
+              --environment azure-staging \
+              --verify-gateway
           else
             echo "scripts/azure/deploy.sh not present yet (separate lane) — skipping."
           fi
@@ -313,12 +314,13 @@ jobs:
         # IP restriction (enableStagingIpRestriction=true, allow-listing
         # only Wyatt's current IP) -- ingress is deliberately NOT weakened
         # to let a GitHub-hosted runner through, so a --gateway-url check
-        # here would just fail on an IP it was never meant to admit. Per
-        # .azure/deployment-plan.md, gateway health/contract verification
-        # pre-cutover is caj-yolo-ops's job (it runs inside cae-yolo-prod,
-        # unaffected by the *external* ingress IP restriction) via
-        # scripts/azure/verify.mjs run from that job, or from Wyatt's own
-        # allow-listed IP directly -- not from this runner.
+        # here would just fail on an IP it was never meant to admit.
+        # Gateway health/contract verification pre-cutover already ran
+        # above via --verify-gateway, which triggers caj-yolo-ops (now a
+        # bounded, exit-code-correct check against the gateway's INTERNAL
+        # fqdn -- see infra/modules/apps.bicep) and runs entirely inside
+        # cae-yolo-prod, never touching the public IP restriction. This
+        # step only covers what genuinely is safe to check externally.
         run: |
           if [ -f scripts/azure/verify.mjs ]; then
             node scripts/azure/verify.mjs \
@@ -480,15 +482,18 @@ jobs:
               --gateway-image "${{ steps.build_images.outputs.gateway_image }}" \
               --copilot-image "${{ steps.build_images.outputs.copilot_image }}" \
               --sha "${{ github.sha }}" \
-              --environment production
+              --environment production \
+              --verify-gateway
           else
             echo "scripts/azure/deploy.sh not present yet (separate lane) — skipping."
           fi
 
       - name: Post-deploy verification (production, read-only)
         # Production's gateway has no IP restriction
-        # (enableStagingIpRestriction=false), so this runner can verify it
-        # directly, unlike the staging job.
+        # (enableStagingIpRestriction=false), so this runner can also verify
+        # it directly here, in addition to --verify-gateway's internal
+        # caj-yolo-ops check above -- defense in depth, not a substitute
+        # for either check.
         run: |
           if [ -f scripts/azure/verify.mjs ]; then
             node scripts/azure/verify.mjs \
