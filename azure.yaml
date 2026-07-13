@@ -18,9 +18,40 @@
 # `az deployment sub create --template-file infra/bootstrap.bicep` under an
 # Owner-authenticated session — see the header comment in that file.
 #
+# WARNING -- `azd provision --preview` is NOT a read-only / non-mutating
+# command, despite its name. Confirmed empirically this session: running it
+# against a target resource group that does not yet exist creates that empty
+# resource group as a side effect (so it can synthesize an ARM what-if),
+# even in --preview --no-prompt mode. This happened twice here against
+# rg-yolo-prod; both times the resulting group was verified empty via
+# `az resource list` and deleted immediately with `az group delete`. Do not
+# rely on `azd provision --preview` for pre-deploy review, and do not run it
+# against a real target resource group name unless you intend to actually
+# provision (or are prepared to clean up an accidentally-created empty
+# group).
+#
+# For pre-deploy review, use the underlying ARM CLI directly instead, which
+# has no such side effect:
+#   az deployment group validate --resource-group rg-yolo-prod \
+#     --template-file infra/runtime.bicep --parameters infra/runtime.parameters.json ...
+#   az deployment group what-if    --resource-group rg-yolo-prod \
+#     --template-file infra/runtime.bicep --parameters infra/runtime.parameters.json ...
+# (`what-if` is exactly what .github/workflows/azure-deploy.yml's
+# workflow_dispatch deploy jobs run as a pre-apply preview step before
+# `az deployment group create`; the PR-triggered `verify` job only runs
+# `az bicep build` compile/lint, since it has no Azure credential at all.)
+# `az deployment sub what-if` against infra/bootstrap.bicep is similarly
+# safe when the target resource groups do not exist yet, since it operates
+# at subscription scope and creates nothing.
+#
+# `azd provision` (without --preview) remains the supported *mutating* local
+# provision path, to be run only after such a review has been approved --
+# never as a substitute for it.
+#
 # Before running `azd provision` locally, two things must be set in the azd
-# environment (verified with the non-mutating `azd provision --preview
-# --no-prompt`, which fails fast and lists exactly what is missing):
+# environment (azd will otherwise fail fast and list exactly what is
+# missing, but that failure itself does not confirm the command is safe to
+# run speculatively -- see the warning above):
 #
 #   1. Target resource group. infra/runtime.bicep is resource-group-scoped
 #      and takes no resourceGroupName parameter, so azd's default naming
