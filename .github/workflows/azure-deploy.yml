@@ -185,24 +185,32 @@ jobs:
           done
 
       - name: Run scripts/azure test suite (fixtures only, no Azure credential)
-        # There is no run-all.sh; the actual existing entry point is
-        # `npm test` inside scripts/azure (package.json: test -> test:bash
-        # (bash test/run-bash-tests.sh) then test:node (node --test
-        # test/*.test.mjs)). run-bash-tests.sh's own header confirms it
-        # uses a fixture az/gh on PATH and a throwaway git repo, and never
-        # touches real Azure, GitHub, or this repository's own working
-        # tree -- consistent with this job's no-Azure-credential design.
-        # `npm ci` installs only the two packages already locked in the
-        # committed package-lock.json (@azure/cosmos, @azure/identity);
-        # per that package.json's own description they are only
-        # dynamically imported by reconcile-scores.mjs's real (non
-        # -fixture) Cosmos mode, which this test run never exercises, but
-        # installing them removes any risk of an import failure regardless.
-        # This is the final, public-CI proof for the automation lane: real
+        # There is no run-all.sh. The existing, documented entry point
+        # (scripts/azure/README.md) is `npm ci --prefix scripts/azure`
+        # followed by `npm test --prefix scripts/azure` (package.json:
+        # test -> test:bash (bash test/run-bash-tests.sh) then test:node
+        # (node --test test/*.test.mjs)). run-bash-tests.sh's own header
+        # confirms it uses a fixture az/gh on PATH and a throwaway git
+        # repo, and never touches real Azure, GitHub, or this
+        # repository's own working tree -- consistent with this job's
+        # no-Azure-credential design. `npm ci` installs only the two
+        # packages already locked in the committed package-lock.json
+        # (@azure/cosmos, @azure/identity); per that package.json's own
+        # description they are only dynamically imported by
+        # reconcile-scores.mjs's real (non-fixture) Cosmos mode, which
+        # this test run never exercises, but installing them removes any
+        # risk of an import failure regardless. No shellcheck step is
+        # added here: shellcheck is only referenced via dormant
+        # `# shellcheck source=`/`disable=` directive comments inside the
+        # .sh files themselves, never actually invoked anywhere in this
+        # repository's tooling today, so adding a real shellcheck run
+        # would be a new runner, not use of an existing one. This is the
+        # final, public-CI proof for the automation lane: real
         # local/fixture tests, not just a --help parse check.
         run: |
           if [ -f scripts/azure/package.json ]; then
-            (cd scripts/azure && npm ci && npm test)
+            npm ci --prefix scripts/azure
+            npm test --prefix scripts/azure
           else
             echo "scripts/azure/package.json not present yet (separate lane) — skipping."
           fi
