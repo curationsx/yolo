@@ -58,6 +58,48 @@ class TestSchemaValidation(unittest.TestCase):
         errors = yolo.validate_schema(meta, schema)
         self.assertTrue(any("unexpected field 'surprise'" in e for e in errors))
 
+    def test_verified_software_requires_last_reviewed(self):
+        schema = yolo.load_schema("software-entry.schema.json")
+        entry = {
+            "id": "demo",
+            "name": "Demo",
+            "entity_type": "company",
+            "category": "development",
+            "primary_use": "A sufficiently descriptive primary use.",
+            "deployment": "cloud",
+            "notable_strength": "A sufficiently descriptive durable strength.",
+            "verify_before_use": "A sufficiently descriptive verification question.",
+            "reference": "https://example.com",
+            "review_status": "verified",
+        }
+        errors = yolo.validate_schema(entry, schema)
+        self.assertTrue(any("missing required field 'last_reviewed'" in e for e in errors))
+
+    def test_startup_credits_require_company_and_valid_source(self):
+        schema = yolo.load_schema("software-entry.schema.json")
+        entry = {
+            "id": "demo",
+            "name": "Demo",
+            "entity_type": "tool",
+            "category": "development",
+            "primary_use": "A sufficiently descriptive primary use.",
+            "deployment": "cloud",
+            "notable_strength": "A sufficiently descriptive durable strength.",
+            "verify_before_use": "A sufficiently descriptive verification question.",
+            "reference": "https://example.com",
+            "startup_credits": {
+                "status": "verified-offer",
+                "headline": "Verified startup offer",
+                "details": "Enough detail to explain the official offer.",
+                "eligibility": "Enough detail to explain who may qualify.",
+                "sources": [{"label": "Official source", "url": "https://?foo"}],
+                "checked_on": "2026-07-13",
+            },
+        }
+        errors = yolo.validate_schema(entry, schema)
+        self.assertTrue(any("entity_type" in e and "company" in e for e in errors))
+        self.assertTrue(any("startup_credits.sources[0].url" in e for e in errors))
+
 
 class TestRepositoryArtifacts(unittest.TestCase):
     """The repository's own artifacts must be healthy."""

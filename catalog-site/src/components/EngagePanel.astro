@@ -23,56 +23,73 @@ const messageId = `engage-message-${toolId}`;
 const privacyId = `engage-privacy-${toolId}`;
 ---
 
-<section class="engage" data-tool={toolId} data-api={apiBase}>
-  <h2>Ask {personaName}</h2>
-  <p class="engage-disclosure">🤖 {disclosure}<br /><span class="muted">{groundingNote}</span></p>
+<details class="engage" data-tool={toolId} data-api={apiBase}>
+  <summary class="engage-summary">
+    <span class="engage-kicker">Grounded guide</span>
+    <h2>Ask {personaName}</h2>
+    <span class="engage-summary-action" aria-hidden="true">
+      <span class="when-closed">Open guide +</span>
+      <span class="when-open">Close guide −</span>
+    </span>
+    <span class="engage-summary-disclosure">
+      🤖 {disclosure}<br /><span class="muted">{groundingNote}</span>
+    </span>
+    <span class="engage-preview" aria-hidden="true">
+      <span class="engage-preview-label">
+        Describe your product or PRD — {personaName} will assess the fit and suggest tuning.
+      </span>
+      <span class="engage-preview-field">Keep it concrete — stack, goal, constraint…</span>
+    </span>
+  </summary>
 
-  <div class="lane-tabs" role="tablist" aria-label="Conversation lanes">
-    <button type="button" role="tab" aria-selected="true" data-lane="prd-check">
-      Will {toolName} work for me?
-    </button>
-    <button type="button" role="tab" aria-selected="false" data-lane="community">
-      Share how you use it
-    </button>
-  </div>
-
-  <form class="engage-form">
-    <label class="engage-label" data-for-lane="prd-check" for={messageId}>
-      Describe your product or PRD — {personaName} will assess the fit and suggest tuning.
-    </label>
-    <label class="engage-label" data-for-lane="community" for={messageId} hidden>
-      Share your setup, workflow, or a prompt you curated — {personaName} will respond,
-      and your post joins the public feed below.
-    </label>
-    <textarea
-      id={messageId}
-      name="message"
-      rows="5"
-      maxlength="4000"
-      aria-describedby={privacyId}
-      required
-      placeholder="Keep it concrete — stack, goal, constraint…"></textarea>
-    <div class="engage-row">
-      <label class="check-row engage-publish">
-        <input type="checkbox" name="publish" />
-        <span data-publish-label>Publish this exchange to the company board</span>
-      </label>
-      <button type="submit" class="btn btn-primary">Send</button>
+  <div class="engage-body">
+    <div class="lane-tabs" role="tablist" aria-label="Conversation lanes">
+      <button type="button" role="tab" aria-selected="true" data-lane="prd-check">
+        Will {toolName} work for me?
+      </button>
+      <button type="button" role="tab" aria-selected="false" data-lane="community">
+        Share how you use it
+      </button>
     </div>
-    <p id={privacyId} class="engage-privacy muted" data-engage-privacy>
-      Private by default. Unpublished PRD checks are answered and not stored.
-    </p>
-    <p class="engage-status" role="status" aria-live="polite"></p>
-  </form>
 
-  <div class="engage-reply" hidden>
-    <p class="engage-reply-head">
-      <strong class="reply-persona"></strong>
-      <span class="badge badge-ai">AI persona</span>
-    </p>
-    <div class="engage-reply-body"></div>
+    <form class="engage-form">
+      <label class="engage-label" data-for-lane="prd-check" for={messageId}>
+        Describe your product or PRD — {personaName} will assess the fit and suggest tuning.
+      </label>
+      <label class="engage-label" data-for-lane="community" for={messageId} hidden>
+        Share your setup, workflow, or a prompt you curated — {personaName} will respond,
+        and your post joins the public feed below.
+      </label>
+      <textarea
+        id={messageId}
+        name="message"
+        rows="4"
+        maxlength="4000"
+        aria-describedby={privacyId}
+        required
+        placeholder="Keep it concrete — stack, goal, constraint…"></textarea>
+      <div class="engage-row">
+        <label class="check-row engage-publish">
+          <input type="checkbox" name="publish" />
+          <span data-publish-label>Publish this exchange to the company board</span>
+        </label>
+        <button type="submit" class="btn btn-primary">Send</button>
+      </div>
+      <p id={privacyId} class="engage-privacy muted" data-engage-privacy>
+        Private by default. Unpublished PRD checks are answered and not stored.
+      </p>
+      <p class="engage-status" role="status" aria-live="polite"></p>
+    </form>
+
+    <div class="engage-reply" hidden>
+      <p class="engage-reply-head">
+        <strong class="reply-persona"></strong>
+        <span class="badge badge-ai">AI persona</span>
+      </p>
+      <div class="engage-reply-body"></div>
+    </div>
   </div>
-</section>
+</details>
 
 <script>
   import {

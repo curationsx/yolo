@@ -520,7 +520,7 @@
       "featured": true,
       "file": "software/entries.json",
       "id": "cloudflare",
-      "last_reviewed": "2026-07-12",
+      "last_reviewed": "2026-07-13",
       "license": "proprietary-free-tier",
       "name": "Cloudflare",
       "notable_strength": "Generous free tier across Workers, Pages, and DNS with a single integrated developer platform.",
@@ -531,6 +531,19 @@
       "reference": "https://www.cloudflare.com",
       "review_status": "verified",
       "source_repository": "https://github.com/cloudflare",
+      "startup_credits": {
+        "checked_on": "2026-07-13",
+        "details": "$10,000 for startups under $1 million raised; $100,000 under $5 million through an affiliated partner; $350,000 at $5 million or more through a partner. Credits last one year; caps and exclusions apply.",
+        "eligibility": "For-profit technology product; incorporated within 10 years; funded through Series B within the last 12 months; live website; active public profile; matching business email; first-time applicant.",
+        "headline": "Up to $350,000 for one year",
+        "sources": [
+          {
+            "label": "Cloudflare for Startups",
+            "url": "https://www.cloudflare.com/startups/"
+          }
+        ],
+        "status": "verified-offer"
+      },
       "tags": [
         "edge-compute",
         "serverless",
@@ -547,7 +560,7 @@
       "featured": true,
       "file": "software/entries.json",
       "id": "supabase",
-      "last_reviewed": "2026-07-12",
+      "last_reviewed": "2026-07-13",
       "license": "open-source",
       "name": "Supabase",
       "notable_strength": "Standard Postgres under the hood \u2014 your data stays in a portable, open format you can export or self-host.",
@@ -561,6 +574,27 @@
       "reference": "https://supabase.com",
       "review_status": "verified",
       "source_repository": "https://github.com/supabase/supabase",
+      "startup_credits": {
+        "checked_on": "2026-07-13",
+        "details": "No fixed public startup grant is listed. Official baseline: a Free plan, plus $10 per month in compute credits for Pro or Team organizations.",
+        "eligibility": "The startup solution page publishes no credit application or eligibility contract. Larger prepaid credit deals require contacting the Supabase growth team.",
+        "headline": "No fixed public startup credit verified",
+        "sources": [
+          {
+            "label": "Startup solution",
+            "url": "https://supabase.com/solutions/startups"
+          },
+          {
+            "label": "Credits documentation",
+            "url": "https://supabase.com/docs/guides/platform/credits"
+          },
+          {
+            "label": "Current pricing",
+            "url": "https://supabase.com/pricing"
+          }
+        ],
+        "status": "no-public-offer"
+      },
       "tags": [
         "postgres",
         "auth",

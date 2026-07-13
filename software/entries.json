@@ -1,6 +1,6 @@
 {
   "$schema": "../schemas/software-entry.schema.json#/definitions/collection",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "entries": [
     {
       "id": "zotero",
@@ -310,8 +310,21 @@
       "platforms": [
         "Web"
       ],
-      "last_reviewed": "2026-07-12",
+      "last_reviewed": "2026-07-13",
       "review_status": "verified",
+      "startup_credits": {
+        "status": "verified-offer",
+        "headline": "Up to $350,000 for one year",
+        "details": "$10,000 for startups under $1 million raised; $100,000 under $5 million through an affiliated partner; $350,000 at $5 million or more through a partner. Credits last one year; caps and exclusions apply.",
+        "eligibility": "For-profit technology product; incorporated within 10 years; funded through Series B within the last 12 months; live website; active public profile; matching business email; first-time applicant.",
+        "sources": [
+          {
+            "label": "Cloudflare for Startups",
+            "url": "https://www.cloudflare.com/startups/"
+          }
+        ],
+        "checked_on": "2026-07-13"
+      },
       "tags": [
         "edge-compute",
         "serverless",
@@ -339,8 +352,29 @@
         "macOS",
         "Windows"
       ],
-      "last_reviewed": "2026-07-12",
+      "last_reviewed": "2026-07-13",
       "review_status": "verified",
+      "startup_credits": {
+        "status": "no-public-offer",
+        "headline": "No fixed public startup credit verified",
+        "details": "No fixed public startup grant is listed. Official baseline: a Free plan, plus $10 per month in compute credits for Pro or Team organizations.",
+        "eligibility": "The startup solution page publishes no credit application or eligibility contract. Larger prepaid credit deals require contacting the Supabase growth team.",
+        "sources": [
+          {
+            "label": "Startup solution",
+            "url": "https://supabase.com/solutions/startups"
+          },
+          {
+            "label": "Credits documentation",
+            "url": "https://supabase.com/docs/guides/platform/credits"
+          },
+          {
+            "label": "Current pricing",
+            "url": "https://supabase.com/pricing"
+          }
+        ],
+        "checked_on": "2026-07-13"
+      },
       "tags": [
         "postgres",
         "auth",

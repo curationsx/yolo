@@ -9,7 +9,7 @@ Browse at [curations.dev](https://curations.dev), or use
 
 ## ⚠️ Verify before you rely
 
-Tool facts decay fast. **Always verify directly with the vendor before deciding:** current pricing, terms of service, data retention, whether your data is used for model training, and compliance posture (e.g., regional data residency, industry certifications). Nothing in this directory substitutes for that check, and entries deliberately omit fields that go stale.
+Tool facts decay fast. **Always verify directly with the vendor before deciding:** current pricing, terms of service, data retention, whether your data is used for model training, and compliance posture (e.g., regional data residency, industry certifications). Nothing in this directory substitutes for that check. Entries deliberately omit fields that go stale, except source-grounded startup programs that carry an explicit checked date.
 
 ## Inclusion criteria
 
@@ -49,7 +49,7 @@ When comparing tools *for your own decision*, we suggest these dimensions — th
 ## Disclosure and update policy
 
 - No entry is paid for or traded. Contributors must disclose affiliations in submissions ([SUBMIT.md](SUBMIT.md)).
-- Entries carry only durable fields; we don't publish pricing or feature inventories that rot.
+- Entries carry durable fields. The narrow startup-program exception requires official sources, a checked date, and an explicit no-public-offer state when a fixed package cannot be verified.
 - Anyone may propose corrections via PR; obviously stale or misleading entries get fixed or removed on evidence.
 - Entry changes go through normal PR review like any other artifact.
 - Community upvotes show interest, not truth. They do not create paid placement
@@ -64,8 +64,9 @@ carry optional trust metadata: `license` (a coarse bucket — open-source,
 source-available, open-weight, proprietary-free-tier, proprietary, or mixed;
 these are **not interchangeable terms**), `source_repository`, `platforms`,
 `tags`, plus `last_reviewed` and `review_status` so staleness is visible instead
-of hidden. `featured` selects a temporary editorial rail and remains separate
-from community vote count. See [entries.json](entries.json) for the data.
+of hidden. Company entries may carry source-grounded `startup_credits` with a
+separate checked date. `featured` selects a temporary editorial rail and remains
+separate from community vote count. See [entries.json](entries.json) for the data.
 
 ### Research
 - **Zotero** — reference and source management; local-first with sync option; strong open ecosystem; verify sync storage handling for sensitive sources. (zotero.org)

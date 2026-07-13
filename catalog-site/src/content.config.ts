@@ -42,6 +42,23 @@ const softwareEntrySchema = z
     last_reviewed: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     review_status: z.enum(['verified', 'needs-review']).optional(),
     tags: z.array(z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/)).optional(),
+    startup_credits: z
+      .object({
+        status: z.enum(['verified-offer', 'no-public-offer']),
+        headline: z.string().min(6),
+        details: z.string().min(10),
+        eligibility: z.string().min(10),
+        sources: z
+          .array(
+            z.object({
+              label: z.string().min(2),
+              url: z.string().url().startsWith('https://'),
+            }),
+          )
+          .min(1),
+        checked_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      })
+      .optional(),
   })
   .superRefine((entry, context) => {
     if (entry.review_status === 'verified' && !entry.last_reviewed) {
@@ -49,6 +66,13 @@ const softwareEntrySchema = z
         code: 'custom',
         path: ['last_reviewed'],
         message: 'verified entries require last_reviewed',
+      });
+    }
+    if (entry.startup_credits && entry.entity_type !== 'company') {
+      context.addIssue({
+        code: 'custom',
+        path: ['startup_credits'],
+        message: 'startup_credits are only valid for company entries',
       });
     }
   });

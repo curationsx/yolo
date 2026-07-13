@@ -23,6 +23,7 @@ import json
 import re
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -106,12 +107,17 @@ def validate_schema(value, schema: dict, path: str = "$") -> list[str]:
     """Validate ``value`` against the JSON-Schema subset used in schemas/.
 
     Supports: type, required, properties, additionalProperties(false),
-    enum, pattern, minLength, minItems, items, and local ``$ref: "#"``.
+    enum, const, pattern, format(uri), minLength, minItems, items, allOf,
+    if/then/else, and local ``$ref: "#"``.
     Returns a list of error strings (empty means valid).
     """
     errors: list[str] = []
+    if "const" in schema and value != schema["const"]:
+        errors.append(f"{path}: {value!r} does not equal {schema['const']!r}")
+
     t = schema.get("type")
-    if t == "object":
+    object_keywords = {"required", "properties", "additionalProperties"}
+    if t == "object" or (isinstance(value, dict) and object_keywords & schema.keys()):
         if not isinstance(value, dict):
             return [f"{path}: expected object, got {type(value).__name__}"]
         for req in schema.get("required", []):
@@ -132,6 +138,15 @@ def validate_schema(value, schema: dict, path: str = "$") -> list[str]:
             errors.append(f"{path}: '{value}' not one of {schema['enum']}")
         if "pattern" in schema and not re.search(schema["pattern"], value):
             errors.append(f"{path}: '{value}' does not match {schema['pattern']!r}")
+        if schema.get("format") == "uri":
+            try:
+                parsed = urlparse(value)
+                _ = parsed.port
+                valid_uri = bool(parsed.scheme and parsed.netloc)
+            except ValueError:
+                valid_uri = False
+            if not valid_uri or any(char.isspace() for char in value):
+                errors.append(f"{path}: '{value}' is not a valid URI")
         if len(value) < schema.get("minLength", 0):
             errors.append(f"{path}: shorter than minLength {schema['minLength']}")
     elif t == "array":
@@ -143,6 +158,16 @@ def validate_schema(value, schema: dict, path: str = "$") -> list[str]:
         if item_schema:
             for i, item in enumerate(value):
                 errors.extend(validate_schema(item, item_schema, f"{path}[{i}]"))
+
+    for sub_schema in schema.get("allOf", []):
+        errors.extend(validate_schema(value, sub_schema, path))
+
+    condition = schema.get("if")
+    if condition is not None:
+        branch = schema.get("then") if not validate_schema(value, condition, path) else schema.get("else")
+        if branch is not None:
+            errors.extend(validate_schema(value, branch, path))
+
     if "$ref" in schema and schema["$ref"] == "#":
         # resolved by caller supplying the root schema as items — see load_software
         pass
