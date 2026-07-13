@@ -19,6 +19,18 @@ These captures verify the production Astro implementation against
 
 ![Cookbooks at 1280x800](cookbooks-desktop.png)
 
+## User-funded Cookbook lanes
+
+The handoff captures use a `1280x1100` desktop viewport and `390x844` mobile
+viewport. They verify that the Board hierarchy remains intact while the billing
+and privacy boundaries stay visibly distinct.
+
+![Use My Copilot at 1280x1100](copilot-lane-desktop.png)
+
+![Use My Copilot at 390x844](copilot-lane-mobile.png)
+
+![Run in My Terminal at 390x844](terminal-lane-mobile.png)
+
 ## Cloudflare company Board
 
 ![Cloudflare Board at 1280x800](cloudflare-board-desktop.png)

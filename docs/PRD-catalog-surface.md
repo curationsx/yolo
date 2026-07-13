@@ -3,7 +3,8 @@
 **Status:** Implementation · **Owner:** CURATIONS · **Canonical domain:** `https://curations.dev`
 **Source repository:** `curationsx/yolo` · **Frontend:** Astro on Cloudflare Pages
 **Community gateway:** Cloudflare Worker · **Data:** Azure Cosmos DB serverless
-**Agent model:** Azure OpenAI `gpt-5.4-mini`, pay-as-you-go only
+**Community agents:** Azure OpenAI `gpt-5.4-mini`, pay-as-you-go only
+**Cookbook execution:** User-funded GitHub Copilot or the user's local terminal
 
 ## 1. Product statement
 
@@ -33,7 +34,7 @@ separate paid model deployments.
 | Directory, not ranking | Votes show community interest. They do not silently rewrite editorial truth, guarantee quality, or create paid placement. |
 | Git is the source of truth | Accepted catalog records live in `software/entries.json`. Web submissions become reviewable GitHub pull requests. |
 | Grounded, not cosplay | Company personas use named public documentation and repositories, admit uncertainty, and never claim company affiliation. |
-| Cost is a feature | No prepaid Azure model capacity, no PTU, no monthly database package, and no resource is provisioned merely for a static page. |
+| Cost is a feature | No prepaid Azure model capacity, no PTU, and no silent operator-funded fallback. Cookbook users explicitly choose their Copilot plan or their terminal. |
 
 ## 3. Audience and jobs to be done
 
@@ -72,6 +73,8 @@ curations.dev/
 │   ├── private/public persona lanes
 │   └── CURATIONS Board (threads, tags, replies, scores)
 ├── /submit/                  Guided tool/company contribution form
+├── /cookbooks/               Versioned prompts with Copilot and terminal lanes
+├── /copilot/{id}/{v}/{stack} Plain-text embedded prompt artifact
 └── /methodology/             Trust, review, and terminology rules
 ```
 
@@ -166,6 +169,10 @@ structure.
 - Sessions expire after 30 days and are revocable through sign-out.
 - Public display includes GitHub login, avatar, and profile link.
 - Anonymous visitors retain full read access and private persona access.
+- Normal identity sign-in never becomes Copilot authorization. Embedded execution
+  requires a separate, explicit, one-run OAuth flow.
+- The Copilot callback verifies that the authorizing GitHub account matches the
+  active CURATIONS identity before storing any grant.
 
 ### 6.3 Persona lanes
 
@@ -235,6 +242,34 @@ before merge. The canonical dataset therefore remains singular.
 
 CURATIONS requests no repository write scope from contributors.
 
+### 6.7 Cookbook execution
+
+Every Cookbook presents two equal, user-funded paths.
+
+#### Use My Copilot
+
+- Requires an existing CURATIONS GitHub identity session.
+- Requests a separate GitHub OAuth authorization for one embedded run.
+- Encrypts the delegated token with AES-256-GCM, binds it to the GitHub user,
+  expires it within ten minutes, and atomically consumes it once.
+- Runs the official GitHub Copilot SDK inside a private Cloudflare Container.
+- Exposes zero tools, repository access, files, shell, MCP servers, skills,
+  plugins, memory, or custom agents.
+- Allows one assistant response with a bounded AI Credit budget and requires a
+  human decision checkpoint.
+- CURATIONS receives the versioned prompt and returned response. GitHub applies
+  the user's Copilot plan, policy, rate limits, and billing.
+
+#### Run in My Terminal
+
+- Copies the same versioned cookbook and stack tailoring as a truthful local
+  handoff.
+- Runs entirely under the user's local permissions, tools, and billing.
+- CURATIONS receives neither the local prompt nor the local result.
+
+Neither path may silently fall back to Azure or another CURATIONS-funded model.
+CURATIONS Credits are a separate roadmap product.
+
 ## 7. Architecture
 
 ```mermaid
@@ -245,6 +280,9 @@ flowchart LR
     BROWSER[Browser] -->|public reads + bearer session| WORKER[Cloudflare Worker<br/>api.curations.dev]
     WORKER -->|read:user OAuth| GITHUB[GitHub]
     WORKER -->|PAYG chat only| AZURE[Azure OpenAI<br/>gpt-5.4-mini]
+    WORKER -->|encrypted one-run grant| GRANT[Durable Object]
+    WORKER -->|private request| CONTAINER[Cloudflare Container<br/>Copilot SDK · zero tools]
+    CONTAINER -->|user Copilot plan| GITHUB
     WORKER -->|signed REST| COSMOS[Cosmos DB serverless]
     WORKER --> KV[Cloudflare KV<br/>sessions + rate limits]
 
@@ -261,7 +299,8 @@ flowchart LR
 | Static site | Astro, TypeScript, `@astrojs/sitemap` |
 | Browser interactivity | Native DOM/fetch only; no React runtime |
 | Gateway | Cloudflare Workers, TypeScript, Wrangler |
-| Agent | Azure OpenAI REST v1; `gpt-5.4-mini` deployment |
+| Community agent | Azure OpenAI REST v1; `gpt-5.4-mini` deployment |
+| Embedded cookbook | GitHub Copilot SDK in a private Cloudflare Container |
 | Community data | Azure Cosmos DB serverless SQL API |
 | Identity | GitHub OAuth |
 | Fonts | Google Fonts delivery for the canonical CURATIONS families |
@@ -306,8 +345,8 @@ flowchart LR
 
 ## 9. Safety, privacy, and moderation
 
-- No credentials, OAuth secrets, Azure keys, Cosmos keys, or session tokens in
-  source control.
+- No credentials, OAuth secrets, delegated GitHub tokens, Azure keys, Cosmos
+  keys, or session tokens in source control.
 - Worker secrets are set with Wrangler secret storage.
 - Dynamic content is rendered with `textContent`, never raw HTML.
 - CSP, frame denial, content-type protection, restricted referrer policy, and
@@ -317,6 +356,10 @@ flowchart LR
 - Input length, tag count, daily post/reply limits, and model output limits are
   enforced server-side.
 - Agent capacity is capped globally, per IP, and per signed-in account.
+- Delegated Copilot tokens are encrypted at rest, never returned to the browser,
+  and consumed before runtime invocation. A failed run requires reconnecting.
+- Embedded Copilot exposes no repository, filesystem, shell, MCP, skill, plugin,
+  or external tool surface.
 - Initial moderation is maintainer review and deletion tooling through Azure;
   flagging, block lists, and trust levels are post-pilot work.
 - Displayed source links are official vendor/project links only.
@@ -330,6 +373,14 @@ flowchart LR
 - Maximum `512` completion tokens per public answer.
 - Default agent limits: `10/day` per IP/account and `200/day` globally.
 - Existing Azure budget alerts remain advisory; budgets do not stop spend.
+
+### User-funded Cookbooks
+
+- **Use My Copilot** charges the authenticated user's GitHub Copilot plan.
+- Default platform limits: `5/day` per user, `10/day` per IP, `100/day` globally.
+- Each run is capped at `10` AI Credits and one assistant response.
+- **Run in My Terminal** creates no CURATIONS inference cost.
+- No automatic Azure fallback is permitted.
 
 ### Data and hosting
 
@@ -357,6 +408,7 @@ flowchart LR
 - Autonomous agent posting without a human action or a clearly labeled seeded
   CURATIONS discussion.
 - Paid Azure capacity reservations.
+- CURATIONS Credits or operator-funded Cookbook inference during this pilot.
 
 ## 13. Success measures
 
@@ -366,7 +418,7 @@ flowchart LR
 | Community value | Human replies add concrete implementation knowledge beyond the agent answer. |
 | Trust | No unlabeled agent content; source/disclosure links remain visible. |
 | Contributions | Non-technical users reach the GitHub PR handoff without editing JSON manually. |
-| Cost | Daily model use stays inside gateway limits and startup credits. |
+| Cost | Community model use stays inside gateway limits; Cookbook inference is user-funded. |
 | Quality | Accepted entries include a real adoption caveat, not marketing copy. |
 
 ## 14. Acceptance criteria
@@ -385,7 +437,12 @@ flowchart LR
 10. The submission form generates schema-compatible JSON and a prefilled GitHub
     new-file URL.
 11. No secret or generated Azure ledger is committed.
-12. Worker typecheck, Astro build, `tools/yolo.py doctor`, and repository diff
+12. Cookbooks expose **Use My Copilot** and **Run in My Terminal** with distinct
+    trust and billing disclosures.
+13. Embedded Copilot grants are account-matched, encrypted, ten-minute-or-shorter,
+    single-use, and expose zero tools or repository access.
+14. No embedded failure silently falls back to a CURATIONS-funded model.
+15. Worker typecheck, Worker/runtime tests, Astro build, `tools/yolo.py doctor`, and repository diff
     checks pass.
 
 ## 15. Rollout

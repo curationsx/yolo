@@ -268,6 +268,16 @@ export function buildPromptPath(
   return `${base}/cookbooks/${cookbookId}/${versionLabel(version)}/${stackId}/`;
 }
 
+export function buildEmbeddedPromptPath(
+  basePath: string,
+  cookbookId: string,
+  version: string,
+  stackId: StackId,
+): string {
+  const base = basePath.replace(/\/$/, '');
+  return `${base}/copilot/${cookbookId}/${versionLabel(version)}/${stackId}/`;
+}
+
 export function buildCopilotCommand(
   promptUrl: string,
   cookbookId: string,

@@ -2,16 +2,25 @@
  * CURATIONS gateway router.
  *
  * The static Astro site talks only to this Worker. It owns GitHub identity,
- * Azure persona calls, rate limits, Cosmos writes, votes, and discussions.
+ * Azure persona calls, user-funded Copilot runs, rate limits, Cosmos writes,
+ * votes, and discussions.
  */
 
 import {
+  beginCopilotGithubAuth,
   beginGithubAuth,
+  copilotAuthConfigured,
   endSession,
   finishGithubAuth,
   getSession,
   githubAuthConfigured,
+  issueCopilotAuthorization,
 } from "./auth";
+import {
+  handleCopilotDisconnect,
+  handleCopilotRun,
+  handleCopilotStatus,
+} from "./copilot";
 import {
   corsHeaders,
   handleAsk,
@@ -27,6 +36,8 @@ import {
 import type { Env } from "./env";
 export { QuotaGuard } from "./quota";
 export { VoteGuard } from "./vote-guard";
+export { CopilotGrantGuard } from "./copilot-grant";
+export { CopilotRuntime } from "./copilot-runtime";
 
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
@@ -44,7 +55,14 @@ export default {
       return finishGithubAuth(req, env);
     }
     if (url.pathname === "/api/auth/config" && req.method === "GET") {
-      return json({ github: githubAuthConfigured(env) }, 200, cors);
+      return json(
+        {
+          github: githubAuthConfigured(env),
+          copilot: copilotAuthConfigured(env),
+        },
+        200,
+        cors,
+      );
     }
     if (url.pathname === "/api/auth/me" && req.method === "GET") {
       const session = await getSession(req, env);
@@ -55,6 +73,25 @@ export default {
     if (url.pathname === "/api/auth/logout" && req.method === "POST") {
       await endSession(req, env);
       return json({ ok: true }, 200, cors);
+    }
+
+    if (url.pathname === "/api/copilot/connect" && req.method === "POST") {
+      const result = await issueCopilotAuthorization(req, env);
+      return result.ok
+        ? json({ authorize_url: result.authorize_url }, 200, cors)
+        : json({ error: result.error }, result.status, cors);
+    }
+    if (url.pathname === "/api/copilot/github/start" && req.method === "GET") {
+      return beginCopilotGithubAuth(req, env);
+    }
+    if (url.pathname === "/api/copilot/status" && req.method === "GET") {
+      return handleCopilotStatus(req, env, cors);
+    }
+    if (url.pathname === "/api/copilot/disconnect" && req.method === "POST") {
+      return handleCopilotDisconnect(req, env, cors);
+    }
+    if (url.pathname === "/api/copilot/run" && req.method === "POST") {
+      return handleCopilotRun(req, env, cors);
     }
 
     if (url.pathname === "/api/ask" && req.method === "POST") {
@@ -86,6 +123,7 @@ export default {
         {
           ok: true,
           identity: githubAuthConfigured(env) ? "github" : "github-unconfigured",
+          copilot: copilotAuthConfigured(env) ? "user-funded" : "unconfigured",
           storage: "cosmos-serverless",
           model: env.AZURE_OPENAI_DEPLOYMENT,
         },

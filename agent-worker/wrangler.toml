@@ -7,12 +7,13 @@
 #   GITHUB_CLIENT_ID       — curations.dev GitHub OAuth app client id
 #   GITHUB_CLIENT_SECRET   — curations.dev GitHub OAuth app client secret
 #   GITHUB_REPOSITORY_TOKEN — optional read-only token for public repo metadata
+#   COPILOT_TOKEN_ENCRYPTION_KEY — 32 random bytes encoded as base64url
 #
 # Vars below are non-secret endpoints/config only.
 
 name = "curations-agent-gateway"
 main = "src/index.ts"
-compatibility_date = "2026-06-01"
+compatibility_date = "2026-07-12"
 workers_dev = true
 routes = [
   { pattern = "api.curations.dev", custom_domain = true }
@@ -34,6 +35,14 @@ MAX_QUESTION_CHARS = "4000"
 MAX_OUTPUT_TOKENS = "512"
 PER_IP_DAILY_LIMIT = "10"
 GLOBAL_DAILY_LIMIT = "200"
+COPILOT_MODEL = "gpt-5.4"
+COPILOT_MAX_PROMPT_CHARS = "60000"
+COPILOT_MAX_RESPONSE_CHARS = "40000"
+COPILOT_MAX_AI_CREDITS = "10"
+COPILOT_CONNECTION_TTL_SECONDS = "600"
+COPILOT_RUNS_PER_USER_DAILY = "5"
+COPILOT_RUNS_PER_IP_DAILY = "10"
+COPILOT_RUNS_GLOBAL_DAILY = "100"
 SOFTWARE_TARGETS = "zotero,ollama,hugging-face,n8n,langfuse,obsidian,sqlite,git,vs-code,pandoc,github,discourse,cloudflare,supabase"
 VOTE_BACKEND = "durable"
 
@@ -49,6 +58,20 @@ class_name = "QuotaGuard"
 name = "VOTE_GUARD"
 class_name = "VoteGuard"
 
+[[durable_objects.bindings]]
+name = "COPILOT_GRANT"
+class_name = "CopilotGrantGuard"
+
+[[durable_objects.bindings]]
+name = "COPILOT_RUNTIME"
+class_name = "CopilotRuntime"
+
+[[containers]]
+class_name = "CopilotRuntime"
+image = "./copilot-runtime/Dockerfile"
+instance_type = "basic"
+max_instances = 1
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["QuotaGuard"]
@@ -56,6 +79,10 @@ new_sqlite_classes = ["QuotaGuard"]
 [[migrations]]
 tag = "v2"
 new_sqlite_classes = ["VoteGuard"]
+
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["CopilotGrantGuard", "CopilotRuntime"]
 
 [observability]
 enabled = true

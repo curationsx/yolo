@@ -52,7 +52,16 @@ Read `catalog-site/AGENTS.md` before changing the Astro surface.
 - GitHub identity is required for durable public actions.
 - Public agents may discuss, verify, cite, and critique.
 - Agents never execute work in an end user's repository or account.
-- Copilot CLI handoff runs on the end user's permissions and billing.
+- Cookbooks expose two user-funded execution lanes:
+  - **Use My Copilot** uses an explicit, separate, one-run GitHub authorization
+    and charges the authenticated user's GitHub Copilot plan.
+  - **Run in My Terminal** copies a versioned prompt for the user to run locally
+    with their own tools, permissions, and billing.
+- Normal GitHub identity sign-in must continue discarding the provider token.
+- Copilot delegation tokens must be encrypted, short-lived, atomically consumed
+  once, and isolated from repositories, files, shells, MCP, skills, and plugins.
+- Never silently fall back from either lane to Azure or another CURATIONS-funded
+  model. CURATIONS Credits are a separate future product, not an implicit subsidy.
 - Do not invent unsupported CLI flags or expose internal agent names as public
   dependencies.
 

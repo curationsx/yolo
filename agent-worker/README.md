@@ -5,6 +5,8 @@ Cloudflare Worker for `api.curations.dev`.
 It is the only write gateway for the static Astro site and owns:
 
 - GitHub OAuth identity (`read:user` only),
+- explicit one-run GitHub Copilot delegation,
+- a private Cloudflare Container running the official Copilot SDK with zero tools,
 - Azure OpenAI persona calls,
 - server-side model/rate limits,
 - Cosmos DB discussions and votes,
@@ -20,6 +22,14 @@ npx wrangler secret put AZURE_OPENAI_API_KEY
 npx wrangler secret put COSMOS_KEY
 npx wrangler secret put GITHUB_CLIENT_ID
 npx wrangler secret put GITHUB_CLIENT_SECRET
+npx wrangler secret put COPILOT_TOKEN_ENCRYPTION_KEY
+```
+
+`COPILOT_TOKEN_ENCRYPTION_KEY` must be 32 random bytes encoded as unpadded
+base64url. Generate it without writing the value to source control:
+
+```bash
+openssl rand -base64 32 | tr '+/' '-_' | tr -d '='
 ```
 
 `GITHUB_REPOSITORY_TOKEN` is optional. Without it, public repository metadata
@@ -42,14 +52,24 @@ under the `curationsx` organization (or the approved CURATIONS owner) with:
 - **Authorization callback URL:** `https://api.curations.dev/api/auth/github/callback`
 - **Device flow:** disabled
 
-The Worker uses state + PKCE, requests only `read:user`, verifies the profile,
-then discards GitHub's access token. Only an opaque CURATIONS session remains.
+Normal identity sign-in uses state + PKCE, requests only `read:user`, verifies the
+profile, then discards GitHub's access token. Only an opaque CURATIONS session
+remains.
+
+**Use My Copilot** is a separate, explicit flow. It verifies the same GitHub
+identity, encrypts the delegated token, expires it within ten minutes, and
+atomically consumes it once. The Container exposes no repository, filesystem,
+shell, MCP, skill, plugin, or external tool access. GitHub charges the user's
+Copilot plan; the gateway never falls back to Azure.
 
 ## Local checks
 
 ```bash
 npm ci
 npm run check
+npm test
+npm --prefix copilot-runtime ci
+npm --prefix copilot-runtime test
 ```
 
 The Azure deployment must remain mini-tier and pay-as-you-go. Do not add PTU,

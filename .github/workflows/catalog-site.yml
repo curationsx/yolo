@@ -39,7 +39,7 @@ jobs:
   verify:
     name: Validate site + gateway
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 20
 
     steps:
       - name: Check out repository
@@ -64,6 +64,7 @@ jobs:
           cache-dependency-path: |
             catalog-site/package-lock.json
             agent-worker/package-lock.json
+            agent-worker/copilot-runtime/package-lock.json
 
       - name: Build Astro site
         working-directory: catalog-site
@@ -83,6 +84,12 @@ jobs:
           npm run check
           npx wrangler deploy --dry-run
 
+      - name: Test isolated Copilot runtime
+        working-directory: agent-worker/copilot-runtime
+        run: |
+          npm ci
+          npm test
+
       - name: Check patch hygiene
         run: git diff --check
 
@@ -91,7 +98,7 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: verify
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     environment:
       name: production
       url: https://curations.dev
@@ -108,10 +115,12 @@ jobs:
           cache-dependency-path: |
             catalog-site/package-lock.json
             agent-worker/package-lock.json
+            agent-worker/copilot-runtime/package-lock.json
 
       - name: Install deployment dependencies
         run: |
           npm --prefix agent-worker ci
+          npm --prefix agent-worker/copilot-runtime ci
           npm --prefix catalog-site ci
 
       - name: Deploy agent gateway

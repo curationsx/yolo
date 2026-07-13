@@ -42,6 +42,21 @@ The oracle's mocked `fable5max` and unsupported Copilot CLI flags are not produc
 behavior requirements. Production handoff must remain truthful while preserving
 the approved visual structure.
 
+## Cookbook execution contract
+
+Cookbooks must preserve the Board oracle while presenting two visibly distinct,
+truthful paths:
+
+- **Use My Copilot:** one response through the official GitHub Copilot SDK, paid
+  by the authenticated user's Copilot plan. The browser must disclose that
+  CURATIONS receives the prompt and returned response.
+- **Run in My Terminal:** copy the versioned handoff prompt. The browser must
+  disclose that CURATIONS receives neither the local prompt nor the local result.
+
+Do not merge the trust language, hide billing, expose repository/tool permissions,
+or add a CURATIONS-funded fallback. Embedded prompt artifacts under `/copilot/`
+are immutable build outputs for a specific cookbook version and stack.
+
 ## Documentation
 
 Full documentation: https://docs.astro.build

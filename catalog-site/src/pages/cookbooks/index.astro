@@ -23,11 +23,12 @@ const cookbooks = (await getCollection('cookbooks'))
   .sort((a, b) => categoryOrder.indexOf(a.category) - categoryOrder.indexOf(b.category));
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 const defaultStack = stackDefinition('ollama');
+const apiBase = import.meta.env.PUBLIC_AGENT_API ?? '';
 ---
 
 <BaseLayout
   title="Cookbooks — CURATIONS.DEV"
-  description="Stack-aware, schema-validated Human × AI cookbooks that hand off into the user's own GitHub Copilot CLI."
+  description="Stack-aware, schema-validated Human × AI cookbooks that run through the user's GitHub Copilot plan or terminal."
 >
   <div class="board-page-back">
     <a href={basePath || '/'}>&larr; all stacks</a>
@@ -41,15 +42,16 @@ const defaultStack = stackDefinition('ollama');
     </div>
     <p>
       Prompts as code: schema-validated, versioned, and tailored to the stack
-      you already use. Handoff moves the contract into your own Copilot CLI.
+      you already use. Run through your GitHub Copilot plan here or move the
+      same contract into your terminal.
     </p>
   </section>
 
   <aside class="cookbook-boundary">
-    <strong>Human-owned execution</strong>
+    <strong>User-funded execution</strong>
     <span>
-      Board agents discuss and verify. They never build for an end user. Your
-      terminal, permissions, account, and billing remain yours.
+      Use My Copilot charges your GitHub plan with zero repository tools. Run in
+      My Terminal keeps the prompt and response entirely on your machine.
     </span>
   </aside>
 
@@ -143,7 +145,7 @@ const defaultStack = stackDefinition('ollama');
             </div>
 
             <button type="button" class="cookbook-handoff" data-handoff-open>
-              Handoff -&gt; Copilot CLI
+              Choose how to run -&gt;
             </button>
           </article>
         );
@@ -163,42 +165,107 @@ const defaultStack = stackDefinition('ollama');
     </p>
   </section>
 
-  <dialog class="handoff-dialog" data-handoff-dialog aria-labelledby="handoff-title">
+  <dialog
+    class="handoff-dialog"
+    data-handoff-dialog
+    data-api={apiBase}
+    aria-labelledby="handoff-title"
+  >
     <div class="handoff-dialog-inner">
       <form method="dialog">
         <button class="handoff-close" type="submit" aria-label="Close handoff dialog">x</button>
       </form>
-      <span class="editorial-eyebrow">Handoff -&gt; GitHub Copilot CLI</span>
+      <span class="editorial-eyebrow">One cookbook · two user-owned paths</span>
       <h2 id="handoff-title" data-handoff-title>Cookbook</h2>
       <p class="handoff-meta" data-handoff-meta></p>
 
-      <div class="handoff-trust">
-        <strong>Your terminal. Your account. Your bill.</strong>
-        <p>
-          The command downloads a plain-text cookbook contract, then opens an
-          interactive Copilot CLI session. CURATIONSX does not receive the
-          terminal prompt or its output.
-        </p>
+      <div class="handoff-mode-switch" role="tablist" aria-label="Choose how to run">
+        <button
+          type="button"
+          role="tab"
+          data-handoff-mode="copilot"
+          aria-selected="true"
+        >
+          <strong>1 · Use My Copilot</strong>
+          <span>Run here · billed to your GitHub plan</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          data-handoff-mode="terminal"
+          aria-selected="false"
+        >
+          <strong>2 · Run in My Terminal</strong>
+          <span>Local prompt · CURATIONS cannot see the run</span>
+        </button>
       </div>
 
-      <pre class="handoff-command"><code data-handoff-command></code></pre>
+      <section class="handoff-panel" data-handoff-panel="copilot">
+        <div class="handoff-trust handoff-trust-copilot">
+          <strong>Your Copilot plan. One authorization. Zero tools.</strong>
+          <p>
+            CURATIONS sends this versioned cookbook and receives the response
+            shown below. The encrypted GitHub token expires within 10 minutes,
+            is consumed once, and cannot access repositories, files, shell,
+            MCP, skills, or plugins.
+          </p>
+        </div>
 
-      <div class="handoff-actions">
-        <button type="button" class="btn btn-primary" data-handoff-copy>Copy command</button>
-        <a data-handoff-prompt target="_blank" rel="noopener">Inspect prompt first</a>
-        <span data-handoff-status role="status" aria-live="polite"></span>
-      </div>
+        <label class="handoff-focus">
+          Optional focus for this run
+          <textarea
+            rows="4"
+            maxlength="2000"
+            data-copilot-focus
+            placeholder="What should your Copilot pressure-test, clarify, or decide?"
+          ></textarea>
+        </label>
 
-      <details class="handoff-caveat">
-        <summary>What is enforced?</summary>
-        <p>
-          Copilot CLI v1.0.70 supports the interactive <code>-i</code> handoff.
-          It does not provide native <code>--checkpoint</code>,
-          <code>--budget</code>, or <code>--max-requests</code> flags. Those
-          limits travel visibly inside the cookbook contract; the CLI must not
-          pretend they are native hard limits.
-        </p>
-      </details>
+        <div class="handoff-actions">
+          <button type="button" class="btn btn-primary" data-copilot-connect>
+            Connect my GitHub Copilot
+          </button>
+          <button type="button" class="btn btn-secondary" data-copilot-run hidden>
+            Run with my Copilot
+          </button>
+          <span data-copilot-status role="status" aria-live="polite"></span>
+        </div>
+
+        <article class="copilot-response" data-copilot-response-root hidden>
+          <div class="copilot-response-meta" data-copilot-response-meta></div>
+          <div class="copilot-response-text" data-copilot-response></div>
+        </article>
+      </section>
+
+      <section class="handoff-panel" data-handoff-panel="terminal" hidden>
+        <div class="handoff-trust">
+          <strong>Your terminal. Your account. Your private run.</strong>
+          <p>
+            The command downloads a plain-text cookbook contract, then opens an
+            interactive Copilot CLI session. CURATIONSX does not receive the
+            terminal prompt or its output.
+          </p>
+        </div>
+
+        <pre class="handoff-command"><code data-handoff-command></code></pre>
+
+        <div class="handoff-actions">
+          <button type="button" class="btn btn-primary" data-handoff-copy>Copy command</button>
+          <a data-handoff-prompt target="_blank" rel="noopener">Inspect prompt first</a>
+          <span data-handoff-status role="status" aria-live="polite"></span>
+        </div>
+
+        <details class="handoff-caveat">
+          <summary>What is enforced?</summary>
+          <p>
+            Copilot CLI v1.0.70 supports the interactive <code>-i</code> handoff.
+            It does not provide native <code>--checkpoint</code>,
+            <code>--budget</code>, or <code>--max-requests</code> flags. Those
+            limits travel visibly inside the cookbook contract; the CLI must not
+            pretend they are native hard limits.
+          </p>
+        </details>
+      </section>
     </div>
   </dialog>
 </BaseLayout>

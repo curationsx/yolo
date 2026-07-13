@@ -2576,11 +2576,58 @@ code {
   text-transform: uppercase;
 }
 
+.handoff-mode-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin-top: 1.25rem;
+  border: 2px solid var(--border-color);
+}
+
+.handoff-mode-switch button {
+  display: grid;
+  gap: 0.3rem;
+  border: 0;
+  border-right: 2px solid var(--border-color);
+  background: #fff;
+  color: var(--foreground);
+  cursor: pointer;
+  padding: 0.8rem;
+  text-align: left;
+}
+
+.handoff-mode-switch button:last-child {
+  border-right: 0;
+}
+
+.handoff-mode-switch button[aria-selected='true'] {
+  background: var(--energetic-lime);
+}
+
+.handoff-mode-switch strong {
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+}
+
+.handoff-mode-switch span {
+  color: var(--editorial-ink-mute);
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+}
+
+.handoff-panel[hidden] {
+  display: none;
+}
+
 .handoff-trust {
   margin-top: 1.5rem;
   border: 3px solid var(--border-color);
   background: var(--energetic-lime);
   padding: 0.9rem 1rem;
+}
+
+.handoff-trust-copilot {
+  background: #eef8ff;
+  border-left-color: var(--picton-blue);
 }
 
 .handoff-trust p {
@@ -2596,6 +2643,31 @@ code {
   padding: 1rem;
 }
 
+.handoff-focus {
+  display: grid;
+  gap: 0.4rem;
+  margin: 1rem 0;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.handoff-focus textarea {
+  width: 100%;
+  resize: vertical;
+  border: 2px solid var(--border-color);
+  background: #fff;
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  letter-spacing: 0;
+  line-height: 1.5;
+  padding: 0.75rem;
+  text-transform: none;
+}
+
 .handoff-actions {
   display: flex;
   flex-wrap: wrap;
@@ -2607,6 +2679,38 @@ code {
   flex-basis: 100%;
   font-family: var(--font-mono);
   font-size: 0.72rem;
+}
+
+.handoff-actions [data-copilot-status] {
+  flex-basis: 100%;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
+
+.copilot-response {
+  margin-top: 1.25rem;
+  border: 2px solid var(--border-color);
+  background: #fff;
+  box-shadow: 5px 5px 0 var(--picton-blue);
+}
+
+.copilot-response-meta {
+  border-bottom: 2px solid var(--border-color);
+  background: var(--near-black);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 0.55rem 0.7rem;
+  text-transform: uppercase;
+}
+
+.copilot-response-text {
+  max-height: 28rem;
+  overflow: auto;
+  padding: 1rem;
+  white-space: pre-wrap;
 }
 
 .handoff-caveat {
@@ -2658,6 +2762,19 @@ code {
 
   .cookbook-boundary {
     grid-template-columns: 1fr;
+  }
+
+  .handoff-mode-switch {
+    grid-template-columns: 1fr;
+  }
+
+  .handoff-mode-switch button {
+    border-right: 0;
+    border-bottom: 2px solid var(--border-color);
+  }
+
+  .handoff-mode-switch button:last-child {
+    border-bottom: 0;
   }
 
   .board-sort {
