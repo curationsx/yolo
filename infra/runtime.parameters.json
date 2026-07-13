@@ -43,6 +43,9 @@
     },
     "deploymentRevision": {
       "value": "${DEPLOYMENT_REVISION}"
+    },
+    "stagingSiteOrigin": {
+      "value": "${STAGING_SITE_ORIGIN}"
     }
   }
 }

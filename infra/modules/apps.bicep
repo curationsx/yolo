@@ -105,10 +105,18 @@ param tags object = {}
 var gatewayTargetPort = 8080
 var copilotTargetPort = 8080
 
-// Container Apps revisionSuffix must be lowercase alphanumeric/hyphens and
-// start with a letter. github.run_id is always purely numeric, so prefix
-// with a stable letter and lowercase defensively for any other caller.
-var sanitizedRevisionSuffix = toLower('r${deploymentRevision}')
+// Container Apps revisionSuffix must be lowercase alphanumeric/hyphens,
+// start with a letter, and stay within a bounded length. deploymentRevision
+// is documented as "any value unique to this run" (azure.yaml), which could
+// contain colons, underscores, dots, or other characters an ad hoc caller
+// might pass (a timestamp, a full git SHA with a branch prefix, etc.) --
+// simple concatenation/lowercasing does not strip those. uniqueString()
+// deterministically hashes the input into a fixed 13-character
+// lowercase-alphanumeric string regardless of what characters
+// deploymentRevision itself contains, so the suffix is always valid no
+// matter the input, while still changing whenever deploymentRevision does
+// (which is all that is required to force a fresh revision).
+var sanitizedRevisionSuffix = 'r${uniqueString(deploymentRevision)}'
 
 var stagingIpRestrictions = enableStagingIpRestriction ? [
   {

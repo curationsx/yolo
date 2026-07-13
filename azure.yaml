@@ -31,12 +31,28 @@
 #   2. Per-deploy values with no committed default, resolved from the azd
 #      environment via infra/runtime.parameters.json's `${VAR}`
 #      interpolation (never hard-coded, since these are either immutable
-#      per-commit image SHAs, a required-unique revision marker, or an
-#      operator's personal IP):
+#      per-commit image SHAs, a revision marker, an operator's personal IP,
+#      or a generated Azure hostname):
 #        azd env set GATEWAY_IMAGE_TAG   <acr>.azurecr.io/yolo/gateway:<sha>
 #        azd env set COPILOT_IMAGE_TAG   <acr>.azurecr.io/yolo/copilot-runtime:<sha>
-#        azd env set DEPLOYMENT_REVISION <any value unique to this run>
+#        azd env set DEPLOYMENT_REVISION <any value; see note below>
 #        azd env set WYATT_STAGING_IP_CIDR <your current IP>/32
+#        azd env set STAGING_SITE_ORIGIN  https://<generated stapp-yolo-prod hostname>
+#            (query it with: az staticwebapp show --name stapp-yolo-prod
+#             --resource-group rg-yolo-prod --query defaultHostname -o tsv,
+#             then prefix https://. Without this, the gateway's CORS
+#             allow-list falls back to localhost-only, and the generated
+#             Azure Static Web Apps review site cannot call it. Production's
+#             CORS is never affected by this value.)
+#
+#      DEPLOYMENT_REVISION accepts any string -- infra/modules/apps.bicep
+#      hashes it with Bicep's uniqueString() into a fixed, always-valid
+#      Container Apps revisionSuffix, so there is no format to get wrong
+#      (colons, underscores, a full git SHA, a timestamp, github.run_id --
+#      all work identically). All that matters is that it differs from the
+#      previous deploy, so a fresh revision actually starts and re-reads
+#      the current Key Vault secret versions instead of reusing one still
+#      running with stale values.
 #
 # .github/workflows/azure-deploy.yml does not depend on any of the above:
 # it always passes explicit `--parameters key=value` overrides to the
