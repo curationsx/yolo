@@ -54,6 +54,18 @@ GATEWAY_VERIFY_TIMEOUT_SECONDS=180
 GATEWAY_VERIFY_POLL_SECONDS=5
 RUNTIME_BICEP="${REPO_ROOT}/infra/runtime.bicep"
 BOOTSTRAP_BICEP="${REPO_ROOT}/infra/bootstrap.bicep"
+# Non-secret marker (e.g. the GitHub Actions run ID -- infra/runtime.bicep
+# and infra/modules/apps.bicep call this same input `deploymentRevision`)
+# forcing a fresh Container Apps revision on every deploy. Staging and
+# production commonly deploy the same image SHA, and the GitHub OAuth Key
+# Vault references (github-client-id/github-client-secret) are
+# deliberately versionless -- without a genuinely new revision, Container
+# Apps can reuse a still-running revision whose secret values were already
+# read from Key Vault at a previous (e.g. staging) version, silently
+# keeping a stale OAuth secret cached through a same-image
+# staging->production rollout. No default: every --apply must supply a
+# genuinely unique value.
+DEPLOYMENT_REVISION=""
 
 # Pinned Static Web Apps CLI version, invoked via `npx --yes` rather than a
 # bare `swa` binary. Neither this script's own dependencies nor the
@@ -72,11 +84,21 @@ Usage: $(basename "$0") --gateway-image <ref> --copilot-image <ref>
                         [--apply] [--sha <sha>] [--site-dist <path>]
                         [--swa-deployment-token-env <VAR_NAME>]
                         [--environment azure-staging|production]
+                        [--deployment-revision <marker>]
                         [--verify-gateway] [--gateway-verify-timeout <secs>] [--gateway-verify-poll-interval <secs>]
                         [--json] [--help]
 
 Contributor-safe runtime deployment only. Never invokes Owner bootstrap.
 Dry run by default; pass --apply to execute.
+
+--deployment-revision <marker> (e.g. the GitHub Actions run ID) is
+REQUIRED before --apply: it is hashed into a sanitized, always-valid
+--revision-suffix passed to both Container Apps updates, forcing a fresh
+revision on every deploy so a same-image staging->production rollout can
+never silently reuse a cached revision still holding stale, versionless
+Key Vault OAuth secret values (matches infra/modules/apps.bicep's
+deploymentRevision/sanitizedRevisionSuffix mechanism for deploys that go
+through the Bicep template instead of this direct Contributor path).
 
 --verify-gateway triggers the caj-yolo-ops Container Apps Job to check
 gateway health *from inside Azure* -- this script never calls the
@@ -105,6 +127,9 @@ while [[ $# -gt 0 ]]; do
     --environment)
       require_flag_value "--environment" "${2-}"
       ENVIRONMENT="$2"; shift 2 ;;
+    --deployment-revision)
+      require_flag_value "--deployment-revision" "${2-}"
+      DEPLOYMENT_REVISION="$2"; shift 2 ;;
     --verify-gateway) VERIFY_GATEWAY=1; shift ;;
     --gateway-verify-timeout)
       require_flag_value "--gateway-verify-timeout" "${2-}"
@@ -128,6 +153,32 @@ case "$ENVIRONMENT" in
   azure-staging|production) ;;
   *) die "--environment must be 'azure-staging' or 'production', got: $ENVIRONMENT" ;;
 esac
+
+# Container Apps revisionSuffix must be lowercase alphanumeric/hyphens,
+# start with a letter, and stay within Azure's length bound.
+# infra/modules/apps.bicep derives its own suffix as
+# 'r${uniqueString(deploymentRevision)}' via Bicep's uniqueString(); this
+# is the equivalent for the direct (non-Bicep) `az containerapp update`
+# path this script uses -- a short SHA-256-derived hex string prefixed
+# with a letter, so any caller-supplied deploymentRevision text (a GitHub
+# run ID, a timestamp, anything) always yields a valid, sufficiently
+# unique suffix regardless of its own characters or length.
+sanitize_revision_suffix() {
+  local raw="$1"
+  require_cmd shasum
+  local hash
+  hash="$(printf '%s' "$raw" | shasum -a 256 | cut -c1-16)"
+  printf 'r%s\n' "$hash"
+}
+
+check_deployment_revision() {
+  if [[ -z "$DEPLOYMENT_REVISION" ]]; then
+    if [[ "$APPLY" == "1" ]]; then
+      die "--deployment-revision <marker> is required for --apply (e.g. the GitHub Actions run ID); without it, a same-image staging->production rollout could reuse a cached Container Apps revision still holding a stale, versionless Key Vault OAuth secret value."
+    fi
+    log_warn "--deployment-revision not given (fine for dry run; required for --apply, so a same-image rollout cannot reuse a cached revision with a stale Key Vault secret)."
+  fi
+}
 
 # This script's one and only job boundary: it must never be the thing that
 # reaches for Owner bootstrap, even indirectly. Fail loudly if anyone tries
@@ -174,6 +225,9 @@ deploy_gateway() {
     --name "$YOLO_GATEWAY_APP"
     --resource-group "$YOLO_RESOURCE_GROUP"
     --image "$GATEWAY_IMAGE")
+  if [[ -n "$DEPLOYMENT_REVISION" ]]; then
+    cmd+=(--revision-suffix "$(sanitize_revision_suffix "$DEPLOYMENT_REVISION")")
+  fi
   if [[ "$APPLY" != "1" ]]; then
     print_dry_run_banner "gateway Container App update -> $GATEWAY_IMAGE"
     log_info "Would run: $(join_spaces "${cmd[@]}")"
@@ -188,6 +242,9 @@ deploy_copilot_runtime() {
     --name "$YOLO_COPILOT_APP"
     --resource-group "$YOLO_RESOURCE_GROUP"
     --image "$COPILOT_IMAGE")
+  if [[ -n "$DEPLOYMENT_REVISION" ]]; then
+    cmd+=(--revision-suffix "$(sanitize_revision_suffix "$DEPLOYMENT_REVISION")")
+  fi
   if [[ "$APPLY" != "1" ]]; then
     print_dry_run_banner "copilot runtime Container App update -> $COPILOT_IMAGE"
     log_info "Would run: $(join_spaces "${cmd[@]}")"
@@ -293,6 +350,7 @@ main() {
   validate_immutable_ref "gateway" "$GATEWAY_IMAGE"
   validate_immutable_ref "copilot-runtime" "$COPILOT_IMAGE"
   check_runtime_bicep_exists
+  check_deployment_revision
 
   if [[ "$APPLY" == "1" ]]; then
     require_cmd az

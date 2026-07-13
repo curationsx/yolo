@@ -139,6 +139,24 @@ updates the two Container Apps to caller-supplied **immutable** image refs
 and publishes the Astro `dist/` artifact to Static Web Apps. Structurally
 refuses to ever invoke Owner bootstrap. Dry run by default.
 
+**`--deployment-revision <marker>` (required for `--apply`):** a non-secret
+marker — e.g. the GitHub Actions run ID — forcing a fresh Container Apps
+revision on every deploy. Staging and production commonly deploy the same
+image SHA, and the GitHub OAuth Key Vault references
+(`github-client-id`/`github-client-secret`) are deliberately versionless;
+without a genuinely new revision, Container Apps can reuse a still-running
+revision whose secret values were already read from Key Vault at a
+previous (e.g. staging) version, silently keeping a stale OAuth secret
+cached through a same-image staging→production rollout. Hashed (SHA-256,
+truncated, letter-prefixed) into a sanitized, always-valid
+`--revision-suffix` passed to **both** `az containerapp update` calls —
+the same input always yields the same suffix for both apps. Mirrors
+`infra/modules/apps.bicep`'s own `deploymentRevision` /
+`sanitizedRevisionSuffix` (`'r${uniqueString(deploymentRevision)}'`)
+mechanism for deploys that go through the Bicep template instead of this
+direct Contributor path. Dry run allows omitting it (warns only, and never
+shows a `--revision-suffix` in the preview); `--apply` refuses without it.
+
 **Static Web Apps publish:** invoked via `npx --yes @azure/static-web-apps-cli@2.0.9`
 — a pinned version, never a bare `swa` binary — since neither this
 script's own dependencies nor the workflow that calls it install the `swa`

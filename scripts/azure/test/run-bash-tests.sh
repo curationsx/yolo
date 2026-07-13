@@ -469,6 +469,55 @@ out="$(YOLO_INTERNAL_CALL_BOOTSTRAP=1 run_script "$ledger" "${AZURE_DIR}/deploy.
 code=$?
 assert_exit_code "deploy.sh refuses if bootstrap invocation is attempted" 1 "$code"
 
+echo "-- --deployment-revision: dry run allowed without it, --apply refuses without it (forces a fresh revision so same-image rollouts can't reuse a cached one) --"
+ledger="${SCRATCH}/deploy-revision-dryrun-missing.ledger"
+: > "$ledger"
+out="$(run_script "$ledger" "${AZURE_DIR}/deploy.sh" \
+  --gateway-image "yolocurationsprod.azurecr.io/yolo/gateway:${GATEWAY_SHA}" \
+  --copilot-image "yolocurationsprod.azurecr.io/yolo/copilot-runtime:${GATEWAY_SHA}" 2>&1)"
+code=$?
+assert_exit_code "deploy.sh dry run without --deployment-revision still exits 0" 0 "$code"
+assert_not_contains "deploy.sh dry run without --deployment-revision never shows --revision-suffix" "$out" "revision-suffix"
+
+ledger="${SCRATCH}/deploy-revision-apply-missing.ledger"
+: > "$ledger"
+out="$(run_script "$ledger" "${AZURE_DIR}/deploy.sh" \
+  --gateway-image "yolocurationsprod.azurecr.io/yolo/gateway:${GATEWAY_SHA}" \
+  --copilot-image "yolocurationsprod.azurecr.io/yolo/copilot-runtime:${GATEWAY_SHA}" \
+  --apply 2>&1)"
+code=$?
+assert_exit_code "deploy.sh --apply without --deployment-revision refuses" 1 "$code"
+assert_contains "deploy.sh explains --deployment-revision is required for --apply" "$out" "deployment-revision"
+assert_not_contains "deploy.sh --apply without --deployment-revision performs no mutation" "$(cat "$ledger")" "containerapp update"
+
+echo "-- --deployment-revision: dry run with it previews a sanitized, valid --revision-suffix for BOTH apps, deterministically (same input -> same suffix) --"
+ledger="${SCRATCH}/deploy-revision-dryrun-given.ledger"
+: > "$ledger"
+out="$(run_script "$ledger" "${AZURE_DIR}/deploy.sh" \
+  --gateway-image "yolocurationsprod.azurecr.io/yolo/gateway:${GATEWAY_SHA}" \
+  --copilot-image "yolocurationsprod.azurecr.io/yolo/copilot-runtime:${GATEWAY_SHA}" \
+  --deployment-revision "run-98765" 2>&1)"
+code=$?
+assert_exit_code "deploy.sh dry run with --deployment-revision exits 0" 0 "$code"
+assert_contains "deploy.sh dry run previews --revision-suffix" "$out" "--revision-suffix"
+gateway_suffix="$(printf '%s' "$out" | grep -o -- '--revision-suffix r[0-9a-f]\{16\}' | head -1 | awk '{print $2}')"
+copilot_suffix="$(printf '%s' "$out" | grep -o -- '--revision-suffix r[0-9a-f]\{16\}' | tail -1 | awk '{print $2}')"
+assert_equal "deploy.sh derives a non-empty gateway revision suffix" "1" "$( [[ -n "$gateway_suffix" ]] && echo 1 || echo 0 )"
+assert_equal "deploy.sh derives the identical revision suffix for gateway and copilot from the same --deployment-revision input" "$gateway_suffix" "$copilot_suffix"
+
+echo "-- --deployment-revision: --apply passes --revision-suffix to both 'az containerapp update' invocations --"
+ledger="${SCRATCH}/deploy-revision-apply-given.ledger"
+: > "$ledger"
+out="$(SWA_DEPLOYMENT_TOKEN=fixture-swa-token run_script "$ledger" "${AZURE_DIR}/deploy.sh" \
+  --gateway-image "yolocurationsprod.azurecr.io/yolo/gateway:${GATEWAY_SHA}" \
+  --copilot-image "yolocurationsprod.azurecr.io/yolo/copilot-runtime:${GATEWAY_SHA}" \
+  --site-dist "${SCRATCH}/no-such-site-dist" \
+  --deployment-revision "run-98765" --apply --json 2>&1)"
+code=$?
+assert_exit_code "deploy.sh --apply with --deployment-revision succeeds" 0 "$code"
+suffix_count="$(grep -c -- '--revision-suffix' "$ledger")"
+assert_equal "deploy.sh --apply passes --revision-suffix to both containerapp update calls" "2" "$suffix_count"
+
 echo "-- --verify-gateway dry run never calls the gateway directly, only previews the ops job trigger --"
 ledger="${SCRATCH}/deploy-verifygateway-dryrun.ledger"
 : > "$ledger"
@@ -489,6 +538,7 @@ out="$(AZ_JOB_EXECUTION_STATUS=Succeeded SWA_DEPLOYMENT_TOKEN=fixture-swa-token 
   --gateway-image "yolocurationsprod.azurecr.io/yolo/gateway:${GATEWAY_SHA}" \
   --copilot-image "yolocurationsprod.azurecr.io/yolo/copilot-runtime:${GATEWAY_SHA}" \
   --site-dist "${SCRATCH}/no-such-site-dist" \
+  --deployment-revision "test-run-12345" \
   --verify-gateway --gateway-verify-poll-interval 1 --apply --json 2>&1)"
 code=$?
 assert_exit_code "deploy.sh --verify-gateway --apply exits 0 on success" 0 "$code"
@@ -502,6 +552,7 @@ out="$(AZ_JOB_EXECUTION_STATUS=Failed SWA_DEPLOYMENT_TOKEN=fixture-swa-token run
   --gateway-image "yolocurationsprod.azurecr.io/yolo/gateway:${GATEWAY_SHA}" \
   --copilot-image "yolocurationsprod.azurecr.io/yolo/copilot-runtime:${GATEWAY_SHA}" \
   --site-dist "${SCRATCH}/no-such-site-dist" \
+  --deployment-revision "test-run-12345" \
   --verify-gateway --gateway-verify-poll-interval 1 --apply 2>&1)"
 code=$?
 assert_exit_code "deploy.sh --verify-gateway --apply refuses (exit 1) when the job fails" 1 "$code"
