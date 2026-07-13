@@ -29,6 +29,24 @@ if [[ "${1:-}" == "auth" && "${2:-}" == "status" ]]; then
   [[ "${GH_AUTHENTICATED:-1}" == "1" ]] && exit 0 || exit 1
 fi
 
+# `gh variable set NAME --body VALUE --repo REPO`: bootstrap.sh's
+# wire_github_repo_variables uses this for AZURE_GITHUB_CLIENT_ID/
+# AZURE_TENANT_ID/AZURE_SUBSCRIPTION_ID (none secret). Records which
+# variable NAMEs were set (never gh's own stdout, so nothing extra is
+# echoed) to $GH_VARIABLE_LEDGER if set, so tests can assert on names
+# without needing to also assert on values.
+if [[ "${1:-}" == "variable" && "${2:-}" == "set" ]]; then
+  var_name="${3:-}"
+  [[ -n "$var_name" ]] || fail "variable set requires a NAME argument"
+  if [[ "${GH_VARIABLE_SET_FAIL:-0}" == "1" ]]; then
+    fail "simulated 'gh variable set' failure"
+  fi
+  if [[ -n "${GH_VARIABLE_LEDGER:-}" ]]; then
+    printf '%s\n' "$var_name" >> "$GH_VARIABLE_LEDGER"
+  fi
+  exit 0
+fi
+
 [[ "${1:-}" == "api" ]] || fail "unsupported command: $*"
 shift
 

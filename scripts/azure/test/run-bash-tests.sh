@@ -54,7 +54,13 @@ assert_not_contains() {
 assert_file_mode() {
   local desc="$1" file="$2" expected_mode="$3"
   local actual_mode
-  actual_mode="$(stat -f '%Lp' "$file" 2>/dev/null || stat -c '%a' "$file" 2>/dev/null)"
+  if actual_mode="$(stat -c '%a' "$file" 2>/dev/null)"; then
+    :
+  elif actual_mode="$(stat -f '%Lp' "$file" 2>/dev/null)"; then
+    :
+  else
+    actual_mode="<unavailable>"
+  fi
   if [[ "$actual_mode" == "$expected_mode" ]]; then ok "$desc (mode=$actual_mode)"; else bad "$desc (expected mode=$expected_mode, got=$actual_mode)"; fi
 }
 
@@ -142,6 +148,7 @@ out="$(AZ_LOGIN=1 AZ_OWNER_ROLE=1 AZ_PROVIDERS_REGISTERED=1 AZ_ACR_AVAILABLE=1 A
 code=$?
 assert_exit_code "bootstrap dry run exits 0 when checks pass" 0 "$code"
 assert_contains "bootstrap dry run mentions --apply" "$out" "--apply"
+assert_contains "bootstrap dry run verifies openssl before any apply" "$out" "prereq:openssl"
 assert_not_contains "bootstrap dry run never calls 'deployment sub create'" "$(cat "$ledger")" "deployment sub"
 
 echo "-- fails closed when caller is not Owner --"
@@ -243,6 +250,220 @@ assert_exit_code "bootstrap --apply with a budget contact email succeeds" 0 "$co
 assert_contains "bootstrap --apply invokes 'deployment sub create'" "$(cat "$ledger")" "deployment sub"
 assert_contains "bootstrap --apply passes budgetContactEmails inline to az" "$(cat "$ledger")" "budgetContactEmails="
 assert_not_contains "bootstrap --apply never echoes the budget contact email to its own stdout/stderr" "$out" "ops-budget-alerts@example.test"
+
+echo "-- post-apply automation: sets non-secret GitHub repo variables and generates+stores both Key Vault runtime secrets, never echoing any value, and never advising 'az keyvault secret show' --"
+ledger="${SCRATCH}/bootstrap-postapply-ok.ledger"
+: > "$ledger"
+gh_variable_ledger="${SCRATCH}/bootstrap-postapply-ok.gh-variables.ledger"
+: > "$gh_variable_ledger"
+gh_state="${GH_STATE_DIR}/postapply-ok.json"
+make_compliant_gh_state "$gh_state"
+out="$(AZ_LOGIN=1 AZ_OWNER_ROLE=1 AZ_PROVIDERS_REGISTERED=1 AZ_ACR_AVAILABLE=1 AZ_KV_EXISTS=0 AZ_ENV_EXISTS=0 \
+  GH_AUTHENTICATED=1 GH_FIXTURE_STATE_FILE="$gh_state" GH_VARIABLE_LEDGER="$gh_variable_ledger" \
+  AZ_GITHUB_IDENTITY_CLIENT_ID="12345678-1234-4abc-8def-1234567890ab" AZ_KEY_VAULT_NAME="kv-yolo-prod-curations" \
+  YOLO_KV_RBAC_WAIT_RETRIES=2 YOLO_KV_RBAC_WAIT_DELAY_SECONDS=0 \
+  run_script "$ledger" "${AZURE_DIR}/bootstrap.sh" \
+  --budget-contact-email "ops-budget-alerts@example.test" \
+  --apply --confirm "bootstrap-rg-yolo-prod" --json 2>&1)"
+code=$?
+assert_exit_code "bootstrap --apply (post-apply automation) succeeds" 0 "$code"
+assert_contains "bootstrap --apply sets AZURE_GITHUB_CLIENT_ID repo variable" "$(cat "$gh_variable_ledger")" "AZURE_GITHUB_CLIENT_ID"
+assert_contains "bootstrap --apply idempotently sets AZURE_TENANT_ID repo variable" "$(cat "$gh_variable_ledger")" "AZURE_TENANT_ID"
+assert_contains "bootstrap --apply idempotently sets AZURE_SUBSCRIPTION_ID repo variable" "$(cat "$gh_variable_ledger")" "AZURE_SUBSCRIPTION_ID"
+assert_not_contains "bootstrap --apply never echoes the githubIdentityClientId value" "$out" "12345678-1234-4abc-8def-1234567890ab"
+kv_set_count="$(grep -c 'keyvault secret set' "$ledger")"
+assert_equal "bootstrap --apply stores exactly 2 Key Vault secrets" "2" "$kv_set_count"
+assert_contains "bootstrap --apply stores copilot-token-encryption-key" "$(cat "$ledger")" "copilot-token-encryption-key"
+assert_contains "bootstrap --apply stores copilot-runtime-shared-secret" "$(cat "$ledger")" "copilot-runtime-shared-secret"
+assert_contains "bootstrap --apply writes secrets via --file, never --value" "$(cat "$ledger")" "--file"
+assert_not_contains "bootstrap --apply never passes a secret via --value" "$(cat "$ledger")" "--value"
+assert_not_contains "bootstrap --apply no longer advises 'az keyvault secret show'" "$out" "keyvault secret show"
+assert_contains "bootstrap --apply explains secrets are read via Container Apps secretRef bindings instead" "$out" "secretRef"
+
+echo "-- post-apply automation: idempotent reruns preserve existing runtime secrets instead of rotating them --"
+ledger="${SCRATCH}/bootstrap-postapply-existing-secrets.ledger"
+: > "$ledger"
+gh_state="${GH_STATE_DIR}/postapply-existing-secrets.json"
+make_compliant_gh_state "$gh_state"
+out="$(AZ_LOGIN=1 AZ_OWNER_ROLE=1 AZ_PROVIDERS_REGISTERED=1 AZ_ACR_AVAILABLE=1 AZ_KV_EXISTS=0 AZ_ENV_EXISTS=0 \
+  GH_AUTHENTICATED=1 GH_FIXTURE_STATE_FILE="$gh_state" \
+  AZ_KV_EXISTING_SECRETS="copilot-token-encryption-key,copilot-runtime-shared-secret" \
+  run_script "$ledger" "${AZURE_DIR}/bootstrap.sh" \
+  --budget-contact-email "ops-budget-alerts@example.test" \
+  --apply --confirm "bootstrap-rg-yolo-prod" --json 2>&1)"
+code=$?
+assert_exit_code "bootstrap --apply rerun succeeds with existing runtime secrets" 0 "$code"
+assert_equal "bootstrap --apply rerun performs zero Key Vault secret writes" "0" "$(grep -c 'keyvault secret set' "$ledger" || true)"
+assert_contains "bootstrap --apply rerun reports preserving the encryption key" "$out" "Preserving existing Key Vault secret 'copilot-token-encryption-key'"
+assert_contains "bootstrap --apply rerun reports preserving the runtime shared secret" "$out" "Preserving existing Key Vault secret 'copilot-runtime-shared-secret'"
+
+echo "-- post-apply automation: Key Vault's case-insensitive identifiers preserve legacy mixed-case secrets --"
+ledger="${SCRATCH}/bootstrap-postapply-mixed-case-secrets.ledger"
+: > "$ledger"
+gh_state="${GH_STATE_DIR}/postapply-mixed-case-secrets.json"
+make_compliant_gh_state "$gh_state"
+out="$(AZ_LOGIN=1 AZ_OWNER_ROLE=1 AZ_PROVIDERS_REGISTERED=1 AZ_ACR_AVAILABLE=1 AZ_KV_EXISTS=0 AZ_ENV_EXISTS=0 \
+  GH_AUTHENTICATED=1 GH_FIXTURE_STATE_FILE="$gh_state" \
+  AZ_KV_EXISTING_SECRETS="Copilot-Token-Encryption-Key,COPILOT-RUNTIME-SHARED-SECRET" \
+  run_script "$ledger" "${AZURE_DIR}/bootstrap.sh" \
+  --budget-contact-email "ops-budget-alerts@example.test" \
+  --apply --confirm "bootstrap-rg-yolo-prod" --json 2>&1)"
+code=$?
+assert_exit_code "bootstrap --apply rerun succeeds with mixed-case existing secret names" 0 "$code"
+assert_equal "bootstrap --apply rerun performs zero writes for mixed-case existing secrets" "0" "$(grep -c 'keyvault secret set' "$ledger" || true)"
+assert_contains "bootstrap --apply rerun preserves the mixed-case encryption key" "$out" "Preserving existing Key Vault secret 'copilot-token-encryption-key'"
+assert_contains "bootstrap --apply rerun preserves the mixed-case runtime shared secret" "$out" "Preserving existing Key Vault secret 'copilot-runtime-shared-secret'"
+
+echo "-- post-apply automation: idempotent reruns create only a missing runtime secret --"
+ledger="${SCRATCH}/bootstrap-postapply-one-missing-secret.ledger"
+: > "$ledger"
+gh_state="${GH_STATE_DIR}/postapply-one-missing-secret.json"
+make_compliant_gh_state "$gh_state"
+out="$(AZ_LOGIN=1 AZ_OWNER_ROLE=1 AZ_PROVIDERS_REGISTERED=1 AZ_ACR_AVAILABLE=1 AZ_KV_EXISTS=0 AZ_ENV_EXISTS=0 \
+  GH_AUTHENTICATED=1 GH_FIXTURE_STATE_FILE="$gh_state" \
+  AZ_KV_EXISTING_SECRETS="copilot-token-encryption-key" \
+  run_script "$ledger" "${AZURE_DIR}/bootstrap.sh" \
+  --budget-contact-email "ops-budget-alerts@example.test" \
+  --apply --confirm "bootstrap-rg-yolo-prod" --json 2>&1)"
+code=$?
+assert_exit_code "bootstrap --apply succeeds when only one runtime secret is missing" 0 "$code"
+assert_equal "bootstrap --apply writes exactly one missing Key Vault secret" "1" "$(grep -c 'keyvault secret set' "$ledger")"
+assert_contains "bootstrap --apply preserves the existing encryption key" "$out" "Preserving existing Key Vault secret 'copilot-token-encryption-key'"
+assert_contains "bootstrap --apply creates the missing runtime shared secret" "$(cat "$ledger")" "copilot-runtime-shared-secret"
+
+echo "-- post-apply automation: a Key Vault existence lookup failure aborts instead of rotating a possibly-existing secret --"
+ledger="${SCRATCH}/bootstrap-postapply-secret-lookup-failure.ledger"
+: > "$ledger"
+gh_state="${GH_STATE_DIR}/postapply-secret-lookup-failure.json"
+make_compliant_gh_state "$gh_state"
+out="$(AZ_LOGIN=1 AZ_OWNER_ROLE=1 AZ_PROVIDERS_REGISTERED=1 AZ_ACR_AVAILABLE=1 AZ_KV_EXISTS=0 AZ_ENV_EXISTS=0 \
+  GH_AUTHENTICATED=1 GH_FIXTURE_STATE_FILE="$gh_state" \
+  AZ_KV_LIST_FAIL_ON_ATTEMPT=2 \
+  run_script "$ledger" "${AZURE_DIR}/bootstrap.sh" \
+  --budget-contact-email "ops-budget-alerts@example.test" \
+  --apply --confirm "bootstrap-rg-yolo-prod" --json 2>&1)"
+code=$?
+assert_exit_code "bootstrap --apply refuses when a post-readiness Key Vault lookup fails" 1 "$code"
+assert_contains "bootstrap explains the fail-closed secret lookup" "$out" "Could not safely list existing Key Vault runtime secrets"
+assert_equal "bootstrap writes no secret after a failed existence lookup" "0" "$(grep -c 'keyvault secret set' "$ledger" || true)"
+
+echo "-- post-apply automation: waits out a transient Key Vault RBAC-propagation delay before writing secrets --"
+ledger="${SCRATCH}/bootstrap-postapply-rbac-delay.ledger"
+: > "$ledger"
+gh_state="${GH_STATE_DIR}/postapply-rbac-delay.json"
+make_compliant_gh_state "$gh_state"
+out="$(AZ_LOGIN=1 AZ_OWNER_ROLE=1 AZ_PROVIDERS_REGISTERED=1 AZ_ACR_AVAILABLE=1 AZ_KV_EXISTS=0 AZ_ENV_EXISTS=0 \
+  GH_AUTHENTICATED=1 GH_FIXTURE_STATE_FILE="$gh_state" \
+  AZ_KV_ACCESS_READY_AFTER_ATTEMPT=3 YOLO_KV_RBAC_WAIT_RETRIES=5 YOLO_KV_RBAC_WAIT_DELAY_SECONDS=0 \
+  run_script "$ledger" "${AZURE_DIR}/bootstrap.sh" \
+  --budget-contact-email "ops-budget-alerts@example.test" \
+  --apply --confirm "bootstrap-rg-yolo-prod" --json 2>&1)"
+code=$?
+assert_exit_code "bootstrap --apply succeeds once RBAC propagation completes within the retry budget" 0 "$code"
+assert_contains "bootstrap --apply still stores the runtime secrets after the RBAC delay clears" "$(cat "$ledger")" "keyvault secret set"
+
+echo "-- post-apply automation: refuses clearly (without ever storing secrets) if Key Vault RBAC never propagates within the retry budget --"
+ledger="${SCRATCH}/bootstrap-postapply-rbac-never.ledger"
+: > "$ledger"
+gh_state="${GH_STATE_DIR}/postapply-rbac-never.json"
+make_compliant_gh_state "$gh_state"
+out="$(AZ_LOGIN=1 AZ_OWNER_ROLE=1 AZ_PROVIDERS_REGISTERED=1 AZ_ACR_AVAILABLE=1 AZ_KV_EXISTS=0 AZ_ENV_EXISTS=0 \
+  GH_AUTHENTICATED=1 GH_FIXTURE_STATE_FILE="$gh_state" \
+  AZ_KV_ACCESS_READY=0 YOLO_KV_RBAC_WAIT_RETRIES=2 YOLO_KV_RBAC_WAIT_DELAY_SECONDS=0 \
+  run_script "$ledger" "${AZURE_DIR}/bootstrap.sh" \
+  --budget-contact-email "ops-budget-alerts@example.test" \
+  --apply --confirm "bootstrap-rg-yolo-prod" --json 2>&1)"
+code=$?
+assert_exit_code "bootstrap --apply refuses when Key Vault RBAC never propagates" 1 "$code"
+assert_contains "bootstrap --apply explains the RBAC propagation refusal" "$out" "did not become accessible"
+assert_not_contains "bootstrap --apply never stores a secret when RBAC never propagates" "$(cat "$ledger")" "keyvault secret set"
+
+echo "-- signal handling: TERM during the RBAC wait exits 143 instead of reporting a false success --"
+ledger="${SCRATCH}/bootstrap-postapply-signal.ledger"
+: > "$ledger"
+gh_state="${GH_STATE_DIR}/postapply-signal.json"
+make_compliant_gh_state "$gh_state"
+signal_out="${SCRATCH}/bootstrap-postapply-signal.out"
+AZ_LOGIN=1 AZ_OWNER_ROLE=1 AZ_PROVIDERS_REGISTERED=1 AZ_ACR_AVAILABLE=1 AZ_KV_EXISTS=0 AZ_ENV_EXISTS=0 \
+  GH_AUTHENTICATED=1 GH_FIXTURE_STATE_FILE="$gh_state" \
+  AZ_KV_ACCESS_READY=0 YOLO_KV_RBAC_WAIT_RETRIES=5 YOLO_KV_RBAC_WAIT_DELAY_SECONDS=20 \
+  AZ_LEDGER="$ledger" "${AZURE_DIR}/bootstrap.sh" \
+  --budget-contact-email "ops-budget-alerts@example.test" \
+  --apply --confirm "bootstrap-rg-yolo-prod" --json >"$signal_out" 2>&1 &
+signal_pid=$!
+signal_ready=0
+for _ in $(seq 1 100); do
+  if grep -q "waiting 20s" "$signal_out"; then
+    signal_ready=1
+    break
+  fi
+  if ! kill -0 "$signal_pid" 2>/dev/null; then
+    break
+  fi
+  sleep 0.05
+done
+assert_equal "bootstrap reaches the injectable RBAC wait before TERM" "1" "$signal_ready"
+if kill -0 "$signal_pid" 2>/dev/null; then
+  kill -TERM "$signal_pid"
+fi
+wait "$signal_pid"
+code=$?
+assert_exit_code "bootstrap exits with the conventional TERM status" 143 "$code"
+
+echo "-- post-apply automation: missing or malformed mandatory outputs fail closed before GitHub/Key Vault post-processing --"
+ledger="${SCRATCH}/bootstrap-postapply-missing-outputs.ledger"
+: > "$ledger"
+gh_variable_ledger="${SCRATCH}/bootstrap-postapply-missing-outputs.gh-variables.ledger"
+: > "$gh_variable_ledger"
+gh_state="${GH_STATE_DIR}/postapply-missing-outputs.json"
+make_compliant_gh_state "$gh_state"
+out="$(AZ_LOGIN=1 AZ_OWNER_ROLE=1 AZ_PROVIDERS_REGISTERED=1 AZ_ACR_AVAILABLE=1 AZ_KV_EXISTS=0 AZ_ENV_EXISTS=0 \
+  GH_AUTHENTICATED=1 GH_FIXTURE_STATE_FILE="$gh_state" GH_VARIABLE_LEDGER="$gh_variable_ledger" \
+  AZ_GITHUB_IDENTITY_CLIENT_ID="" AZ_KEY_VAULT_NAME="" \
+  run_script "$ledger" "${AZURE_DIR}/bootstrap.sh" \
+  --budget-contact-email "ops-budget-alerts@example.test" \
+  --apply --confirm "bootstrap-rg-yolo-prod" --json 2>&1)"
+code=$?
+assert_exit_code "bootstrap --apply fails when required outputs are missing" 1 "$code"
+assert_contains "bootstrap explains the missing githubIdentityClientId output" "$out" "required githubIdentityClientId"
+assert_equal "bootstrap sets no GitHub variables when mandatory outputs are missing" "" "$(cat "$gh_variable_ledger")"
+assert_not_contains "bootstrap stores no Key Vault secret when mandatory outputs are missing" "$(cat "$ledger")" "keyvault secret set"
+
+ledger="${SCRATCH}/bootstrap-postapply-missing-vault.ledger"
+: > "$ledger"
+gh_variable_ledger="${SCRATCH}/bootstrap-postapply-missing-vault.gh-variables.ledger"
+: > "$gh_variable_ledger"
+gh_state="${GH_STATE_DIR}/postapply-missing-vault.json"
+make_compliant_gh_state "$gh_state"
+out="$(AZ_LOGIN=1 AZ_OWNER_ROLE=1 AZ_PROVIDERS_REGISTERED=1 AZ_ACR_AVAILABLE=1 AZ_KV_EXISTS=0 AZ_ENV_EXISTS=0 \
+  GH_AUTHENTICATED=1 GH_FIXTURE_STATE_FILE="$gh_state" GH_VARIABLE_LEDGER="$gh_variable_ledger" \
+  AZ_GITHUB_IDENTITY_CLIENT_ID="12345678-1234-4abc-8def-1234567890ab" AZ_KEY_VAULT_NAME="" \
+  run_script "$ledger" "${AZURE_DIR}/bootstrap.sh" \
+  --budget-contact-email "ops-budget-alerts@example.test" \
+  --apply --confirm "bootstrap-rg-yolo-prod" --json 2>&1)"
+code=$?
+assert_exit_code "bootstrap --apply fails when keyVaultName is missing" 1 "$code"
+assert_contains "bootstrap explains the missing keyVaultName output" "$out" "required keyVaultName"
+assert_equal "bootstrap sets no GitHub variables before validating keyVaultName" "" "$(cat "$gh_variable_ledger")"
+assert_not_contains "bootstrap stores no Key Vault secret when keyVaultName is missing" "$(cat "$ledger")" "keyvault secret set"
+
+ledger="${SCRATCH}/bootstrap-postapply-malformed-client.ledger"
+: > "$ledger"
+gh_variable_ledger="${SCRATCH}/bootstrap-postapply-malformed-client.gh-variables.ledger"
+: > "$gh_variable_ledger"
+gh_state="${GH_STATE_DIR}/postapply-malformed-client.json"
+make_compliant_gh_state "$gh_state"
+out="$(AZ_LOGIN=1 AZ_OWNER_ROLE=1 AZ_PROVIDERS_REGISTERED=1 AZ_ACR_AVAILABLE=1 AZ_KV_EXISTS=0 AZ_ENV_EXISTS=0 \
+  GH_AUTHENTICATED=1 GH_FIXTURE_STATE_FILE="$gh_state" GH_VARIABLE_LEDGER="$gh_variable_ledger" \
+  AZ_GITHUB_IDENTITY_CLIENT_ID="not-a-guid" AZ_KEY_VAULT_NAME="kv-yolo-prod-curations" \
+  run_script "$ledger" "${AZURE_DIR}/bootstrap.sh" \
+  --budget-contact-email "ops-budget-alerts@example.test" \
+  --apply --confirm "bootstrap-rg-yolo-prod" --json 2>&1)"
+code=$?
+assert_exit_code "bootstrap --apply fails on a malformed githubIdentityClientId" 1 "$code"
+assert_contains "bootstrap explains the malformed githubIdentityClientId output" "$out" "malformed githubIdentityClientId"
+assert_equal "bootstrap sets no GitHub variables for malformed outputs" "" "$(cat "$gh_variable_ledger")"
+assert_not_contains "bootstrap stores no Key Vault secret for malformed outputs" "$(cat "$ledger")" "keyvault secret set"
 
 echo "-- budget contact email: \$YOLO_BUDGET_CONTACT_EMAIL env var alone satisfies the requirement (no flag needed) --"
 ledger="${SCRATCH}/bootstrap-budget-envvar.ledger"

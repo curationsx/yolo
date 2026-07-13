@@ -21,6 +21,33 @@
 #                              [--budget-contact-email <email[,email...]>]
 #                              [--skip-quota-check] [--json]
 #
+# Post-apply automation (after a successful Bicep deployment): this script
+# reads ONLY the deployment's non-secret outputs (Bicep never outputs
+# secrets to begin with) -- via `az deployment sub create ... --query
+# properties.outputs` -- and:
+#   1. Sets the non-secret GitHub repository variable AZURE_GITHUB_CLIENT_ID
+#      from the `githubIdentityClientId` output (plus, idempotently,
+#      AZURE_TENANT_ID/AZURE_SUBSCRIPTION_ID, which are already known and
+#      not secret) via `gh variable set`.
+#   2. Waits (bounded, injectable-delay poll) for the bootstrap identity's
+#      Key Vault RBAC role assignment to actually propagate, then creates any
+#      missing `copilot-token-encryption-key` and
+#      `copilot-runtime-shared-secret` values directly in Key Vault as
+#      32-byte, unpadded base64url values. Existing values are preserved on
+#      rerun so bootstrap is truly idempotent and never performs an implicit
+#      credential rotation. New values are written via
+#      `az keyvault secret set --file <path>` from a 0600 temporary file
+#      (never `--value`, which would expose the secret as a plain CLI
+#      argument) -- the temp file is securely removed immediately after each
+#      write.
+# Neither generated secret, nor any Bicep output, is ever echoed, logged,
+# or written to a tracked file. The GitHub OAuth client ID/secret remain a
+# separate, later, human-gated input -- this script never touches them.
+# Retrieving a stored secret via `az keyvault secret show` is intentionally
+# never advised by this script -- read secrets only through the running
+# Container Apps' Key Vault secretRef bindings, never by printing them to a
+# terminal.
+#
 # Exit codes:
 #   0  success (dry run report printed, or bootstrap applied)
 #   1  a prerequisite, safety, or quota check failed
@@ -52,6 +79,43 @@ STAGING_BRANCHES_OVERRIDE=""
 # @description) -- required so the plan's "Azure budget active" acceptance
 # criterion is actually met. Comma-separated for multiple recipients.
 BUDGET_CONTACT_EMAIL="${YOLO_BUDGET_CONTACT_EMAIL:-}"
+# Private (0700) directory for ephemeral generated-secret material only --
+# created on demand by generate_and_store_keyvault_secret, removed
+# immediately after each secret is written to Key Vault, and also cleaned
+# up by the EXIT/INT/TERM trap below if anything crashes mid-generation.
+SECRET_WORKDIR=""
+BOOTSTRAP_GITHUB_CLIENT_ID=""
+BOOTSTRAP_KEY_VAULT_NAME=""
+
+cleanup_secret_workdir() {
+  if [[ -n "$SECRET_WORKDIR" && -d "$SECRET_WORKDIR" ]]; then
+    if command -v shred >/dev/null 2>&1; then
+      for f in "$SECRET_WORKDIR"/*; do
+        [[ -f "$f" ]] && shred -u -- "$f" 2>/dev/null
+      done
+    fi
+    rm -rf -- "$SECRET_WORKDIR"
+  fi
+}
+
+handle_exit() {
+  local status=$?
+  trap - EXIT
+  cleanup_secret_workdir
+  exit "$status"
+}
+
+handle_signal() {
+  local status="$1"
+  trap - EXIT INT TERM
+  cleanup_secret_workdir
+  exit "$status"
+}
+
+trap handle_exit EXIT
+trap 'handle_signal 130' INT
+trap 'handle_signal 143' TERM
+
 
 usage() {
   cat <<EOF
@@ -123,7 +187,7 @@ FAILED=0
 check_prereqs() {
   log_step "Checking local prerequisites"
   local tool
-  for tool in az git jq gh; do
+  for tool in az git jq gh openssl; do
     if command -v "$tool" >/dev/null 2>&1; then
       record_check "prereq:$tool" pass "found on PATH"
     else
@@ -457,6 +521,143 @@ budget_contact_emails_json() {
   printf '%s\n' "${emails[@]}" | jq -R . | jq -s -c .
 }
 
+# Validates every mandatory non-secret output before any post-deployment
+# mutation begins. The Bicep contract always emits both values; a missing or
+# malformed value means the deployment result is incomplete and must fail
+# closed rather than leaving GitHub variables or Key Vault secrets half-wired.
+validate_bootstrap_outputs() {
+  local outputs_json="$1"
+
+  if ! BOOTSTRAP_GITHUB_CLIENT_ID="$(printf '%s' "$outputs_json" | jq -er '.githubIdentityClientId.value | select(type == "string" and length > 0)')"; then
+    die "Bootstrap deployment did not return the required githubIdentityClientId output; refusing post-apply automation."
+  fi
+  if [[ ! "$BOOTSTRAP_GITHUB_CLIENT_ID" =~ ^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$ ]]; then
+    die "Bootstrap deployment returned a malformed githubIdentityClientId output; refusing post-apply automation."
+  fi
+
+  if ! BOOTSTRAP_KEY_VAULT_NAME="$(printf '%s' "$outputs_json" | jq -er '.keyVaultName.value | select(type == "string" and length > 0)')"; then
+    die "Bootstrap deployment did not return the required keyVaultName output; refusing post-apply automation."
+  fi
+  if [[ ! "$BOOTSTRAP_KEY_VAULT_NAME" =~ ^[A-Za-z][A-Za-z0-9-]{1,22}[A-Za-z0-9]$ || "$BOOTSTRAP_KEY_VAULT_NAME" == *--* ]]; then
+    die "Bootstrap deployment returned a malformed keyVaultName output; refusing post-apply automation."
+  fi
+}
+
+# Sets non-secret GitHub repository variables from the already-validated Bicep
+# deployment output, plus the known non-secret tenant/subscription IDs.
+# Idempotent: `gh variable set` always overwrites, so re-running
+# bootstrap.sh --apply never leaves a stale value behind. Never logs a value
+# -- only the variable names that were set.
+wire_github_repo_variables() {
+  local github_client_id="$1"
+  require_cmd gh
+  log_step "Setting non-secret GitHub repository variables from Bicep outputs"
+  gh variable set AZURE_GITHUB_CLIENT_ID --body "$github_client_id" --repo "$YOLO_GITHUB_REPOSITORY" >/dev/null
+  # Idempotent: these are already known (config.sh defaults / --subscription)
+  # and not secret -- keeping them in sync here means the workflow's OIDC
+  # login step always has one consistent, current source of truth.
+  gh variable set AZURE_TENANT_ID --body "$AZURE_TENANT_ID" --repo "$YOLO_GITHUB_REPOSITORY" >/dev/null
+  gh variable set AZURE_SUBSCRIPTION_ID --body "$SUBSCRIPTION" --repo "$YOLO_GITHUB_REPOSITORY" >/dev/null
+  log_info "Set repo variables: AZURE_GITHUB_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID (none are secret; values themselves are never logged)."
+}
+
+# Bounded, retryable wait for the bootstrap identity's Key Vault RBAC role
+# assignment to actually propagate before this script tries to write a
+# secret -- Azure RBAC propagation is not instantaneous. Polls a harmless,
+# read-only call (listing secret names, never their values) as the
+# readiness probe. Retries/delay are overridable so
+# scripts/azure/test/run-bash-tests.sh never actually sleeps.
+wait_for_keyvault_write_access() {
+  local vault_name="$1"
+  local retries="${YOLO_KV_RBAC_WAIT_RETRIES:-10}"
+  local delay_seconds="${YOLO_KV_RBAC_WAIT_DELAY_SECONDS:-15}"
+  local attempt
+  for ((attempt = 1; attempt <= retries; attempt++)); do
+    if az keyvault secret list --vault-name "$vault_name" --maxresults 1 >/dev/null 2>&1; then
+      log_info "Key Vault '$vault_name' access confirmed (attempt ${attempt}/${retries})."
+      return 0
+    fi
+    if [[ "$attempt" -lt "$retries" ]]; then
+      log_warn "Key Vault '$vault_name' not yet accessible (RBAC propagation) -- attempt ${attempt}/${retries}; waiting ${delay_seconds}s."
+      sleep "$delay_seconds"
+    fi
+  done
+  die "Key Vault '$vault_name' did not become accessible after ${retries} attempts; the RBAC role assignment may not have propagated yet. Re-run 'bootstrap.sh --apply' once resolved -- it is idempotent."
+}
+
+# Generates a random 32-byte secret as exactly 43 unpadded base64url
+# characters in a 0600 temp file inside a private (0700) working directory,
+# writes it to Key Vault via
+# `az keyvault secret set --file <path>` (never `--value`, which would put
+# the secret in the process argument list), then immediately, securely
+# removes that one file. The value itself is never echoed, logged, or
+# returned to the caller.
+generate_and_store_keyvault_secret() {
+  local vault_name="$1" secret_name="$2"
+  if [[ -z "$SECRET_WORKDIR" ]]; then
+    SECRET_WORKDIR="$(make_private_workdir "yolo-bootstrap-secrets")"
+  fi
+  local secret_file="${SECRET_WORKDIR}/${secret_name}.value"
+  local secret_value
+  secret_value="$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=\r\n')"
+  if [[ ! "$secret_value" =~ ^[A-Za-z0-9_-]{43}$ ]]; then
+    die "Generated secret '$secret_name' did not satisfy the required 32-byte unpadded base64url format."
+  fi
+  ( umask 077 && printf '%s' "$secret_value" > "$secret_file" )
+  unset secret_value
+  chmod 0600 "$secret_file"
+  az keyvault secret set --vault-name "$vault_name" --name "$secret_name" --file "$secret_file" >/dev/null
+  if command -v shred >/dev/null 2>&1; then
+    shred -u -- "$secret_file" 2>/dev/null || rm -f -- "$secret_file"
+  else
+    rm -f -- "$secret_file"
+  fi
+  log_info "Stored Key Vault secret '$secret_name' (value never echoed; written via --file from a 0600 temp file, now securely removed)."
+}
+
+# Checks one already-validated secret metadata snapshot. The snapshot is
+# loaded once before any write so a later lookup failure can never leave only
+# one of the two runtime credentials created.
+keyvault_secret_exists_in_metadata() {
+  local secret_metadata="$1" secret_name="$2"
+  printf '%s' "$secret_metadata" | jq -e --arg name "$secret_name" \
+    'any(.[];
+      ((.name // ((.id // "") | split("/")[-1])) | ascii_downcase)
+      == ($name | ascii_downcase)
+    )' >/dev/null
+}
+
+# Generates and stores both runtime secrets Key Vault needs post-bootstrap.
+# Requires the vault to already be write-accessible (see
+# wait_for_keyvault_write_access above) -- called only after that check
+# passes.
+generate_and_store_runtime_secrets() {
+  local key_vault_name="$1"
+  require_cmd az
+  require_cmd openssl
+
+  log_step "Waiting for Key Vault RBAC role assignment propagation before writing secrets"
+  wait_for_keyvault_write_access "$key_vault_name"
+
+  log_step "Generating and storing runtime secrets directly in Key Vault '$key_vault_name'"
+  local secret_metadata
+  if ! secret_metadata="$(az keyvault secret list --vault-name "$key_vault_name" --output json)"; then
+    die "Could not safely list existing Key Vault runtime secrets; refusing to create or rotate any runtime credential."
+  fi
+  if ! printf '%s' "$secret_metadata" | jq -e 'type == "array"' >/dev/null 2>&1; then
+    die "Key Vault returned malformed secret metadata; refusing to create or rotate any runtime credential."
+  fi
+
+  local secret_name
+  for secret_name in "copilot-token-encryption-key" "copilot-runtime-shared-secret"; do
+    if keyvault_secret_exists_in_metadata "$secret_metadata" "$secret_name"; then
+      log_info "Preserving existing Key Vault secret '$secret_name' (bootstrap reruns never rotate runtime credentials)."
+    else
+      generate_and_store_keyvault_secret "$key_vault_name" "$secret_name"
+    fi
+  done
+}
+
 apply_bootstrap() {
   log_step "Applying Owner-only bootstrap deployment"
   require_exact_confirmation "$CONFIRM_TOKEN" "$BOOTSTRAP_CONFIRM_PHRASE"
@@ -475,14 +676,26 @@ apply_bootstrap() {
   budget_emails_json="$(budget_contact_emails_json "$BUDGET_CONTACT_EMAIL")"
 
   log_info "Invoking: az deployment sub create --location $LOCATION --template-file $BICEP_ENTRY_POINT --parameters @${REPO_ROOT}/infra/main.parameters.json --parameters budgetContactEmails=<redacted: configured>"
-  az deployment sub create \
+  # Bicep never outputs secrets to begin with (no @secure() param is ever
+  # surfaced as an output in infra/bootstrap.bicep) -- --query
+  # properties.outputs captures only that already-non-secret set into a
+  # variable, never teed or logged as a whole blob; only specific named
+  # fields are ever extracted and used below.
+  local outputs_json
+  outputs_json="$(az deployment sub create \
     --location "$LOCATION" \
     --template-file "$BICEP_ENTRY_POINT" \
     --parameters "@${REPO_ROOT}/infra/main.parameters.json" \
     --parameters resourceGroupName="$YOLO_RESOURCE_GROUP" \
-    --parameters budgetContactEmails="$budget_emails_json"
+    --parameters budgetContactEmails="$budget_emails_json" \
+    --query properties.outputs \
+    --output json)"
 
-  log_info "Bootstrap deployment submitted. Secrets are never echoed by this script; retrieve them from Key Vault via 'az keyvault secret show' when needed."
+  validate_bootstrap_outputs "$outputs_json"
+  wire_github_repo_variables "$BOOTSTRAP_GITHUB_CLIENT_ID"
+  generate_and_store_runtime_secrets "$BOOTSTRAP_KEY_VAULT_NAME"
+
+  log_info "Bootstrap deployment complete. Required runtime secrets are present in Key Vault (existing values preserved; missing values created) and are never printed by this script -- read them only through the running Container Apps' Key Vault secretRef bindings. The GitHub OAuth client ID/secret remain a separate, later, human-gated input."
 }
 
 # configure_environment_branch_policy <env> <branch> <mode: main-only|allow-extra>
