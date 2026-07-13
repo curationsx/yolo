@@ -7,14 +7,17 @@
  * reached through the managed-identity SDK instead.
  *
  * `createAzureVoteStore` makes the `votes` container the source of truth.
- * Each target's partition holds one document per viewer
- * (`id = "github-<userId>"`, `doc_type: "vote"`) plus exactly one score
- * metadata document (`id = "score"`, `doc_type: "score"`). Because both live
- * in the same partition, a single Cosmos transactional batch adds/removes
- * the vote document and increments/decrements the score document
- * atomically — two viewers can never corrupt the same target's count. Adds
- * and removes are idempotent: voting twice, or unvoting when there is no
- * vote, is a no-op that returns the current state without a network write.
+ * Each target's partition holds one document per viewer, `id =
+ * "github-<userId>"` — Azure writes `doc_type: "vote"`, but legacy
+ * Cloudflare vote documents (`vote-guard.ts`, `{id, target_id, user_id,
+ * created_at}`) have no `doc_type` field at all and are equally
+ * authoritative — plus exactly one score metadata document (`id = "score"`,
+ * `doc_type: "score"`). Because both live in the same partition, a single
+ * Cosmos transactional batch adds/removes the vote document and
+ * increments/decrements the score document atomically — two viewers can
+ * never corrupt the same target's count. Adds and removes are idempotent:
+ * voting twice, or unvoting when there is no vote, is a no-op that returns
+ * the current state without a network write.
  *
  * `reconcileScoreFromVotes`/`reconcileAllScoresFromVotes` and
  * `reconcileLegacyScoresContainer` rebuild score metadata from the
@@ -209,14 +212,29 @@ export function createAzureVoteStore(container: CosmosContainerLike): VoteStore 
  * vote count now" and upserts, so repeated calls converge to the same
  * result and never double-count, whether this is the first pre-cutover
  * backfill, a post-cutover late-vote absorption pass, or a repeat of
- * either. */
+ * either.
+ *
+ * Counts every document in the partition that isn't the score metadata
+ * document itself, not just documents with `doc_type: "vote"`. Legacy
+ * Cloudflare vote documents (written by `vote-guard.ts`'s durable path,
+ * still reachable during the post-cutover DNS TTL race window) are shaped
+ * `{id, target_id, user_id, created_at}` with no `doc_type` field at all —
+ * filtering on `doc_type = "vote"` would silently miss exactly the late
+ * legacy writes this reconciliation exists to absorb. */
 export async function reconcileScoreFromVotes(
   container: CosmosContainerLike,
   targetId: string,
 ): Promise<{ target_id: string; count: number }> {
   const result = await container.items
     .query<number>(
-      { query: "SELECT VALUE COUNT(1) FROM c WHERE c.doc_type = @type", parameters: [{ name: "@type", value: "vote" }] },
+      {
+        query:
+          "SELECT VALUE COUNT(1) FROM c WHERE (NOT IS_DEFINED(c.doc_type) OR c.doc_type = @type) AND c.id != @scoreId",
+        parameters: [
+          { name: "@type", value: "vote" },
+          { name: "@scoreId", value: SCORE_DOC_ID },
+        ],
+      },
       { partitionKey: targetId },
     )
     .fetchAll();

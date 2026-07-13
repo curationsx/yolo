@@ -171,6 +171,35 @@ test("reconcileScoreFromVotes reports zero for a target with no vote documents",
   assert.deepEqual(reconciled, { target_id: "software:never-voted", count: 0 });
 });
 
+test("reconcileScoreFromVotes counts legacy (no doc_type) and Azure-native vote docs together, excluding the score doc", async () => {
+  const votesContainer = new FakeCosmosContainer();
+  // True legacy Cloudflare shape — no doc_type field (vote-guard.ts:237-243).
+  await votesContainer.items.upsert({
+    id: "github-1",
+    target_id: "software:cloudflare",
+    user_id: "1",
+    created_at: new Date().toISOString(),
+  });
+  // Azure-native shape.
+  await votesContainer.items.upsert({
+    id: "github-2",
+    doc_type: "vote",
+    target_id: "software:cloudflare",
+    user_id: "2",
+    created_at: new Date().toISOString(),
+  });
+  // The score metadata document itself must never be counted as a vote.
+  await votesContainer.items.upsert({
+    id: "score",
+    doc_type: "score",
+    target_id: "software:cloudflare",
+    count: 0,
+  });
+
+  const reconciled = await reconcileScoreFromVotes(votesContainer, "software:cloudflare");
+  assert.deepEqual(reconciled, { target_id: "software:cloudflare", count: 2 });
+});
+
 test("reconcileAllScoresFromVotes backfills every target's score metadata in one pass", async () => {
   const votesContainer = new FakeCosmosContainer();
   const store = createAzureVoteStore(votesContainer);
@@ -204,7 +233,7 @@ test("reconcileAllScoresFromVotes is idempotent — repeated runs converge witho
   assert.deepEqual(second, third);
 });
 
-test("reconcileAllScoresFromVotes absorbs votes the legacy Cloudflare Worker writes late during the DNS TTL race window", async () => {
+test("reconcileAllScoresFromVotes absorbs true legacy-shaped Cloudflare vote docs (no doc_type) written late during the DNS TTL race window", async () => {
   const votesContainer = new FakeCosmosContainer();
   const store = createAzureVoteStore(votesContainer);
 
@@ -214,13 +243,13 @@ test("reconcileAllScoresFromVotes absorbs votes the legacy Cloudflare Worker wri
 
   // Cutover happens. During Cloudflare's proxied DNS TTL window, some
   // clients still resolve to the legacy Worker, which writes a vote
-  // document directly (its REST client updates `votes` + the legacy
-  // `scores` container, but never this same-partition score metadata
-  // document) — simulated here by writing the vote doc without going
-  // through the Azure transactional VoteStore.
+  // document directly through vote-guard.ts's durable path (see
+  // vote-guard.ts:237-243): `{id, target_id, user_id, created_at}` with NO
+  // `doc_type` field at all — it never updates this same-partition score
+  // metadata document. Simulated here with a true legacy-shaped document
+  // (not the Azure-native `doc_type: "vote"` shape).
   await votesContainer.items.upsert({
     id: "github-999",
-    doc_type: "vote",
     target_id: "software:cloudflare",
     user_id: "999",
     created_at: new Date().toISOString(),
@@ -232,7 +261,8 @@ test("reconcileAllScoresFromVotes absorbs votes the legacy Cloudflare Worker wri
   assert.equal(staleRead.resource.count, 0);
 
   // After waiting at least one old-DNS TTL (10 minutes preferred), the
-  // post-cutover reconciliation run absorbs the late vote.
+  // post-cutover reconciliation run absorbs the late legacy-shaped vote —
+  // proving the count query no longer relies on `doc_type` being present.
   const postCutover = await reconcileAllScoresFromVotes(votesContainer, ["software:cloudflare"]);
   assert.deepEqual(postCutover, [{ target_id: "software:cloudflare", count: 1 }]);
 

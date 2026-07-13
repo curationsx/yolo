@@ -121,6 +121,25 @@ export class FakeCosmosContainer {
               .filter(([key]) => partitionKey === undefined || key.startsWith(`${partitionKey}\u0000`))
               .map(([, entry]) => entry.doc);
 
+            // Reconciliation's "count every vote doc, legacy or Azure-native,
+            // excluding the score metadata doc" query. Matches documents
+            // missing the field entirely (legacy Cloudflare shape) or equal
+            // to the given value (Azure-native shape), same as real Cosmos
+            // SQL's IS_DEFINED semantics.
+            const isDefinedMatch = querySpec.query.match(
+              /COUNT\(1\)\s+FROM c\s+WHERE\s+\(NOT IS_DEFINED\(c\.(\w+)\)\s+OR\s+c\.\1\s*=\s*@(\w+)\)\s+AND\s+c\.id\s*!=\s*@(\w+)/i,
+            );
+            if (isDefinedMatch) {
+              const [, field, typeParamName, idParamName] = isDefinedMatch;
+              const typeValue = (querySpec.parameters ?? []).find((p) => p.name === `@${typeParamName}`)?.value;
+              const excludedId = (querySpec.parameters ?? []).find((p) => p.name === `@${idParamName}`)?.value;
+              const filtered = entries.filter((doc) => {
+                if (doc.id === excludedId) return false;
+                return !Object.hasOwn(doc, field) || doc[field] === typeValue;
+              });
+              return { resources: [filtered.length] };
+            }
+
             const countMatch = querySpec.query.match(/COUNT\(1\)\s+FROM c(?:\s+WHERE c\.(\w+) = @(\w+))?/i);
             if (countMatch) {
               const [, field, paramName] = countMatch;
