@@ -161,6 +161,17 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: scripts/azure/package-lock.json
+        # See the other two jobs' identical step: ubuntu-latest's ambient
+        # Node version is not a stable contract, and this job now runs the
+        # real scripts/azure test suite (Node's built-in test runner),
+        # not just a --help smoke check.
+
       - name: Install Bicep CLI
         run: az bicep install
 
@@ -173,18 +184,27 @@ jobs:
             echo "::endgroup::"
           done
 
-      - name: Verify script smoke check (module present, --help only, local)
-        # Full endpoint verification (scripts/azure/verify.mjs --gateway-url
-        # ... --site-url ...) only makes sense against real deployed
-        # hostnames, which do not exist for an unmerged PR, and this script
-        # itself makes no Azure API calls either way (Node http fetch only).
-        # This step only confirms the read-only verifier is present and its
-        # CLI still parses.
+      - name: Run scripts/azure test suite (fixtures only, no Azure credential)
+        # There is no run-all.sh; the actual existing entry point is
+        # `npm test` inside scripts/azure (package.json: test -> test:bash
+        # (bash test/run-bash-tests.sh) then test:node (node --test
+        # test/*.test.mjs)). run-bash-tests.sh's own header confirms it
+        # uses a fixture az/gh on PATH and a throwaway git repo, and never
+        # touches real Azure, GitHub, or this repository's own working
+        # tree -- consistent with this job's no-Azure-credential design.
+        # `npm ci` installs only the two packages already locked in the
+        # committed package-lock.json (@azure/cosmos, @azure/identity);
+        # per that package.json's own description they are only
+        # dynamically imported by reconcile-scores.mjs's real (non
+        # -fixture) Cosmos mode, which this test run never exercises, but
+        # installing them removes any risk of an import failure regardless.
+        # This is the final, public-CI proof for the automation lane: real
+        # local/fixture tests, not just a --help parse check.
         run: |
-          if [ -f scripts/azure/verify.mjs ]; then
-            node scripts/azure/verify.mjs --help
+          if [ -f scripts/azure/package.json ]; then
+            (cd scripts/azure && npm ci && npm test)
           else
-            echo "scripts/azure/verify.mjs not present yet (separate lane) — skipping."
+            echo "scripts/azure/package.json not present yet (separate lane) — skipping."
           fi
 
   # ── Provision + deploy generated (azure-staging) endpoints on demand. ──
