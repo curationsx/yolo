@@ -222,7 +222,14 @@ jobs:
     name: Provision + deploy (azure-staging, generated endpoints)
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.target_environment == 'azure-staging'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Bounded, not unlimited: three sequential ACR remote builds (gateway +
+    # copilot-runtime, and once opsImageTag stops defaulting to
+    # gatewayImageTag, a third dedicated ops image) + Bicep what-if/create +
+    # SWA publish + a remote Playwright Visual Oracle run against the live
+    # deployed URL is a lot of sequential, largely non-parallelizable work
+    # for one job -- 30m was sized before the Playwright step existed and
+    # risked killing a healthy first (uncached ACR layer) build mid-deploy.
+    timeout-minutes: 60
     environment: azure-staging
     env:
       # Environment-suffixed so staging and production can never collide,
@@ -484,7 +491,11 @@ jobs:
     name: Deploy production
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.target_environment == 'production'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # See the staging job's identical comment: bounded, not unlimited, to
+    # cover three sequential ACR builds + Bicep + SWA publish + remote
+    # Playwright without killing a healthy first (uncached) build mid
+    # -deploy.
+    timeout-minutes: 60
     environment: production
     env:
       # See the staging job's identical env var for the full rationale.
