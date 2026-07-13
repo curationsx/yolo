@@ -68,7 +68,22 @@ case "$1 $2" in
     case "${3:-}" in
       list-usages|"")
         if [[ "${AZ_ENV_EXISTS:-1}" == "1" ]]; then
-          printf '[{"name":{"value":"Consumption Cores"},"limit":%s,"currentValue":0}]\n' "${AZ_QUOTA_LIMIT:-10}"
+          case "${AZ_QUOTA_PAYLOAD_SHAPE:-live}" in
+            live)
+              printf '{"value":[{"name":{"localizedValue":"Managed Environment Consumption Cores","value":"ManagedEnvironmentConsumptionCores"},"limit":%s,"currentValue":%s,"usage":%s}]}\n' \
+                "${AZ_QUOTA_LIMIT:-10}" "${AZ_QUOTA_CURRENT:-0}" "${AZ_QUOTA_CURRENT:-0}"
+              ;;
+            legacy)
+              printf '[{"name":{"value":"Consumption Cores"},"limit":%s,"currentValue":%s}]\n' \
+                "${AZ_QUOTA_LIMIT:-10}" "${AZ_QUOTA_CURRENT:-0}"
+              ;;
+            malformed)
+              printf '{"value":{"unexpected":"shape"}}\n'
+              ;;
+            *)
+              fail "fixture az: unknown quota payload shape"
+              ;;
+          esac
         else
           exit 1
         fi

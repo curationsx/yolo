@@ -217,6 +217,44 @@ out="$(AZ_LOGIN=1 AZ_OWNER_ROLE=1 AZ_PROVIDERS_REGISTERED=0 AZ_ACR_AVAILABLE=1 A
 code=$?
 assert_exit_code "bootstrap refuses when providers unregistered" 1 "$code"
 
+echo "-- Container Apps quota: accepts the live wrapped schema and fails closed on low or malformed capacity --"
+ledger="${SCRATCH}/bootstrap-quota-live.ledger"
+: > "$ledger"
+gh_state="${GH_STATE_DIR}/quota-live.json"
+make_compliant_gh_state "$gh_state"
+out="$(AZ_LOGIN=1 AZ_OWNER_ROLE=1 AZ_PROVIDERS_REGISTERED=1 AZ_ACR_AVAILABLE=1 AZ_KV_EXISTS=0 \
+  AZ_ENV_EXISTS=1 AZ_QUOTA_LIMIT=10 AZ_QUOTA_CURRENT=1 \
+  GH_AUTHENTICATED=1 GH_FIXTURE_STATE_FILE="$gh_state" \
+  run_script "$ledger" "${AZURE_DIR}/bootstrap.sh" --json 2>&1)"
+code=$?
+assert_exit_code "bootstrap accepts the live Container Apps usage wrapper" 0 "$code"
+assert_contains "bootstrap computes available cores from the live quota name" "$out" \
+  '"name":"quota:container-apps-cores","status":"pass","detail":"available=9 required=2.1"'
+
+ledger="${SCRATCH}/bootstrap-quota-low.ledger"
+: > "$ledger"
+gh_state="${GH_STATE_DIR}/quota-low.json"
+make_compliant_gh_state "$gh_state"
+out="$(AZ_LOGIN=1 AZ_OWNER_ROLE=1 AZ_PROVIDERS_REGISTERED=1 AZ_ACR_AVAILABLE=1 AZ_KV_EXISTS=0 \
+  AZ_ENV_EXISTS=1 AZ_QUOTA_LIMIT=2 AZ_QUOTA_CURRENT=0 \
+  GH_AUTHENTICATED=1 GH_FIXTURE_STATE_FILE="$gh_state" \
+  run_script "$ledger" "${AZURE_DIR}/bootstrap.sh" --json 2>&1)"
+code=$?
+assert_exit_code "bootstrap refuses when Container Apps capacity is below the deployment floor" 1 "$code"
+assert_contains "bootstrap reports the low available-core value" "$out" "available=2 is below required=2.1"
+
+ledger="${SCRATCH}/bootstrap-quota-malformed.ledger"
+: > "$ledger"
+gh_state="${GH_STATE_DIR}/quota-malformed.json"
+make_compliant_gh_state "$gh_state"
+out="$(AZ_LOGIN=1 AZ_OWNER_ROLE=1 AZ_PROVIDERS_REGISTERED=1 AZ_ACR_AVAILABLE=1 AZ_KV_EXISTS=0 \
+  AZ_ENV_EXISTS=1 AZ_QUOTA_PAYLOAD_SHAPE=malformed \
+  GH_AUTHENTICATED=1 GH_FIXTURE_STATE_FILE="$gh_state" \
+  run_script "$ledger" "${AZURE_DIR}/bootstrap.sh" --json 2>&1)"
+code=$?
+assert_exit_code "bootstrap refuses a malformed Container Apps usage payload" 1 "$code"
+assert_contains "bootstrap explains the missing usable core quota" "$out" "could not determine available consumption cores"
+
 echo "-- budget contact email: dry run reports presence only, never the address, and never fails a dry run --"
 ledger="${SCRATCH}/bootstrap-budget-dryrun-missing.ledger"
 : > "$ledger"

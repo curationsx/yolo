@@ -348,10 +348,29 @@ check_quota() {
     return
   fi
   local available
-  available="$(printf '%s' "$usage_json" | jq -r '
-    ([.[] | select(.name.value == "Consumption Cores" or .name.value == "Cores")][0]) as $c
-    | if $c == null then "" else ($c.limit - $c.currentValue) end
-  ')"
+  if ! available="$(printf '%s' "$usage_json" | jq -r '
+    def rows:
+      if type == "array" then .
+      elif type == "object" and (.value | type) == "array" then .value
+      else [] end;
+    (rows
+      | [.[] | select(
+          (.name.value // "") == "ManagedEnvironmentConsumptionCores"
+          or (.name.value // "") == "Consumption Cores"
+          or (.name.value // "") == "Cores"
+        )][0]) as $c
+    | ($c.currentValue // $c.usage) as $current
+    | if $c == null
+        or ($c.limit | type) != "number"
+        or ($current | type) != "number"
+      then ""
+      else ($c.limit - $current)
+      end
+  ')"; then
+    record_check "quota:container-apps-cores" fail "Container Apps returned malformed usage JSON"
+    FAILED=1
+    return
+  fi
   if [[ -z "$available" ]]; then
     record_check "quota:container-apps-cores" fail "could not determine available consumption cores from usage payload"
     FAILED=1
