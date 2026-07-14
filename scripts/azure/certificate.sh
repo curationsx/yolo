@@ -121,9 +121,12 @@ PFX_CHAIN=""
 PFX_OUT=""
 PFX_PASSWORD_FILE=""
 
-# Pinned Certbot + certbot-dns-cloudflare versions installed into the
-# isolated venv by --apply. Bump deliberately, not implicitly.
+# Pinned Certbot + matching ACME + certbot-dns-cloudflare versions installed
+# into the isolated venv by --apply. Certbot 2.11 calls an ACME 2.11 internal
+# helper removed in later releases, so leaving acme transitive is unsafe.
+# Bump this trio deliberately, not implicitly.
 CERTBOT_PIP_SPEC="certbot==2.11.0"
+ACME_PIP_SPEC="acme==2.11.0"
 CERTBOT_DNS_CLOUDFLARE_PIP_SPEC="certbot-dns-cloudflare==2.11.0"
 
 # Test seam ONLY: overrides the venv's own absolute pip/certbot binary
@@ -441,8 +444,8 @@ apply_issue_cloudflare_dns_plugin() {
   local pip_bin="${YOLO_CERT_PIP_BIN:-${venv_dir}/bin/pip}"
   local certbot_bin="${YOLO_CERT_CERTBOT_BIN:-${venv_dir}/bin/certbot}"
 
-  log_step "Installing pinned ${CERTBOT_PIP_SPEC} + ${CERTBOT_DNS_CLOUDFLARE_PIP_SPEC}"
-  "$pip_bin" install --quiet "$CERTBOT_PIP_SPEC" "$CERTBOT_DNS_CLOUDFLARE_PIP_SPEC"
+  log_step "Installing pinned ${CERTBOT_PIP_SPEC} + ${ACME_PIP_SPEC} + ${CERTBOT_DNS_CLOUDFLARE_PIP_SPEC}"
+  "$pip_bin" install --quiet "$CERTBOT_PIP_SPEC" "$ACME_PIP_SPEC" "$CERTBOT_DNS_CLOUDFLARE_PIP_SPEC"
 
   log_step "Requesting a DNS-01 certificate for ${DOMAIN}"
   "$certbot_bin" certonly \
