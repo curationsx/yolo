@@ -172,6 +172,13 @@ export class RealCloudflareClient {
     try {
       payload = await response.json();
     } catch {
+      const successfulStatus = response.ok === true || (response.status >= 200 && response.status < 300);
+      if (method !== "GET" && successfulStatus) {
+        // Cloudflare's Worker Custom Domain detach can return HTTP 200 with
+        // an empty body. The mutation succeeded; requiring a JSON envelope
+        // here would falsely report failure after the binding was removed.
+        return null;
+      }
       throw new CloudflareApiError(`Cloudflare API returned a non-JSON response (status ${response.status})`, {
         status: response.status,
       });
