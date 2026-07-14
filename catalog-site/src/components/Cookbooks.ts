@@ -161,6 +161,7 @@ function initCards(dialog: HTMLDialogElement): void {
       const stack = stackDefinition(stackId);
       const strong = data.strongFit.includes(stackId);
       root.style.setProperty('--cookbook-stack', stack.color);
+      root.style.setProperty('--cookbook-stack-ink', stack.ink);
       stackMark.textContent = stack.glyph;
       stackMark.setAttribute('aria-label', stack.name);
       replaceCodeLines(code, data.code[stackId]);

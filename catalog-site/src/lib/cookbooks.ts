@@ -1,10 +1,16 @@
 export const STACKS = [
-  { id: 'ollama', name: 'Ollama', glyph: 'OL', color: '#ff3131' },
-  { id: 'supabase', name: 'Supabase', glyph: 'SB', color: '#3ecf8e' },
-  { id: 'cloudflare', name: 'Cloudflare Workers', glyph: 'CF', color: '#f38020' },
-  { id: 'n8n', name: 'n8n', glyph: 'N8', color: '#ff6d5a' },
-  { id: 'langfuse', name: 'Langfuse', glyph: 'LF', color: '#6e56cf' },
-  { id: 'obsidian', name: 'Obsidian', glyph: 'OB', color: '#8b5cf6' },
+  { id: 'ollama', name: 'Ollama', glyph: 'OL', color: '#ff3131', ink: '#ffffff' },
+  { id: 'supabase', name: 'Supabase', glyph: 'SB', color: '#3ecf8e', ink: '#1a1614' },
+  {
+    id: 'cloudflare',
+    name: 'Cloudflare Workers',
+    glyph: 'CF',
+    color: '#f38020',
+    ink: '#1a1614',
+  },
+  { id: 'n8n', name: 'n8n', glyph: 'N8', color: '#ff6d5a', ink: '#ffffff' },
+  { id: 'langfuse', name: 'Langfuse', glyph: 'LF', color: '#6e56cf', ink: '#ffffff' },
+  { id: 'obsidian', name: 'Obsidian', glyph: 'OB', color: '#8b5cf6', ink: '#ffffff' },
 ] as const;
 
 export type StackId = (typeof STACKS)[number]['id'];

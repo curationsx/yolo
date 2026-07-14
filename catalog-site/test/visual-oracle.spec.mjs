@@ -287,6 +287,29 @@ test.describe('Public repository proof + cookbook inventory (ACCEPTANCE.md #11-#
       expect(style.fontWeight).toBeGreaterThanOrEqual(700);
     }
   });
+
+  test('stack markers use selective foreground colors for each brand', async ({ page }) => {
+    await page.goto('/cookbooks/');
+    const card = page.locator('[data-cookbook-card]').first();
+    const select = card.locator('[data-stack-select]');
+    const mark = card.locator('[data-stack-mark]');
+    const cases = [
+      ['ollama', 'OL', 'rgb(255, 255, 255)'],
+      ['supabase', 'SB', 'rgb(26, 22, 20)'],
+      ['cloudflare', 'CF', 'rgb(26, 22, 20)'],
+      ['n8n', 'N8', 'rgb(255, 255, 255)'],
+      ['langfuse', 'LF', 'rgb(255, 255, 255)'],
+      ['obsidian', 'OB', 'rgb(255, 255, 255)'],
+    ];
+
+    for (const [value, glyph, color] of cases) {
+      await select.selectOption(value);
+      await expect(mark).toHaveText(glyph);
+      await expect
+        .poll(() => mark.evaluate((element) => getComputedStyle(element).color))
+        .toBe(color);
+    }
+  });
 });
 
 test.describe('Client module health', () => {

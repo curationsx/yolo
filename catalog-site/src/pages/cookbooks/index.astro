@@ -88,7 +88,7 @@ const apiBase = import.meta.env.PUBLIC_AGENT_API ?? '';
             data-strong-fit={JSON.stringify(cookbook.strong_fit)}
             data-code={JSON.stringify(presentation.code)}
             data-fit-note={JSON.stringify(presentation.fitNote)}
-            style={`--cookbook-accent: ${presentation.accent}; --cookbook-stack: ${defaultStack.color};`}
+            style={`--cookbook-accent: ${presentation.accent}; --cookbook-stack: ${defaultStack.color}; --cookbook-stack-ink: ${defaultStack.ink};`}
           >
             <div class="cookbook-card-main">
               <div class="cookbook-glyph" aria-hidden="true">{presentation.glyph}</div>
