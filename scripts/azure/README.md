@@ -202,8 +202,8 @@ Python venv and a `certbot-dns-cloudflare` credentials file
 (`dns_cloudflare_api_token = ...`, built directly from the env var) at
 `0600`, both inside the same private `0700` working directory as Certbot's
 forced `--config-dir`/`--work-dir`/`--logs-dir` (never the global Certbot
-paths); installs the pinned, mutually compatible `certbot==2.11.0` +
-`acme==2.11.0` + `certbot-dns-cloudflare==2.11.0` trio into that venv; runs
+paths); installs the pinned, mutually compatible `certbot==5.6.0` +
+`acme==5.6.0` + `certbot-dns-cloudflare==5.6.0` trio into that venv; runs
 `certbot certonly
 --dns-cloudflare` (which creates *and* removes the `_acme-challenge` TXT
 record itself — no manual DNS step); packages the result into a
@@ -533,8 +533,8 @@ by default.
   accepts a credentials file containing `dns_cloudflare_api_token = ...`
   and a `--dns-cloudflare-credentials <path>` flag alongside
   `--config-dir`/`--work-dir`/`--logs-dir` (per its published
-  documentation), and that the pinned `certbot==2.11.0`/`acme==2.11.0`/
-  `certbot-dns-cloudflare==2.11.0` versions are current, compatible
+  documentation), and that the pinned `certbot==5.6.0`/`acme==5.6.0`/
+  `certbot-dns-cloudflare==5.6.0` versions are current, compatible
   releases at install time — bump deliberately, not implicitly, once a
   newer pinned trio is verified. Also assumes `az containerapp env
   certificate upload` accepts `--certificate-name <name>` to pin the

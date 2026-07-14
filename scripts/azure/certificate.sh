@@ -122,12 +122,13 @@ PFX_OUT=""
 PFX_PASSWORD_FILE=""
 
 # Pinned Certbot + matching ACME + certbot-dns-cloudflare versions installed
-# into the isolated venv by --apply. Certbot 2.11 calls an ACME 2.11 internal
-# helper removed in later releases, so leaving acme transitive is unsafe.
-# Bump this trio deliberately, not implicitly.
-CERTBOT_PIP_SPEC="certbot==2.11.0"
-ACME_PIP_SPEC="acme==2.11.0"
-CERTBOT_DNS_CLOUDFLARE_PIP_SPEC="certbot-dns-cloudflare==2.11.0"
+# into the isolated venv by --apply. One shared version prevents pip from
+# resolving an incompatible transitive ACME or pyOpenSSL-era package mix.
+# Bump this verified trio deliberately, not implicitly.
+CERTBOT_STACK_VERSION="5.6.0"
+CERTBOT_PIP_SPEC="certbot==${CERTBOT_STACK_VERSION}"
+ACME_PIP_SPEC="acme==${CERTBOT_STACK_VERSION}"
+CERTBOT_DNS_CLOUDFLARE_PIP_SPEC="certbot-dns-cloudflare==${CERTBOT_STACK_VERSION}"
 
 # Test seam ONLY: overrides the venv's own absolute pip/certbot binary
 # paths. In production these are always empty, so --apply always uses the
