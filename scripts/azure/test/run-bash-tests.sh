@@ -1016,6 +1016,7 @@ assert_contains "certificate.sh --apply detects CLOUDFLARE_API_TOKEN and prefers
 assert_contains "certificate.sh --apply prepares an isolated venv" "$out" "virtual environment"
 assert_contains "certificate.sh --apply creates a 0600 Cloudflare credentials file" "$out" "cloudflare-credentials.ini"
 assert_contains "certificate.sh --apply installs the pinned certbot spec" "$(cat "$ledger")" "certbot==2.11.0"
+assert_contains "certificate.sh --apply installs the matching pinned acme spec" "$(cat "$ledger")" "acme==2.11.0"
 assert_contains "certificate.sh --apply installs the pinned certbot-dns-cloudflare spec" "$(cat "$ledger")" "certbot-dns-cloudflare==2.11.0"
 assert_contains "certificate.sh --apply issues via 'certbot certonly'" "$(cat "$ledger")" "certonly"
 assert_contains "certificate.sh --apply uploads the certificate to the Container Apps environment" "$(cat "$ledger")" "certificate upload"
