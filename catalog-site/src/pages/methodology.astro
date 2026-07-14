@@ -1,0 +1,93 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import {
+  REPO_URL,
+  ENTRIES_URL,
+  SUBMIT_URL,
+  METHODOLOGY_SOURCE_URL,
+} from '../lib/labels';
+---
+
+<BaseLayout
+  title="Methodology — CURATIONS.DEV"
+  description="How entries are selected, described, and corrected. Directory, not ranking. No paid placement."
+>
+  <article class="prose">
+    <h1>Methodology</h1>
+    <p>
+      This site is a read-only presentation of
+      <a href={ENTRIES_URL}><code>software/entries.json</code></a> in the
+      <a href={REPO_URL}>curationsx/yolo</a> repository. Git is the source of
+      truth; every change goes through a public pull request.
+    </p>
+
+    <h2>What this directory is</h2>
+    <ul>
+      <li>A curated map of tool categories with well-known reference points.</li>
+      <li>Descriptive, durable fields only — the job a tool does, its deployment shape, one defensible strength, and the trade-off to verify.</li>
+      <li>Transparent: each entry links to its official site and, where one exists, its public source repository.</li>
+    </ul>
+
+    <h2>What it deliberately is not</h2>
+    <ul>
+      <li>No rankings, star ratings, or “best tool” badges.</li>
+      <li>No paid placement or affiliate links — no entry is ever traded for anything.</li>
+      <li>No pricing or feature inventories: those rot fast, so we omit them rather than mislead.</li>
+      <li>No AI-generated descriptions that aren't stored and reviewed in the repository.</li>
+    </ul>
+
+    <h2>Licensing buckets are not interchangeable</h2>
+    <p>
+      Entries use coarse licensing postures: <strong>open source</strong> (OSI-style),
+      <strong>source available</strong> (visible source, restricted use),
+      <strong>open-weight access</strong> (downloadable model weights, possibly restricted),
+      <strong>proprietary with a free tier</strong>, <strong>proprietary</strong>, and
+      <strong>mixed</strong>. These are starting points, not legal advice — always
+      verify the exact current license before adoption.
+    </p>
+
+    <h2>Freshness</h2>
+    <p>
+      Entries carry a <code>last_reviewed</code> date and a review status.
+      “Verified” means a maintainer checked the fields against official sources
+      on that date — it does not mean the facts are still true today. Tool facts
+      decay; verify directly.
+    </p>
+
+    <h2>Cookbook handoffs</h2>
+    <p>
+      Cookbooks are stack-aware revisions mapped to the versioned prompt
+      artifacts in <a href={`${REPO_URL}/tree/main/prompts`}><code>prompts/</code></a>.
+      The repository validates each mapping and keeps the cookbook revision
+      separate from the source prompt's maturity status.
+    </p>
+    <p>
+      CURATIONSX agents may discuss a cookbook or provide a disclosed fit check
+      on a public stack board. They never build or deploy for an end user. A
+      terminal handoff runs through the user's own GitHub Copilot CLI account,
+      permissions, repository, and billing.
+    </p>
+
+    <h2>Public PRD and repository proof</h2>
+    <p>
+      Supported stack pages accept GitHub-authenticated public PRD submissions.
+      CURATIONS reads public repository metadata and a small allowlist of stack
+      marker files at the submitted stack root. It never clones or runs the
+      repository. “Stack marker found” means only that the named evidence was
+      visible; it is not a security review, endorsement, or completeness claim.
+    </p>
+    <p>
+      Community upvotes help surface useful examples. They are a social signal,
+      not proof that a PRD is correct. Comments, disclosed agent questions, the
+      automated marker result, and the linked source remain visible so a human
+      can make the verification decision.
+    </p>
+
+    <h2>Contribute</h2>
+    <ul>
+      <li><a href={SUBMIT_URL}>Propose a tool</a> — inclusion criteria and required fields.</li>
+      <li><a href={`${REPO_URL}/issues/new`}>Suggest a correction</a> — evidence beats opinion.</li>
+      <li><a href={METHODOLOGY_SOURCE_URL}>Full policy</a> — inclusion, exclusion, and disclosure rules.</li>
+    </ul>
+  </article>
+</BaseLayout>

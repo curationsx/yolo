@@ -1,0 +1,150 @@
+---
+import {
+  CATEGORY_LABELS,
+  DEPLOYMENT_LABELS,
+  LICENSE_LABELS,
+} from '../lib/labels';
+
+interface Props {
+  existingIds: string[];
+}
+
+const { existingIds } = Astro.props;
+const apiBase = import.meta.env.PUBLIC_AGENT_API ?? '';
+---
+
+<div
+  class="submission-shell"
+  data-submission-shell
+  data-api={apiBase}
+  data-existing-ids={JSON.stringify(existingIds)}
+>
+  <ol class="form-steps" aria-label="Submission progress">
+    <li data-step-indicator="0" aria-current="step"><span>01</span> Identity</li>
+    <li data-step-indicator="1"><span>02</span> Fit</li>
+    <li data-step-indicator="2"><span>03</span> Trust</li>
+    <li data-step-indicator="3"><span>04</span> Preview</li>
+  </ol>
+
+  <form class="submission-form" data-submission-form>
+    <fieldset data-form-step="0">
+      <legend>What are you bringing into CURATIONS?</legend>
+      <div class="field-grid">
+        <label>
+          Entry type
+          <select name="entity_type" required>
+            <option value="tool">Tool</option>
+            <option value="company">Company</option>
+            <option value="platform">Platform</option>
+            <option value="project">Open project</option>
+          </select>
+        </label>
+        <label>
+          Name
+          <input name="name" maxlength="80" required placeholder="Cloudflare" />
+        </label>
+        <label>
+          Directory slug
+          <input name="id" pattern="[a-z0-9]+(-[a-z0-9]+)*" maxlength="80" required placeholder="cloudflare" />
+          <span class="field-help">Lowercase words separated by hyphens.</span>
+        </label>
+        <label>
+          Official website
+          <input name="reference" type="url" required placeholder="https://example.com" />
+        </label>
+        <label class="field-span">
+          Official source repository <span class="muted">(when one exists)</span>
+          <input name="source_repository" type="url" placeholder="https://github.com/owner/repo" />
+        </label>
+      </div>
+    </fieldset>
+
+    <fieldset data-form-step="1" hidden>
+      <legend>Where does it fit?</legend>
+      <div class="field-grid">
+        <label>
+          Category
+          <select name="category" required>
+            {Object.entries(CATEGORY_LABELS).map(([value, label]) => <option value={value}>{label}</option>)}
+          </select>
+        </label>
+        <label>
+          Deployment
+          <select name="deployment" required>
+            {Object.entries(DEPLOYMENT_LABELS).map(([value, label]) => <option value={value}>{label}</option>)}
+          </select>
+        </label>
+        <label>
+          Licensing posture
+          <select name="license" required>
+            {Object.entries(LICENSE_LABELS).map(([value, label]) => <option value={value}>{label}</option>)}
+          </select>
+        </label>
+        <fieldset class="platform-field field-span">
+          <legend>First-party platforms</legend>
+          <div class="choice-grid">
+            {['Linux', 'macOS', 'Windows', 'Web', 'iOS', 'Android'].map((platform) => (
+              <label class="check-row"><input type="checkbox" name="platforms" value={platform} /> {platform}</label>
+            ))}
+          </div>
+        </fieldset>
+      </div>
+    </fieldset>
+
+    <fieldset data-form-step="2" hidden>
+      <legend>Make the entry useful—not promotional.</legend>
+      <label>
+        Primary use
+        <textarea name="primary_use" minlength="10" maxlength="240" rows="3" required placeholder="One sentence: the job this does."></textarea>
+      </label>
+      <label>
+        Durable strength
+        <textarea name="notable_strength" minlength="10" maxlength="240" rows="3" required placeholder="One defensible strength, without unsupported superlatives."></textarea>
+      </label>
+      <label>
+        What should someone verify before adoption?
+        <textarea name="verify_before_use" minlength="10" maxlength="320" rows="3" required placeholder="A real trade-off, limit, license question, or data-handling concern."></textarea>
+      </label>
+      <label>
+        Tags <span class="muted">(comma separated)</span>
+        <input name="tags" maxlength="160" placeholder="local-first, serverless, open-source" />
+      </label>
+    </fieldset>
+
+    <fieldset data-form-step="3" hidden>
+      <legend>Review the contribution.</legend>
+      <article class="submission-preview" data-submission-preview>
+        <span class="badge" data-preview-type></span>
+        <h2 data-preview-name></h2>
+        <p data-preview-use></p>
+        <p class="preview-strength" data-preview-strength></p>
+        <p class="card-verify" data-preview-verify></p>
+        <div class="tag-row" data-preview-tags></div>
+      </article>
+      <div class="github-handoff">
+        <span class="editorial-eyebrow">Git remains the source of truth</span>
+        <h2>Your form becomes a reviewable pull request.</h2>
+        <p>
+          The next button opens GitHub with a new submission file already filled
+          in. GitHub handles the fork, branch, and pull-request steps; CURATIONS
+          never asks for write access to your repositories.
+        </p>
+        <div class="form-action-row">
+          <a class="btn btn-primary" data-github-handoff href="#">Continue to GitHub →</a>
+          <button class="btn btn-secondary" type="button" data-copy-submission>Copy JSON</button>
+        </div>
+        <p class="muted" data-submission-status aria-live="polite"></p>
+      </div>
+    </fieldset>
+
+    <div class="submission-nav">
+      <button class="btn btn-secondary" type="button" data-step-back hidden>← Back</button>
+      <button class="btn btn-primary" type="button" data-step-next>Continue →</button>
+    </div>
+  </form>
+</div>
+
+<script>
+  import { initSubmissionForms } from './SubmissionForm';
+  initSubmissionForms();
+</script>

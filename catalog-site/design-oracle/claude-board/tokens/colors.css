@@ -1,0 +1,69 @@
+/* CurationsX — color tokens
+   Source: curationsvibes/v1.1 src/main.css + src/index.css (Q2 2026 coral system) */
+:root {
+  /* Brand — coral red system (Q2 2026) */
+  --curations-coral:      #ff3131;
+  --curations-red:        #e82828;
+  --curations-red-deep:   #d12020;
+  --curations-red-vibrant:#ff3131;
+  --curations-pink:       #ff8080;
+  --curations-pink-light: #ffb3b3;
+
+  /* Editorial ink & paper */
+  --editorial-ink:        #1a1614;
+  --editorial-ink-soft:   #3a3330;
+  --editorial-ink-mute:   #6b6360;
+  --editorial-paper:      #faf7f2;
+  --editorial-paper-warm: #f5efe6;
+  --editorial-coral:      #f95f5f;
+
+  /* Legacy / secondary accents */
+  --near-black:           #353839;
+  --mindaro:              #C5D86D;
+  --picton-blue:          #02A9EA;
+  --hollywood-cerise:     #F254B8;
+  --orchid:               #DC6ACF;
+  --energetic-lime:       #EBF998;
+  --hero-blue:            #0496ff;
+
+  /* Gradients — @kind other (all six below) */
+  --curations-gradient:         linear-gradient(90deg, #ff3131 0%, #e82828 50%, #ff6b6b 100%); /* @kind other */
+  --curations-gradient-flow:    linear-gradient(135deg, #ff3131 0%, #e82828 30%, #ff5555 60%, #ff8080 100%); /* @kind other */
+  --curations-gradient-radial:  radial-gradient(circle at 30% 50%, #ff3131 0%, #e82828 40%, #d12020 100%); /* @kind other */
+  --curations-gradient-angular: conic-gradient(from 45deg, #ff3131, #e82828, #ff6b6b, #ff3131); /* @kind other */
+  --curations-gradient-vivid:   linear-gradient(120deg, #ff3131 0%, #ff5555 25%, #e82828 50%, #ff8080 75%, #ff3131 100%); /* @kind other */
+  --curations-gradient-subtle:  linear-gradient(90deg, rgba(255,49,49,0.9) 0%, rgba(232,40,40,0.95) 50%, rgba(255,107,107,0.85) 100%); /* @kind other */
+
+  /* Semantic (shadcn-style, from v1.1) */
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+
+  /* Semantic aliases — CurationsX platform */
+  --surface-page:    #fafafa;      /* embossed white */
+  --surface-card:    #ffffff;
+  --surface-paper:   var(--editorial-paper);
+  --text-body:       var(--editorial-ink);
+  --text-soft:       var(--editorial-ink-soft);
+  --text-mute:       var(--editorial-ink-mute);
+  --accent-primary:  var(--curations-coral);
+  --accent-eyebrow:  var(--editorial-coral);
+  --border-hard:     var(--near-black);
+
+  /* Human × AI disclosure language */
+  --voice-human:     var(--hero-blue);      /* humans = blue */
+  --voice-agent:     var(--curations-coral);/* agents = coral, always labeled */
+  --voice-agent-bg:  #fff3f3;
+  --voice-human-bg:  #f0f8ff;
+}

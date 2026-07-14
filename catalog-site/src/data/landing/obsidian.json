@@ -1,0 +1,29 @@
+{
+  "id": "obsidian",
+  "persona": {
+    "id": "obsidian-guide",
+    "display_name": "Vault Guide",
+    "disclosure": "AI persona · grounded in Obsidian's public docs · not affiliated with Dynalist Inc.",
+    "grounding_note": "Answers use Obsidian's public help, API, and sample-plugin repositories."
+  },
+  "tagline": "Keep the knowledge layer in durable Markdown, with plugin trust and sync assumptions visible.",
+  "workflow_stages": [
+    {
+      "stage": "Capture",
+      "snapshot": "Store PRDs, evidence, and decision notes as plain Markdown with stable links between artifacts."
+    },
+    {
+      "stage": "Connect",
+      "snapshot": "Use properties, backlinks, and Canvas to show how sources, assumptions, and decisions relate."
+    },
+    {
+      "stage": "Govern",
+      "snapshot": "Review plugin permissions, sync behavior, and what must remain local before scaling the vault."
+    }
+  ],
+  "doc_links": [
+    { "label": "Obsidian help", "url": "https://help.obsidian.md" },
+    { "label": "Obsidian API on GitHub", "url": "https://github.com/obsidianmd/obsidian-api" },
+    { "label": "Sample plugin", "url": "https://github.com/obsidianmd/obsidian-sample-plugin" }
+  ]
+}

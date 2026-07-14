@@ -1,0 +1,57 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "value": "eastus2"
+    },
+    "resourceGroupName": {
+      "value": "rg-yolo-prod"
+    },
+    "foundryResourceGroupName": {
+      "value": "rg-yolo-foundry"
+    },
+    "cognitiveServicesAccountName": {
+      "value": "yolo-foundry"
+    },
+    "cosmosAccountName": {
+      "value": "yolo-curations-feed"
+    },
+    "acrName": {
+      "value": "yolocurationsprod"
+    },
+    "keyVaultName": {
+      "value": "kv-yolo-prod-curations"
+    },
+    "logAnalyticsName": {
+      "value": "log-yolo-prod"
+    },
+    "containerAppsEnvironmentName": {
+      "value": "cae-yolo-prod"
+    },
+    "staticWebAppName": {
+      "value": "stapp-yolo-prod"
+    },
+    "gatewayIdentityName": {
+      "value": "id-yolo-gateway"
+    },
+    "copilotIdentityName": {
+      "value": "id-yolo-copilot"
+    },
+    "githubIdentityName": {
+      "value": "id-yolo-github"
+    },
+    "githubRepo": {
+      "value": "curationsx/yolo"
+    },
+    "githubEnvironments": {
+      "value": ["azure-staging", "production"]
+    },
+    "budgetAmount": {
+      "value": 8
+    },
+    "budgetContactEmails": {
+      "value": []
+    }
+  }
+}

@@ -1,0 +1,189 @@
+name: CURATIONS.DEV
+
+on:
+  pull_request:
+    paths:
+      - "agent-worker/**"
+      - "catalog-site/**"
+      - "cookbooks/**"
+      - "prompts/**"
+      - "software/**"
+      - "schemas/cookbook-entry.schema.json"
+      - "schemas/software-entry.schema.json"
+      - "catalog.json"
+      - "tools/yolo.py"
+      - ".github/workflows/catalog-site.yml"
+  push:
+    branches: [main]
+    paths:
+      - "agent-worker/**"
+      - "catalog-site/**"
+      - "cookbooks/**"
+      - "prompts/**"
+      - "software/**"
+      - "schemas/cookbook-entry.schema.json"
+      - "schemas/software-entry.schema.json"
+      - "catalog.json"
+      - "tools/yolo.py"
+      - ".github/workflows/catalog-site.yml"
+  workflow_dispatch:
+    inputs:
+      generate_oracle_baseline:
+        description: "Generate Linux Visual Oracle candidates for human review"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: curations-dev-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Validate site + gateway
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Validate source data
+        run: |
+          python tools/yolo.py doctor
+          python tools/yolo.py catalog
+          git diff --exit-code -- catalog.json
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: |
+            catalog-site/package-lock.json
+            agent-worker/package-lock.json
+            agent-worker/copilot-runtime/package-lock.json
+
+      - name: Build Astro site
+        working-directory: catalog-site
+        env:
+          ASTRO_BASE: /
+          ASTRO_SITE: https://curations.dev
+          PUBLIC_AGENT_API: https://api.curations.dev
+        run: |
+          npm ci
+          npm run build
+
+      - name: Install Visual Oracle browser
+        working-directory: catalog-site
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Visual Oracle contract
+        working-directory: catalog-site
+        run: npm run test:visual:ci
+
+      - name: Generate Linux Visual Oracle candidates
+        if: github.event_name == 'workflow_dispatch' && inputs.generate_oracle_baseline
+        working-directory: catalog-site
+        env:
+          GENERATE_ORACLE_BASELINE: "1"
+        run: npm run test:visual:update
+
+      - name: Publish Linux Visual Oracle candidates
+        if: github.event_name == 'workflow_dispatch' && inputs.generate_oracle_baseline
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-oracle-linux-candidates
+          path: catalog-site/test/visual-oracle.spec.mjs-snapshots/*-linux.png
+          if-no-files-found: error
+
+      - name: Test and typecheck Cloudflare Worker
+        working-directory: agent-worker
+        run: |
+          npm ci
+          npm test
+          npm run check
+          npx wrangler deploy --dry-run
+
+      - name: Test isolated Copilot runtime
+        working-directory: agent-worker/copilot-runtime
+        run: |
+          npm ci
+          npm test
+
+      - name: Check patch hygiene
+        run: git diff --check
+
+  deploy:
+    name: Deploy Worker + Pages
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment:
+      name: production
+      url: https://curations.dev
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: |
+            catalog-site/package-lock.json
+            agent-worker/package-lock.json
+            agent-worker/copilot-runtime/package-lock.json
+
+      - name: Install deployment dependencies
+        run: |
+          npm --prefix agent-worker ci
+          npm --prefix agent-worker/copilot-runtime ci
+          npm --prefix catalog-site ci
+
+      - name: Deploy agent gateway
+        working-directory: agent-worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy
+
+      - name: Build static site
+        working-directory: catalog-site
+        env:
+          ASTRO_BASE: /
+          ASTRO_SITE: https://curations.dev
+          PUBLIC_AGENT_API: https://api.curations.dev
+        run: npm run build
+
+      - name: Deploy Cloudflare Pages
+        working-directory: catalog-site
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          ../agent-worker/node_modules/.bin/wrangler pages deploy dist \
+            --project-name curations-dev \
+            --branch main \
+            --commit-hash "$GITHUB_SHA" \
+            --commit-dirty=false
+
+      - name: Verify production
+        run: |
+          curl --fail --silent --show-error --retry 8 --retry-delay 5 \
+            --retry-all-errors https://api.curations.dev/api/health \
+            | grep -q '"ok":true'
+          curl --fail --silent --show-error --retry 8 --retry-delay 5 \
+            --retry-all-errors https://curations.dev/cookbooks/ \
+            | grep -q 'Prompts as code'

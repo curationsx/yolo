@@ -1,0 +1,15 @@
+{
+  "name": "@curationsx/yolo-azure-scripts",
+  "private": true,
+  "type": "module",
+  "description": "Operational scripts for the CurationsX Yolo Azure migration (see .azure/deployment-plan.md). Fixture/dry-run use requires no dependencies at all; @azure/cosmos and @azure/identity are only imported (dynamically, at runtime) by reconcile-scores.mjs's real (non-fixture) Cosmos mode -- run `npm ci --prefix scripts/azure` before any real (non --fixture) reconciliation.",
+  "scripts": {
+    "test": "npm run test:bash && npm run test:node",
+    "test:bash": "bash test/run-bash-tests.sh",
+    "test:node": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@azure/cosmos": "^4.9.3",
+    "@azure/identity": "^4.13.1"
+  }
+}

@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://curationsx.github.io/yolo/sitemap-index.xml

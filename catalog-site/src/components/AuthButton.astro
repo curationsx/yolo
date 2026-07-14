@@ -1,0 +1,110 @@
+---
+const apiBase = import.meta.env.PUBLIC_AGENT_API ?? '';
+---
+
+<div class="auth-control" data-auth-control data-api={apiBase}>
+  <button type="button" class="auth-sign-in" data-auth-sign-in disabled>
+    Sign in with GitHub
+  </button>
+  <a class="auth-profile" data-auth-profile href="#" rel="noopener" hidden>
+    <img data-auth-avatar alt="" width="24" height="24" />
+    <span data-auth-name></span>
+  </a>
+  <button type="button" class="auth-sign-out" data-auth-sign-out hidden>Sign out</button>
+  <span class="auth-status" data-auth-status aria-live="polite">Checking GitHub identity...</span>
+</div>
+
+<script>
+  import {
+    authHeaders,
+    beginGithubSignIn,
+    broadcastAuth,
+    clearSession,
+    consumeOAuthResult,
+    currentUser,
+    fetchAuthResponse,
+  } from '../lib/browser-auth';
+
+  for (const root of document.querySelectorAll<HTMLElement>('[data-auth-control]')) {
+    const api = root.dataset.api ?? '';
+    const signIn = root.querySelector<HTMLButtonElement>('[data-auth-sign-in]')!;
+    const signOut = root.querySelector<HTMLButtonElement>('[data-auth-sign-out]')!;
+    const profile = root.querySelector<HTMLAnchorElement>('[data-auth-profile]')!;
+    const avatar = root.querySelector<HTMLImageElement>('[data-auth-avatar]')!;
+    const name = root.querySelector<HTMLElement>('[data-auth-name]')!;
+    const status = root.querySelector<HTMLElement>('[data-auth-status]')!;
+
+    const renderSignedOut = (): void => {
+      signIn.hidden = false;
+      signOut.hidden = true;
+      profile.hidden = true;
+      broadcastAuth(null);
+    };
+
+    const result = consumeOAuthResult();
+    const oauthError = result.error ? 'GitHub sign-in was not completed.' : '';
+
+    if (!api) {
+      signIn.disabled = true;
+      status.textContent = 'Identity gateway unavailable';
+      continue;
+    }
+
+    signIn.addEventListener('click', () => beginGithubSignIn(api));
+    signOut.addEventListener('click', async () => {
+      try {
+        await fetch(`${api}/api/auth/logout`, {
+          method: 'POST',
+          headers: authHeaders(),
+        });
+      } finally {
+        clearSession();
+        renderSignedOut();
+      }
+    });
+
+    try {
+      const retryOptions = {
+        onRetry: () => {
+          status.textContent = 'Waking identity gateway...';
+        },
+      };
+      const configResponse = await fetchAuthResponse(
+        `${api}/api/auth/config`,
+        {},
+        retryOptions,
+      );
+      if (!configResponse.ok) {
+        throw new Error(`identity configuration failed: ${configResponse.status}`);
+      }
+      const config = (await configResponse.json()) as { github?: boolean };
+      if (!config.github) {
+        signIn.disabled = true;
+        status.textContent = 'GitHub SSO setup pending';
+        renderSignedOut();
+        continue;
+      }
+      const user = await currentUser(api, retryOptions);
+      if (!user) {
+        signIn.disabled = false;
+        status.textContent = oauthError;
+        renderSignedOut();
+        continue;
+      }
+      signIn.disabled = false;
+      signIn.hidden = true;
+      signOut.hidden = false;
+      profile.hidden = false;
+      profile.href = user.html_url;
+      avatar.src = user.avatar_url;
+      avatar.alt = `${user.login} on GitHub`;
+      name.textContent = user.login;
+      status.textContent = '';
+      broadcastAuth(user);
+    } catch {
+      signIn.disabled = false;
+      status.textContent = 'Identity temporarily unavailable. Try again.';
+      renderSignedOut();
+    }
+  }
+</script>

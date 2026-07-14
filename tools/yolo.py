@@ -8,6 +8,7 @@ Usage:
     python tools/yolo.py doctor              # validate all artifacts
     python tools/yolo.py list prompts        # index of prompts
     python tools/yolo.py list workflows      # index of workflows
+    python tools/yolo.py list cookbooks      # index of cookbook revisions
     python tools/yolo.py list software       # index of software entries
     python tools/yolo.py search <term>       # search artifacts by text
     python tools/yolo.py show <id>           # show one artifact's details
@@ -22,6 +23,7 @@ import json
 import re
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -55,6 +57,10 @@ TAXONOMY_DIMENSIONS = [
     "outputs", "human_controls", "evidence_provenance", "risks",
     "feedback_learning",
 ]
+
+COOKBOOK_STACKS = {
+    "ollama", "supabase", "cloudflare", "n8n", "langfuse", "obsidian",
+}
 
 
 # ---------------------------------------------------------------- parsing
@@ -101,12 +107,17 @@ def validate_schema(value, schema: dict, path: str = "$") -> list[str]:
     """Validate ``value`` against the JSON-Schema subset used in schemas/.
 
     Supports: type, required, properties, additionalProperties(false),
-    enum, pattern, minLength, minItems, items, and local ``$ref: "#"``.
+    enum, const, pattern, format(uri), minLength, minItems, items, allOf,
+    if/then/else, and local ``$ref: "#"``.
     Returns a list of error strings (empty means valid).
     """
     errors: list[str] = []
+    if "const" in schema and value != schema["const"]:
+        errors.append(f"{path}: {value!r} does not equal {schema['const']!r}")
+
     t = schema.get("type")
-    if t == "object":
+    object_keywords = {"required", "properties", "additionalProperties"}
+    if t == "object" or (isinstance(value, dict) and object_keywords & schema.keys()):
         if not isinstance(value, dict):
             return [f"{path}: expected object, got {type(value).__name__}"]
         for req in schema.get("required", []):
@@ -127,6 +138,15 @@ def validate_schema(value, schema: dict, path: str = "$") -> list[str]:
             errors.append(f"{path}: '{value}' not one of {schema['enum']}")
         if "pattern" in schema and not re.search(schema["pattern"], value):
             errors.append(f"{path}: '{value}' does not match {schema['pattern']!r}")
+        if schema.get("format") == "uri":
+            try:
+                parsed = urlparse(value)
+                _ = parsed.port
+                valid_uri = bool(parsed.scheme and parsed.netloc)
+            except ValueError:
+                valid_uri = False
+            if not valid_uri or any(char.isspace() for char in value):
+                errors.append(f"{path}: '{value}' is not a valid URI")
         if len(value) < schema.get("minLength", 0):
             errors.append(f"{path}: shorter than minLength {schema['minLength']}")
     elif t == "array":
@@ -138,6 +158,16 @@ def validate_schema(value, schema: dict, path: str = "$") -> list[str]:
         if item_schema:
             for i, item in enumerate(value):
                 errors.extend(validate_schema(item, item_schema, f"{path}[{i}]"))
+
+    for sub_schema in schema.get("allOf", []):
+        errors.extend(validate_schema(value, sub_schema, path))
+
+    condition = schema.get("if")
+    if condition is not None:
+        branch = schema.get("then") if not validate_schema(value, condition, path) else schema.get("else")
+        if branch is not None:
+            errors.extend(validate_schema(value, branch, path))
+
     if "$ref" in schema and schema["$ref"] == "#":
         # resolved by caller supplying the root schema as items — see load_software
         pass
@@ -224,6 +254,84 @@ def load_software() -> tuple[list[dict], list[str]]:
     return [e for e in entries if isinstance(e, dict)], problems
 
 
+def load_cookbooks() -> tuple[list[dict], list[str]]:
+    """Load cookbook revisions and verify their prompt-source contracts."""
+    problems: list[str] = []
+    path = REPO_ROOT / "cookbooks" / "entries.json"
+    rel = path.relative_to(REPO_ROOT)
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return [], [f"{rel}: {exc}"]
+
+    schema = load_schema("cookbook-entry.schema.json")
+    collection = schema["definitions"]["collection"]
+    for err in validate_schema(doc, collection, "$"):
+        problems.append(f"{rel}: {err}")
+
+    entries = doc.get("entries", []) if isinstance(doc, dict) else []
+    prompt_by_file = {
+        prompt["_file"]: prompt
+        for prompt in load_prompts()[0]
+    }
+    for i, entry in enumerate(entries):
+        for err in validate_schema(entry, schema, f"$.entries[{i}]"):
+            problems.append(f"{rel}: {err}")
+        if not isinstance(entry, dict):
+            continue
+
+        source_path = entry.get("source_prompt", "")
+        source = prompt_by_file.get(source_path)
+        if not source:
+            problems.append(
+                f"{rel}: $.entries[{i}].source_prompt: "
+                f"'{source_path}' is not a valid prompt artifact"
+            )
+        else:
+            expected = {
+                "source_prompt_id": source.get("id"),
+                "source_version": source.get("version"),
+                "source_status": source.get("status"),
+                "category": source.get("category"),
+            }
+            for field, value in expected.items():
+                if entry.get(field) != value:
+                    problems.append(
+                        f"{rel}: $.entries[{i}].{field}: "
+                        f"expected '{value}' from {source_path}"
+                    )
+
+        strong = set(entry.get("strong_fit", []))
+        partial = set(entry.get("partial_fit", []))
+        overlap = strong & partial
+        if overlap:
+            problems.append(
+                f"{rel}: $.entries[{i}]: stack fit overlaps: "
+                f"{', '.join(sorted(overlap))}"
+            )
+        covered = strong | partial
+        if covered != COOKBOOK_STACKS:
+            missing = COOKBOOK_STACKS - covered
+            extra = covered - COOKBOOK_STACKS
+            detail = []
+            if missing:
+                detail.append(f"missing {', '.join(sorted(missing))}")
+            if extra:
+                detail.append(f"unknown {', '.join(sorted(extra))}")
+            problems.append(
+                f"{rel}: $.entries[{i}]: stack fit must cover all stacks "
+                f"({'; '.join(detail)})"
+            )
+
+        entry["_kind"] = "cookbook"
+        entry["_file"] = str(rel)
+
+    ids = [e.get("id") for e in entries if isinstance(e, dict)]
+    for dup in {i for i in ids if ids.count(i) > 1}:
+        problems.append(f"{rel}: duplicate id '{dup}'")
+    return [e for e in entries if isinstance(e, dict)], problems
+
+
 def check_taxonomy() -> list[str]:
     problems: list[str] = []
     path = REPO_ROOT / "taxonomy" / "taxonomy.json"
@@ -252,6 +360,7 @@ def build_catalog() -> dict:
     """Build the deterministic catalog structure from repository artifacts."""
     prompts, _ = load_prompts()
     workflows, _ = load_workflows()
+    cookbooks, _ = load_cookbooks()
     software, _ = load_software()
 
     def public(meta: dict) -> dict:
@@ -262,6 +371,7 @@ def build_catalog() -> dict:
         "$comment": "Generated by 'python tools/yolo.py catalog'. Do not edit by hand.",
         "prompts": [public(p) for p in prompts],
         "workflows": [public(w) for w in workflows],
+        "cookbooks": [public(c) for c in cookbooks],
         "software": [public(s) for s in software],
     }
 
@@ -276,8 +386,9 @@ def cmd_doctor() -> int:
     problems: list[str] = []
     prompts, p1 = load_prompts()
     workflows, p2 = load_workflows()
-    software, p3 = load_software()
-    problems += p1 + p2 + p3 + check_taxonomy()
+    cookbooks, p3 = load_cookbooks()
+    software, p4 = load_software()
+    problems += p1 + p2 + p3 + p4 + check_taxonomy()
 
     if not prompts:
         problems.append("prompts/: no prompt artifacts found")
@@ -291,14 +402,15 @@ def cmd_doctor() -> int:
     else:
         problems.append("catalog.json: missing — generate with 'python tools/yolo.py catalog'")
 
-    checked = len(prompts) + len(workflows) + len(software)
+    checked = len(prompts) + len(workflows) + len(cookbooks) + len(software)
     if problems:
         print(f"🦆 doctor: {len(problems)} problem(s) across {checked} artifact(s):\n")
         for problem in problems:
             print(f"  ✗ {problem}")
         return 1
     print(f"🦆 doctor: all checks passed — {len(prompts)} prompts, "
-          f"{len(workflows)} workflows, {len(software)} software entries healthy.")
+          f"{len(workflows)} workflows, {len(cookbooks)} cookbooks, "
+          f"{len(software)} software entries healthy.")
     return 0
 
 
@@ -318,8 +430,16 @@ def cmd_list(what: str) -> int:
         rows = [(i["id"], i.get("category", ""), i.get("deployment", ""),
                  i.get("name", "")) for i in items]
         _table(("ID", "CATEGORY", "DEPLOYMENT", "NAME"), rows)
+    elif what == "cookbooks":
+        items, _ = load_cookbooks()
+        rows = [(i["id"], i.get("category", ""), i.get("release_status", ""),
+                 i.get("version", ""), i.get("title", "")) for i in items]
+        _table(("ID", "CATEGORY", "STATUS", "VERSION", "TITLE"), rows)
     else:
-        print(f"unknown list target '{what}' (expected: prompts, workflows, software)")
+        print(
+            f"unknown list target '{what}' "
+            "(expected: prompts, workflows, cookbooks, software)"
+        )
         return 2
     return 0
 
@@ -337,6 +457,11 @@ def cmd_search(term: str) -> int:
                             if not k.startswith("_")).lower()
         if term_lower in haystack:
             hits.append(("software", entry["id"], entry.get("name", "")))
+    for cookbook in load_cookbooks()[0]:
+        haystack = " ".join(str(v) for k, v in cookbook.items()
+                            if not k.startswith("_")).lower()
+        if term_lower in haystack:
+            hits.append(("cookbook", cookbook["id"], cookbook.get("title", "")))
     if not hits:
         print(f"no matches for '{term}'")
         return 1
@@ -365,6 +490,15 @@ def cmd_show(artifact_id: str) -> int:
                         "notable_strength", "verify_before_use", "reference"):
                 print(f"  {key}: {entry.get(key)}")
             return 0
+    for cookbook in load_cookbooks()[0]:
+        if cookbook.get("id") == artifact_id:
+            print(f"{cookbook.get('title')}  [cookbook]")
+            for key in ("category", "version", "release_status", "source_prompt",
+                        "source_version", "source_status"):
+                print(f"  {key}: {cookbook.get(key)}")
+            print(f"  strong_fit: {', '.join(cookbook.get('strong_fit', []))}")
+            print(f"  partial_fit: {', '.join(cookbook.get('partial_fit', []))}")
+            return 0
     print(f"no artifact with id '{artifact_id}' (try: python tools/yolo.py list prompts)")
     return 1
 
@@ -377,6 +511,7 @@ def cmd_catalog() -> int:
     print(f"catalog.json {'updated' if changed else 'already up to date'} "
           f"({len(build_catalog()['prompts'])} prompts, "
           f"{len(build_catalog()['workflows'])} workflows, "
+          f"{len(build_catalog()['cookbooks'])} cookbooks, "
           f"{len(build_catalog()['software'])} software entries)")
     return 0
 

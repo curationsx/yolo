@@ -1,0 +1,29 @@
+{
+  "id": "ollama",
+  "persona": {
+    "id": "ollama-guide",
+    "display_name": "Local Model Guide",
+    "disclosure": "AI persona · grounded in Ollama's public docs · not affiliated with Ollama",
+    "grounding_note": "Answers use Ollama's public repository, documentation, and model-library guidance."
+  },
+  "tagline": "Run open-weight models locally, with hardware and model licenses still yours to verify.",
+  "workflow_stages": [
+    {
+      "stage": "Prototype",
+      "snapshot": "Pull a small model and test prompts locally before selecting hosted infrastructure or sharing sensitive context."
+    },
+    {
+      "stage": "Build",
+      "snapshot": "Use Modelfiles and a local API boundary to make model choice, context, and parameters visible in source control."
+    },
+    {
+      "stage": "Verify",
+      "snapshot": "Record hardware, latency, quality, and model-license evidence for the exact model used by the PRD."
+    }
+  ],
+  "doc_links": [
+    { "label": "Ollama docs", "url": "https://docs.ollama.com" },
+    { "label": "ollama/ollama on GitHub", "url": "https://github.com/ollama/ollama" },
+    { "label": "Model library", "url": "https://ollama.com/library" }
+  ]
+}

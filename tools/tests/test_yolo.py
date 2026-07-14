@@ -58,6 +58,48 @@ class TestSchemaValidation(unittest.TestCase):
         errors = yolo.validate_schema(meta, schema)
         self.assertTrue(any("unexpected field 'surprise'" in e for e in errors))
 
+    def test_verified_software_requires_last_reviewed(self):
+        schema = yolo.load_schema("software-entry.schema.json")
+        entry = {
+            "id": "demo",
+            "name": "Demo",
+            "entity_type": "company",
+            "category": "development",
+            "primary_use": "A sufficiently descriptive primary use.",
+            "deployment": "cloud",
+            "notable_strength": "A sufficiently descriptive durable strength.",
+            "verify_before_use": "A sufficiently descriptive verification question.",
+            "reference": "https://example.com",
+            "review_status": "verified",
+        }
+        errors = yolo.validate_schema(entry, schema)
+        self.assertTrue(any("missing required field 'last_reviewed'" in e for e in errors))
+
+    def test_startup_credits_require_company_and_valid_source(self):
+        schema = yolo.load_schema("software-entry.schema.json")
+        entry = {
+            "id": "demo",
+            "name": "Demo",
+            "entity_type": "tool",
+            "category": "development",
+            "primary_use": "A sufficiently descriptive primary use.",
+            "deployment": "cloud",
+            "notable_strength": "A sufficiently descriptive durable strength.",
+            "verify_before_use": "A sufficiently descriptive verification question.",
+            "reference": "https://example.com",
+            "startup_credits": {
+                "status": "verified-offer",
+                "headline": "Verified startup offer",
+                "details": "Enough detail to explain the official offer.",
+                "eligibility": "Enough detail to explain who may qualify.",
+                "sources": [{"label": "Official source", "url": "https://?foo"}],
+                "checked_on": "2026-07-13",
+            },
+        }
+        errors = yolo.validate_schema(entry, schema)
+        self.assertTrue(any("entity_type" in e and "company" in e for e in errors))
+        self.assertTrue(any("startup_credits.sources[0].url" in e for e in errors))
+
 
 class TestRepositoryArtifacts(unittest.TestCase):
     """The repository's own artifacts must be healthy."""
@@ -76,6 +118,15 @@ class TestRepositoryArtifacts(unittest.TestCase):
         entries, problems = yolo.load_software()
         self.assertEqual(problems, [])
         self.assertGreater(len(entries), 0)
+
+    def test_cookbooks_load_clean(self):
+        entries, problems = yolo.load_cookbooks()
+        self.assertEqual(problems, [])
+        self.assertEqual(len(entries), 4)
+        self.assertEqual(
+            set(entries[0]["strong_fit"]) | set(entries[0]["partial_fit"]),
+            yolo.COOKBOOK_STACKS,
+        )
 
     def test_taxonomy_clean(self):
         self.assertEqual(yolo.check_taxonomy(), [])
@@ -105,6 +156,11 @@ class TestCommands(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("rubber-duck-debugging", out)
 
+    def test_list_cookbooks(self):
+        code, out = self._run("list", "cookbooks")
+        self.assertEqual(code, 0)
+        self.assertIn("rubber-duck", out)
+
     def test_list_unknown_target(self):
         code, _ = self._run("list", "unicorns")
         self.assertEqual(code, 2)
@@ -118,10 +174,13 @@ class TestCommands(unittest.TestCase):
         code, _ = self._run("search", "zzz-no-such-term-zzz")
         self.assertEqual(code, 1)
 
-    def test_show_prompt_and_software(self):
+    def test_show_prompt_cookbook_and_software(self):
         code, out = self._run("show", "rubber-duck-debugging")
         self.assertEqual(code, 0)
         self.assertIn("Prompt text", out)
+        code, out = self._run("show", "rubber-duck")
+        self.assertEqual(code, 0)
+        self.assertIn("source_prompt", out)
         code, out = self._run("show", "git")
         self.assertEqual(code, 0)
         self.assertIn("git-scm.com", out)

@@ -1,0 +1,192 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import DeploymentBadge from '../../components/DeploymentBadge.astro';
+import EngagePanel from '../../components/EngagePanel.astro';
+import CompanyBoard from '../../components/CompanyBoard.astro';
+import {
+  CATEGORY_LABELS,
+  LICENSE_LABELS,
+  withBase,
+} from '../../lib/labels';
+
+interface LandingData {
+  id: string;
+  persona: {
+    id: string;
+    display_name: string;
+    disclosure: string;
+    grounding_note: string;
+  };
+  tagline: string;
+}
+
+// Pilot landing pages: entries with extended data get the engagement layer.
+const landingModules = import.meta.glob<{ default: LandingData }>(
+  '../../data/landing/*.json',
+  { eager: true },
+);
+const LANDING: Record<string, LandingData> = {};
+for (const mod of Object.values(landingModules)) {
+  LANDING[mod.default.id] = mod.default;
+}
+
+export async function getStaticPaths() {
+  const entries = await getCollection('software');
+  return entries.map((entry) => ({
+    params: { id: entry.data.id },
+    props: { entry: entry.data },
+  }));
+}
+
+const { entry } = Astro.props;
+const landing = LANDING[entry.id];
+---
+
+<BaseLayout
+  title={`${entry.name} — CURATIONS.DEV`}
+  description={entry.primary_use}
+>
+  <section class="software-detail-page">
+    <nav class="detail-breadcrumb" aria-label="Breadcrumb">
+      <a href={withBase('/')}>← All tools</a>
+    </nav>
+
+    <div class="detail-header">
+      <h1>{entry.name.toUpperCase()}</h1>
+      <DeploymentBadge deployment={entry.deployment} />
+      {entry.license && <span class="badge">{LICENSE_LABELS[entry.license]}</span>}
+      {
+        entry.review_status && (
+          <span class={`badge badge-${entry.review_status}`}>
+            {entry.review_status === 'verified'
+              ? entry.last_reviewed
+                ? `Reviewed ${entry.last_reviewed}`
+                : 'Verified · date pending'
+              : 'Needs re-review'}
+          </span>
+        )
+      }
+    </div>
+    <p class="detail-tagline muted">
+      {landing ? landing.tagline : CATEGORY_LABELS[entry.category]}
+    </p>
+
+    <div class="detail-grid">
+      <div class="detail-main">
+        <h2>What it does</h2>
+        <p>{entry.primary_use}</p>
+
+        <h2>Durable strength</h2>
+        <p>{entry.notable_strength}</p>
+      </div>
+
+      <aside>
+        <dl class="facts">
+          <dt>Official site</dt>
+          <dd><a href={entry.reference} rel="noopener">{entry.reference.replace('https://', '')}</a></dd>
+
+          {
+            entry.source_repository && (
+              <>
+                <dt>Source repository</dt>
+                <dd>
+                  <a href={entry.source_repository} rel="noopener">
+                    {entry.source_repository.replace('https://', '')}
+                  </a>
+                </dd>
+              </>
+            )
+          }
+
+          {
+            entry.platforms && (
+              <>
+                <dt>Platforms</dt>
+                <dd>{entry.platforms.join(' · ')}</dd>
+              </>
+            )
+          }
+
+          {
+            entry.license && (
+              <>
+                <dt>Licensing posture</dt>
+                <dd>{LICENSE_LABELS[entry.license]} — verify the exact license directly</dd>
+              </>
+            )
+          }
+
+          {
+            entry.startup_credits && (
+              <>
+                <dt>Startup credits</dt>
+                <dd class={`startup-credits startup-credits-${entry.startup_credits.status}`}>
+                  <strong>{entry.startup_credits.headline}</strong>
+                  <p>{entry.startup_credits.details}</p>
+                  <p class="startup-credits-eligibility">{entry.startup_credits.eligibility}</p>
+                  <span class="startup-credit-sources">
+                    {entry.startup_credits.sources.map((source, index) => (
+                      <>
+                        {index > 0 && <span aria-hidden="true"> · </span>}
+                        <a href={source.url} rel="noopener">{source.label}</a>
+                      </>
+                    ))}
+                  </span>
+                  <small>Grounded {entry.startup_credits.checked_on}</small>
+                </dd>
+              </>
+            )
+          }
+
+          <dt>CLI</dt>
+          <dd><code class="cli-command">python tools/yolo.py show {entry.id}</code></dd>
+
+          {
+            entry.tags && (
+              <>
+                <dt>Tags</dt>
+                <dd class="tag-row">
+                  {entry.tags.map((tag) => (
+                    <span class="badge">{tag}</span>
+                  ))}
+                </dd>
+              </>
+            )
+          }
+
+          {
+            entry.last_reviewed && (
+              <>
+                <dt>Last reviewed</dt>
+                <dd>{entry.last_reviewed}</dd>
+              </>
+            )
+          }
+        </dl>
+      </aside>
+
+      {
+        landing && (
+          <EngagePanel
+            toolId={entry.id}
+            toolName={entry.name}
+            personaName={landing.persona.display_name}
+            disclosure={landing.persona.disclosure}
+            groundingNote={landing.persona.grounding_note}
+          />
+        )
+      }
+    </div>
+  </section>
+
+  {
+    landing && (
+      <CompanyBoard
+        toolId={entry.id}
+        toolName={entry.name}
+        personaName={landing.persona.display_name}
+      />
+    )
+  }
+</BaseLayout>

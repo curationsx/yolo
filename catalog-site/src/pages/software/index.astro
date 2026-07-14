@@ -1,0 +1,7 @@
+---
+// /software/ is the same directory experience as the homepage — keep the URL
+// working since detail pages live beneath it.
+import { withBase } from '../../lib/labels';
+
+return Astro.redirect(withBase('/'));
+---

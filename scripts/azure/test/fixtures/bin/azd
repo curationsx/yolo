@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# bootstrap.sh only verifies that azd is installed. Fail loudly if production
+# code ever starts invoking it so fixture tests cannot hide a new dependency.
+printf 'fixture azd: unexpected invocation: %s\n' "$*" >&2
+exit 1

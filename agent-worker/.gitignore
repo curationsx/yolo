@@ -1,0 +1,9 @@
+# dependencies
+node_modules/
+
+# wrangler local state
+.wrangler/
+.dev.vars
+
+# never commit secrets
+.env

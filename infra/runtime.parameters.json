@@ -1,0 +1,51 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environmentName": {
+      "value": "azure-staging"
+    },
+    "acrName": {
+      "value": "yolocurationsprod"
+    },
+    "keyVaultName": {
+      "value": "kv-yolo-prod-curations"
+    },
+    "containerAppsEnvironmentName": {
+      "value": "cae-yolo-prod"
+    },
+    "gatewayIdentityName": {
+      "value": "id-yolo-gateway"
+    },
+    "copilotIdentityName": {
+      "value": "id-yolo-copilot"
+    },
+    "cosmosEndpoint": {
+      "value": "https://yolo-curations-feed.documents.azure.com:443/"
+    },
+    "foundryEndpoint": {
+      "value": "https://yolo-foundry.cognitiveservices.azure.com/"
+    },
+    "foundryDeploymentName": {
+      "value": "gpt-5.4-mini"
+    },
+    "enableStagingIpRestriction": {
+      "value": true
+    },
+    "wyattStagingIpCidr": {
+      "value": "${WYATT_STAGING_IP_CIDR}"
+    },
+    "gatewayImageTag": {
+      "value": "${GATEWAY_IMAGE_TAG}"
+    },
+    "copilotImageTag": {
+      "value": "${COPILOT_IMAGE_TAG}"
+    },
+    "deploymentRevision": {
+      "value": "${DEPLOYMENT_REVISION}"
+    },
+    "stagingSiteOrigin": {
+      "value": "${STAGING_SITE_ORIGIN}"
+    }
+  }
+}

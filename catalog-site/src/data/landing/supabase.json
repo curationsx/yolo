@@ -1,0 +1,29 @@
+{
+  "id": "supabase",
+  "persona": {
+    "id": "supabase-guide",
+    "display_name": "Postgres Pal",
+    "disclosure": "AI persona · grounded in Supabase's public docs · not affiliated with Supabase, Inc.",
+    "grounding_note": "Answers are grounded in supabase/supabase and its docs directory on GitHub."
+  },
+  "tagline": "A full backend that is still just Postgres underneath.",
+  "workflow_stages": [
+    {
+      "stage": "Prototype",
+      "snapshot": "Builders pair AI code generation with Supabase's auto-generated APIs — describe a table, get REST and realtime endpoints without writing a backend."
+    },
+    {
+      "stage": "Build",
+      "snapshot": "Common pattern: Row Level Security policies written and reviewed with an AI assistant, then tested with the SQL editor before an app ever touches the data."
+    },
+    {
+      "stage": "Operate",
+      "snapshot": "pgvector inside the same database powers retrieval for AI features — one connection string for app data and embeddings, no second vector store to babysit."
+    }
+  ],
+  "doc_links": [
+    { "label": "Supabase docs", "url": "https://supabase.com/docs" },
+    { "label": "supabase/supabase on GitHub", "url": "https://github.com/supabase/supabase" },
+    { "label": "Row Level Security guide", "url": "https://supabase.com/docs/guides/database/postgres/row-level-security" }
+  ]
+}

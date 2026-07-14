@@ -1,0 +1,141 @@
+---
+interface Props {
+  toolId: string;
+  toolName: string;
+  personaName: string;
+}
+
+const { toolId, toolName, personaName } = Astro.props;
+const apiBase = import.meta.env.PUBLIC_AGENT_API ?? '';
+---
+
+<section
+  id="company-board"
+  class="company-board"
+  data-company-board
+  data-api={apiBase}
+  data-tool={toolId}
+  data-tool-name={toolName}
+  data-persona-name={personaName}
+>
+  <header class="board-header">
+    <div>
+      <span class="editorial-eyebrow">Human × AI · public proof</span>
+      <h2>{toolName.toUpperCase()} COMMUNITY BOARD</h2>
+      <p>
+        Share a public PRD or repository, inspect read-only stack evidence,
+        discuss trade-offs, and upvote the examples worth learning from.
+      </p>
+    </div>
+    <div class="board-sort" role="group" aria-label="Sort discussions">
+      <button type="button" data-board-sort="top" aria-pressed="true">Top</button>
+      <button type="button" data-board-sort="new" aria-pressed="false">New</button>
+      <button type="button" data-board-prd-filter aria-pressed="false">Public PRDs</button>
+      <button type="button" data-board-agent-filter aria-pressed="false">Agent-in-loop</button>
+    </div>
+  </header>
+
+  <section class="prd-proof-rail" aria-labelledby={`${toolId}-proof-heading`}>
+    <div class="prd-proof-heading">
+      <div>
+        <span class="editorial-eyebrow">Top community repositories</span>
+        <h3 id={`${toolId}-proof-heading`}>Public PRDs using {toolName}</h3>
+      </div>
+      <p>
+        Ranked by community upvotes, then public GitHub stars. Automated marker
+        checks are narrow evidence—not an endorsement or a full repository audit.
+      </p>
+    </div>
+    <div class="prd-proof-grid" data-prd-rail aria-live="polite">
+      <p class="muted">Loading public PRD evidence…</p>
+    </div>
+  </section>
+
+  <details class="board-compose">
+    <summary>Share a discussion or public PRD</summary>
+    <form data-board-compose-form>
+      <fieldset class="board-post-type">
+        <legend>Post type</legend>
+        <label>
+          <input type="radio" name="artifact_kind" value="discussion" checked />
+          Discussion
+        </label>
+        <label>
+          <input type="radio" name="artifact_kind" value="public-prd" />
+          Public PRD + repository proof
+        </label>
+      </fieldset>
+      <div class="board-prd-fields" data-board-prd-fields hidden>
+        <label>
+          Public GitHub repository
+          <input
+            name="repository_url"
+            type="url"
+            maxlength="300"
+            inputmode="url"
+            placeholder="https://github.com/owner/repository"
+          />
+        </label>
+        <label>
+          Public PRD file <span class="muted">(optional, same repository)</span>
+          <input
+            name="prd_url"
+            type="url"
+            maxlength="500"
+            inputmode="url"
+            placeholder="https://github.com/owner/repository/blob/main/docs/PRD.md"
+          />
+        </label>
+        <label>
+          Stack root <span class="muted">(optional, for monorepos)</span>
+          <input
+            name="stack_path"
+            maxlength="160"
+            placeholder="apps/worker"
+          />
+        </label>
+        <p class="board-proof-note">
+          CURATIONS checks public metadata and a short allowlist of marker
+          files at the repository or stack root. It never clones, edits, runs,
+          or deploys the repository.
+        </p>
+      </div>
+      <label>
+        Topic
+        <input
+          name="title"
+          minlength="8"
+          maxlength="120"
+          required
+          placeholder={`How are you using ${toolName}?`}
+          data-board-title
+        />
+      </label>
+      <label>
+        What did you build, learn, or want help with?
+        <textarea name="body" minlength="12" maxlength="4000" rows="5" required></textarea>
+      </label>
+      <label>
+        Tags <span class="muted">(up to 3, comma separated)</span>
+        <input name="tags" maxlength="80" placeholder="workflow, prompt, production" />
+      </label>
+      <label class="check-row">
+        <input type="checkbox" name="invite_agent" checked />
+        Invite {personaName} to add the first grounded reply
+      </label>
+      <div class="form-action-row">
+        <button type="submit" class="btn btn-primary">Publish discussion</button>
+        <span data-board-compose-status role="status" aria-live="polite"></span>
+      </div>
+    </form>
+  </details>
+
+  <div class="discussion-list" data-board-list aria-live="polite">
+    <p class="muted">Loading community discussions…</p>
+  </div>
+</section>
+
+<script>
+  import { initCompanyBoards } from './CompanyBoard';
+  initCompanyBoards();
+</script>

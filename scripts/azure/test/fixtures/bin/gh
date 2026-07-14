@@ -1,0 +1,137 @@
+#!/usr/bin/env bash
+# Fixture GitHub CLI stand-in used only by scripts/azure/test/**.
+# Behavior is controlled by env vars set by the test harness:
+#   GH_AUTHENTICATED    - "1" (default) or "0" for `gh auth status`
+#   GH_FIXTURE_STATE_FILE - path to a JSON state file modeling
+#                           per-environment deployment_branch_policy state
+#                           and branch_policies lists, mutated in place so
+#                           check -> configure -> re-check flows behave
+#                           realistically across separate invocations.
+#   GH_LEDGER           - optional path; every invocation is appended here
+#                         so tests can assert which calls were made.
+#
+# State file shape:
+# {
+#   "environments": {
+#     "production": {"customBranchPolicies": false, "branches": []},
+#     "azure-staging": {"customBranchPolicies": true, "branches": [{"id":1,"name":"feat/x"}]}
+#   }
+# }
+set -euo pipefail
+
+if [[ -n "${GH_LEDGER:-}" ]]; then
+  printf '%s\n' "$*" >> "$GH_LEDGER"
+fi
+
+fail() { echo "fixture gh: $1" >&2; exit 1; }
+
+if [[ "${1:-}" == "auth" && "${2:-}" == "status" ]]; then
+  [[ "${GH_AUTHENTICATED:-1}" == "1" ]] && exit 0 || exit 1
+fi
+
+# `gh variable set NAME --body VALUE --repo REPO`: bootstrap.sh's
+# wire_github_repo_variables uses this for AZURE_GITHUB_CLIENT_ID/
+# AZURE_TENANT_ID/AZURE_SUBSCRIPTION_ID (none secret). Records which
+# variable NAMEs were set (never gh's own stdout, so nothing extra is
+# echoed) to $GH_VARIABLE_LEDGER if set, so tests can assert on names
+# without needing to also assert on values.
+if [[ "${1:-}" == "variable" && "${2:-}" == "set" ]]; then
+  var_name="${3:-}"
+  [[ -n "$var_name" ]] || fail "variable set requires a NAME argument"
+  if [[ "${GH_VARIABLE_SET_FAIL:-0}" == "1" ]]; then
+    fail "simulated 'gh variable set' failure"
+  fi
+  if [[ -n "${GH_VARIABLE_LEDGER:-}" ]]; then
+    printf '%s\n' "$var_name" >> "$GH_VARIABLE_LEDGER"
+  fi
+  exit 0
+fi
+
+[[ "${1:-}" == "api" ]] || fail "unsupported command: $*"
+shift
+
+STATE="${GH_FIXTURE_STATE_FILE:?GH_FIXTURE_STATE_FILE must be set for the gh fixture}"
+[[ -f "$STATE" ]] || fail "state file not found: $STATE"
+
+path="$1"; shift
+method="GET"
+fvals=()
+read_stdin=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -X) method="$2"; shift 2 ;;
+    -f) fvals+=("$2"); shift 2 ;;
+    --input)
+      shift
+      if [[ "${1:-}" == "-" ]]; then read_stdin=1; fi
+      shift || true
+      ;;
+    *) shift ;;
+  esac
+done
+
+body=""
+if [[ "$read_stdin" == "1" ]]; then
+  body="$(cat -)"
+fi
+
+# Extract the environment name and (if present) the branch-policy id from
+# a path like repos/OWNER/REPO/environments/ENV[/deployment-branch-policies[/ID]].
+env_name=""
+bp_id=""
+if [[ "$path" =~ environments/([^/]+)(/deployment-branch-policies(/([0-9]+))?)?$ ]]; then
+  env_name="${BASH_REMATCH[1]}"
+  bp_id="${BASH_REMATCH[4]:-}"
+else
+  fail "unrecognized path: $path"
+fi
+
+atomic_write() {
+  # atomic_write <jq-filter> [jq-args...]
+  local filter="$1"; shift
+  jq "$@" "$filter" "$STATE" > "${STATE}.tmp"
+  mv "${STATE}.tmp" "$STATE"
+}
+
+if [[ "$path" == *"/deployment-branch-policies/"* && "$method" == "DELETE" ]]; then
+  atomic_write '.environments[$env].branches |= map(select((.id|tostring) != $id))' \
+    --arg env "$env_name" --arg id "$bp_id"
+  exit 0
+fi
+
+if [[ "$path" == *"/deployment-branch-policies" && "$method" == "POST" ]]; then
+  name=""
+  for f in "${fvals[@]+"${fvals[@]}"}"; do
+    [[ "$f" == name=* ]] && name="${f#name=}"
+  done
+  [[ -n "$name" ]] || fail "POST deployment-branch-policies missing -f name=..."
+  atomic_write '.environments[$env].branches += [{"id": (([0, (.environments[$env].branches[]?.id)] | max) + 1), "name": $name}]' \
+    --arg env "$env_name" --arg name "$name"
+  jq -n --arg name "$name" '{name: $name}'
+  exit 0
+fi
+
+if [[ "$path" == *"/deployment-branch-policies" && "$method" == "GET" ]]; then
+  jq --arg env "$env_name" '{branch_policies: (.environments[$env].branches // [])}' "$STATE"
+  exit 0
+fi
+
+if [[ "$path" == *"/environments/"* && "$method" == "PUT" ]]; then
+  custom="$(printf '%s' "$body" | jq -r '.deployment_branch_policy.custom_branch_policies // false')"
+  atomic_write '.environments[$env].customBranchPolicies = ($custom == "true")' \
+    --arg env "$env_name" --arg custom "$custom"
+  jq -n --argjson custom "$custom" '{deployment_branch_policy: {protected_branches: false, custom_branch_policies: $custom}}'
+  exit 0
+fi
+
+if [[ "$path" == *"/environments/"* && "$method" == "GET" ]]; then
+  jq --arg env "$env_name" \
+    'if (.environments[$env] // null) == null
+     then {deployment_branch_policy: null}
+     else {deployment_branch_policy: {protected_branches: false, custom_branch_policies: (.environments[$env].customBranchPolicies // false)}}
+     end' \
+    "$STATE"
+  exit 0
+fi
+
+fail "unhandled path/method: $method $path"

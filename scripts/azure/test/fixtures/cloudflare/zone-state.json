@@ -1,0 +1,21 @@
+{
+  "records": {
+    "curations.dev": { "id": "rec-root", "type": "CNAME", "name": "curations.dev", "content": "curations-dev.pages.dev", "proxied": true },
+    "www.curations.dev": { "id": "rec-www", "type": "CNAME", "name": "www.curations.dev", "content": "curations-dev.pages.dev", "proxied": true },
+    "api.curations.dev": { "id": "rec-managed-aaaa-api", "type": "AAAA", "name": "api.curations.dev", "content": "100::", "proxied": true, "managedByWorker": true }
+  },
+  "workerCustomDomain": {
+    "id": "wd-api",
+    "hostname": "api.curations.dev",
+    "service": "yolo-gateway-worker",
+    "environment": "production",
+    "zoneId": "fixture-zone-id"
+  },
+  "advancedCertificate": {
+    "id": "cert-advanced-api",
+    "hostname": "api.curations.dev",
+    "type": "advanced",
+    "status": "active",
+    "note": "Never deleted by scripts/azure/cutover.mjs. Kept intact for the full seven-day rollback window; only Stage 7 decommission (out of scope here) ever removes it."
+  }
+}

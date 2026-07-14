@@ -14,6 +14,8 @@ Now / Next / Later. No dates, no promises — direction, honestly stated. Items 
 - Proposed Community Grid with discussion forms, PRD showcase, resource exchange, and a vendor-neutral agent protocol.
 - Full PRD suite: [Community Discussion Board](PRD-community-discussion-board.md), [AoT Agent Protocol](PRD-aot-agent-protocol.md), [Azure Foundry Integration](PRD-azure-foundry-integration.md), [Catalog Surface](PRD-catalog-surface.md).
 - Local offline Foundry emulator (`foundry-sim/`) — zero-cost, no network, standard-library-only staging layer for evaluating personas, workflows, and ROI before connecting real Azure keys.
+- Published Astro catalog and Board surface at `curations.dev`.
+- Versioned Cookbooks with two user-funded lanes: **Use My Copilot** and **Run in My Terminal**. No silent CURATIONS-funded inference fallback.
 
 ## Next (as the community forms)
 
@@ -26,11 +28,12 @@ Now / Next / Later. No dates, no promises — direction, honestly stated. Items 
 - Enable and manually exercise the [Community Grid](../community/README.md); name initial human stewards before deploying any agent (see [Community Discussion Board PRD](PRD-community-discussion-board.md)).
 - Evaluate a read-only agent on public fictional fixtures via `foundry-sim/` before any community pilot (see [AoT Agent Protocol PRD](PRD-aot-agent-protocol.md)).
 - Build out personas and workflows in `foundry-sim/personas/` and `foundry-sim/workflows/` to validate ROI before connecting to real Azure (maintainer-owned).
+- Migrate embedded Copilot delegation from the shared OAuth App to a GitHub App if finer permissions or shorter-lived user tokens materially improve the trust boundary.
 
 ## Later (earned, not scheduled)
 
 - Connect real Azure AI Foundry (first-party Azure OpenAI only; see [Azure Foundry Integration PRD](PRD-azure-foundry-integration.md) — gated behind sim validation and Startup Credits guardrails).
-- A published catalog surface generated from `catalog.json` for browsing without cloning (see [Catalog Surface PRD](PRD-catalog-surface.md)).
+- CURATIONS Credits: an explicit hosted-execution product with purchased usage, visible limits, and no connection to a visitor's GitHub Copilot entitlement.
 - Worked case studies of workflows applied end-to-end, with evidence.
 - Taxonomy v2 informed by real usage, with migration notes.
 - Accessibility review of all artifacts against a documented checklist.
@@ -40,7 +43,7 @@ Now / Next / Later. No dates, no promises — direction, honestly stated. Items 
 
 ## What we will not do
 
-- Execute prompts against paid model APIs from this repository's tooling.
+- Spend CURATIONS model credits for a user who selected **Use My Copilot** or **Run in My Terminal**.
 - Collect telemetry of any kind.
 - Publish fake badges, invented testimonials, or adoption claims we can't evidence.
 - Lock any workflow to a specific vendor.

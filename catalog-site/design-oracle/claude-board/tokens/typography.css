@@ -1,0 +1,77 @@
+/* CurationsX — typography tokens & editorial classes
+   Source: curationsvibes/v1.1 src/index.css + src/main.css */
+:root {
+  --font-sans:    'Inter', 'Helvetica Neue', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Inter', 'Helvetica Neue', ui-sans-serif, system-ui, sans-serif;
+  --font-serif:   'Fraunces', 'Merriweather', 'Times New Roman', serif;
+  --font-mono:    'JetBrains Mono', 'IBM Plex Mono', 'Courier New', monospace;
+  --font-brutal:  'Fira Sans', 'Helvetica Neue', sans-serif; /* 900 only — .brutal-button */
+}
+
+body {
+  font-family: var(--font-sans);
+  font-weight: 400;
+  line-height: 1.6;
+  color: var(--text-body, #1a1614);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+a { color: var(--curations-red, #e82828); text-decoration: none; }
+a:hover { color: var(--curations-coral, #ff3131); text-decoration: underline; }
+
+/* Editorial classes (verbatim spec from v1.1) */
+.editorial-eyebrow {
+  display: inline-block;
+  border-bottom: 1px solid var(--editorial-coral);
+  padding-bottom: 0.6rem;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--editorial-coral);
+}
+
+.editorial-section-title {
+  font-family: var(--font-display);
+  font-size: clamp(2.3rem, 4vw, 3.75rem);
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+  color: inherit;
+  font-weight: 700;
+}
+.editorial-section-title em {
+  color: var(--editorial-coral);
+  font-style: italic;
+  font-weight: 600;
+  font-family: var(--font-serif);
+  font-optical-sizing: auto;
+}
+
+.editorial-intro {
+  border-left: 2px solid var(--editorial-coral);
+  padding-left: 1.25rem;
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.8;
+  color: var(--editorial-ink-soft);
+}
+
+.editorial-mono { font-family: var(--font-mono); }
+
+/* Hero wordmark */
+.hero-wordmark {
+  font-family: var(--font-display);
+  font-weight: 800;
+  text-transform: uppercase;
+  line-height: 0.88;
+  letter-spacing: -0.03em;
+  color: #1a1614;
+}
+.hero-wordmark--blue { color: #0496ff; }
+.hero-wordmark--red  { color: #f95f5f; }

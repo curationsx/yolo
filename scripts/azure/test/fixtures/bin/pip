@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Fixture pip stand-in used only by scripts/azure/test/** (via
+# YOLO_CERT_PIP_BIN pointing directly at this file) so certificate.sh
+# --apply's "install pinned certbot + certbot-dns-cloudflare" step never
+# reaches the real PyPI registry during tests. Records every invocation to
+# $AZ_LEDGER (if set) so tests can assert the exact pinned package specs
+# were requested, and always succeeds without installing anything real.
+set -euo pipefail
+
+if [[ -n "${AZ_LEDGER:-}" ]]; then
+  printf 'pip %s\n' "$*" >> "$AZ_LEDGER"
+fi
+
+if [[ "${PIP_FIXTURE_FAIL:-0}" == "1" ]]; then
+  echo "fixture pip: simulated install failure" >&2
+  exit 1
+fi
+
+exit 0

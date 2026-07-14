@@ -1,0 +1,726 @@
+name: AZURE DEPLOY
+
+# Delivery lane for the Yolo Azure migration (infra/**, azure.yaml). This
+# workflow never applies infra/bootstrap.bicep — that file is Owner-only and
+# is applied out-of-band by a human with subscription Owner / User Access
+# Administrator rights, via scripts/azure/bootstrap.sh. Every job that logs
+# in to Azure uses the Contributor-scoped id-yolo-github OIDC identity,
+# federated ONLY to the `azure-staging` and `production` GitHub environments
+# (never a branch wildcard, never a bare `pull_request` subject, never a
+# long-lived Azure credential — no client secret, no publish profile). The
+# PR-triggered `verify` job below requests no Azure credential at all.
+#
+# SECURITY (do not reintroduce): an earlier version of this workflow also
+# federated a bare `repo:curationsx/yolo:pull_request` subject so the PR
+# `verify` job could run a live `az deployment ... what-if`. That subject
+# would let the Contributor-scoped identity mint an Azure token from ANY
+# pull_request workflow run in this repository — including fork PRs once
+# runnable — with no environment or branch-policy gate in front of it. That
+# federated credential has been removed from
+# infra/modules/identity-rbac.bicep entirely. PR verification is now local
+# -only: `az bicep build` compiles and lints every template with zero
+# network calls and zero credentials. Live `what-if` only ever runs in the
+# provision-and-deploy / deploy-production jobs below, both
+# workflow_dispatch-triggered and gated by an explicitly human-approved,
+# branch-policy-restricted GitHub environment.
+#
+# OIDC hardening note: an environment-scoped federated subject
+# (repo:curationsx/yolo:environment:<name>) only narrows *which token* a job
+# can mint — it does not by itself restrict *which git ref* may use that
+# environment. That restriction is enforced separately by each GitHub
+# environment's own deployment branch policy, configured out-of-band (not
+# expressible in Bicep, since it is a GitHub API resource, not an Azure one):
+#   - `production`     -> custom branch policy, "main" only.
+#   - `azure-staging`   -> custom branch policy, "main" + the current feature
+#                          branch (feat/catalog-site as of this writing; add
+#                          later feature branches here as needed, remove them
+#                          once merged).
+# Verify with: gh api repos/curationsx/yolo/environments/<name>/deployment-branch-policies
+# Neither environment is left callable from an arbitrary branch.
+#
+# Production is intentionally workflow_dispatch/manual only -- there is no
+# push-to-main auto-trigger for the production job. A human must explicitly
+# choose target_environment=production, and the environment's own branch
+# policy (main only) plus any reviewer/wait-timer protection rules configured
+# on it are the actual gate, matching .azure/deployment-plan.md's Stage 4/5
+# "separate explicit confirmation" requirement.
+#
+# Image builds and per-deploy image rollout delegate to the existing
+# scripts/azure/build-images.sh and scripts/azure/deploy.sh (ACR remote
+# builds, immutable Git-SHA tags, Static Web Apps publish). infra/runtime.bicep
+# is applied directly by this workflow whenever infra-level configuration
+# (scale, ingress, secrets, environment variables) needs to change, using
+# the same image references build-images.sh produced.
+#
+# Operational note (pending Stage 1 Owner bootstrap): AZURE_GITHUB_CLIENT_ID,
+# AZURE_TENANT_ID, and AZURE_SUBSCRIPTION_ID must be configured as
+# repository-level or environment-scoped Actions variables once
+# infra/bootstrap.bicep has run, using its githubIdentityClientId output plus
+# the subscription/tenant IDs in .azure/deployment-plan.md (only the
+# provision-and-deploy/deploy-production jobs need them now that `verify`
+# requests no Azure credential). No value is fabricated here; these do not
+# exist yet because rg-yolo-prod has not been created.
+#
+# Staging data isolation (do not remove without reading
+# infra/modules/foundry-integration.bicep's header comment first):
+# azure-staging never writes to the shared production
+# engagements/discussions/votes/scores/gateway-state Cosmos containers.
+# infra/runtime.bicep routes all five container-name parameters to their
+# own isolated *-staging containers whenever environmentName is not
+# "production" (engagements-staging, discussions-staging, votes-staging,
+# scores-staging, gateway-state-staging -- created by
+# infra/modules/foundry-integration.bicep). This is why VOTE_BACKEND can
+# safely stay "durable" in every environment, including staging: staging
+# now exercises the exact same production transaction/CAS code path, just
+# against data that can never affect a real production count or score.
+# This workflow does not, and must not, pass an explicit override for any
+# of the five container-name parameters or for voteBackend -- the Bicep
+# defaults are the single source of truth for this routing.
+
+on:
+  pull_request:
+    # Bounded to files whose correctness this workflow's `verify` job can
+    # actually check (local az bicep build/lint, no Azure credential) or
+    # whose behavior the staging/production jobs directly depend on --
+    # not all of agent-worker/** or scripts/azure's own test suite. Kept
+    # deliberately inclusive of scripts/azure/** and Docker/dependency
+    # -manifest surfaces so an ops-only PR can never bypass local Bicep
+    # verification just because it never touches infra/**: deploy.sh,
+    # build-images.sh, and friends are exactly what integrates with this
+    # workflow's Azure calls, and a Dockerfile or package manifest change
+    # can change what's actually inside a deployed image.
+    paths:
+      - "infra/**"
+      - "azure.yaml"
+      - ".github/workflows/azure-deploy.yml"
+      - "scripts/azure/**"
+      - "agent-worker/**/Dockerfile*"
+      - "agent-worker/**/package.json"
+      - "agent-worker/**/package-lock.json"
+  workflow_dispatch:
+    inputs:
+      target_environment:
+        # Both values are real, deliberate destinations, gated two ways:
+        #   1. This job-level `if:` below only runs the matching job.
+        #   2. Each GitHub environment's own deployment branch policy (see
+        #      header comment) independently restricts which branch may
+        #      actually use it, regardless of what a caller requests here.
+        # azure-staging always builds the Astro site against the generated
+        # Azure gateway hostname; production always rebuilds the same
+        # committed SHA against https://api.curations.dev. Do not change
+        # either job's build URL without re-reading the header comment.
+        description: "GitHub environment to deploy against"
+        required: true
+        default: "azure-staging"
+        type: choice
+        options:
+          - azure-staging
+          - production
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: azure-deploy-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  AZURE_RESOURCE_GROUP: rg-yolo-prod
+  AZURE_CONTAINER_REGISTRY: yolocurationsprod
+
+jobs:
+  # ── PR verification: local Bicep compile/lint only. No Azure credential ──
+  # ── is ever requested by this job — see security note below. ──
+  verify:
+    name: Verify Bicep (local compile/lint, no Azure credential)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # SECURITY: this job intentionally requests no Azure credential at all.
+    # A `pull_request` event's git ref is always the synthetic
+    # `refs/pull/<n>/merge` ref, so it can never satisfy any GitHub
+    # Environment's deployment branch policy -- and, more importantly, a
+    # federated OIDC subject scoped only to `repo:<org>/<repo>:pull_request`
+    # (an earlier version of this workflow) would let this Contributor
+    # -scoped identity mint an Azure token from ANY pull_request workflow
+    # run in this repository, including fork PRs once runnable, with no
+    # environment or branch-policy gate in front of it. That federated
+    # credential has been removed entirely (see
+    # infra/modules/identity-rbac.bicep). PR verification is local-only:
+    # `az bicep build` compiles and lints (Bicep's built-in linter runs as
+    # part of build) every template with zero network calls and zero
+    # credentials. Live `az deployment ... what-if` only ever runs in the
+    # provision-and-deploy / deploy-production jobs below, both
+    # workflow_dispatch-triggered and gated by an explicitly human-approved,
+    # branch-policy-restricted GitHub environment.
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: scripts/azure/package-lock.json
+        # See the other two jobs' identical step: ubuntu-latest's ambient
+        # Node version is not a stable contract, and this job now runs the
+        # real scripts/azure test suite (Node's built-in test runner),
+        # not just a --help smoke check.
+
+      - name: Install Bicep CLI
+        run: az bicep install
+
+      - name: az bicep build (compile + lint, local only, no Azure credential)
+        run: |
+          set -eu
+          for f in infra/bootstrap.bicep infra/runtime.bicep infra/modules/*.bicep; do
+            echo "::group::bicep build $f"
+            az bicep build --file "$f" --stdout > /dev/null
+            echo "::endgroup::"
+          done
+
+      - name: Run scripts/azure test suite (fixtures only, no Azure credential)
+        # There is no run-all.sh. The existing, documented entry point
+        # (scripts/azure/README.md) is `npm ci --prefix scripts/azure`
+        # followed by `npm test --prefix scripts/azure` (package.json:
+        # test -> test:bash (bash test/run-bash-tests.sh) then test:node
+        # (node --test test/*.test.mjs)). run-bash-tests.sh's own header
+        # confirms it uses a fixture az/gh on PATH and a throwaway git
+        # repo, and never touches real Azure, GitHub, or this
+        # repository's own working tree -- consistent with this job's
+        # no-Azure-credential design. `npm ci` installs only the two
+        # packages already locked in the committed package-lock.json
+        # (@azure/cosmos, @azure/identity); per that package.json's own
+        # description they are only dynamically imported by
+        # reconcile-scores.mjs's real (non-fixture) Cosmos mode, which
+        # this test run never exercises, but installing them removes any
+        # risk of an import failure regardless. No shellcheck step is
+        # added here: shellcheck is only referenced via dormant
+        # `# shellcheck source=`/`disable=` directive comments inside the
+        # .sh files themselves, never actually invoked anywhere in this
+        # repository's tooling today, so adding a real shellcheck run
+        # would be a new runner, not use of an existing one. This is the
+        # final, public-CI proof for the automation lane: real
+        # local/fixture tests, not just a --help parse check.
+        run: |
+          if [ -f scripts/azure/package.json ]; then
+            npm ci --prefix scripts/azure
+            npm test --prefix scripts/azure
+          else
+            echo "scripts/azure/package.json not present yet (separate lane) — skipping."
+          fi
+
+  # ── Provision + deploy generated (azure-staging) endpoints on demand. ──
+  # Always builds against the generated Azure gateway hostname, never
+  # api.curations.dev -- see the workflow_dispatch input comment above.
+  provision-and-deploy:
+    name: Provision + deploy (azure-staging, generated endpoints)
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.target_environment == 'azure-staging'
+    runs-on: ubuntu-latest
+    # Bounded, not unlimited: three sequential ACR remote builds (gateway +
+    # copilot-runtime, and once opsImageTag stops defaulting to
+    # gatewayImageTag, a third dedicated ops image) + Bicep what-if/create +
+    # SWA publish + a remote Playwright Visual Oracle run against the live
+    # deployed URL is a lot of sequential, largely non-parallelizable work
+    # for one job -- 30m was sized before the Playwright step existed and
+    # risked killing a healthy first (uncached ACR layer) build mid-deploy.
+    timeout-minutes: 60
+    environment: azure-staging
+    env:
+      # Environment-suffixed so staging and production can never collide,
+      # even if a re-run or some other edge case ever produced the same
+      # github.run_id for both (they cannot run in the same workflow_dispatch
+      # invocation today, per the job-level `if:` above, but this marker
+      # does not rely on that mutual exclusivity to stay unique). Includes
+      # run_attempt too, so a manual re-run of this exact job also gets its
+      # own distinct marker rather than reusing the first attempt's.
+      DEPLOYMENT_REVISION_MARKER: ${{ github.run_id }}-${{ github.run_attempt }}-azure-staging
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            catalog-site/package-lock.json
+            scripts/azure/package-lock.json
+        # ubuntu-latest's ambient Node version is not a stable contract
+        # (GitHub periodically changes the default, and it may already be
+        # older than what catalog-site's package.json requires: "node":
+        # ">=22.12.0"). This job runs `npm ci`/`npm run build` in
+        # catalog-site and `node scripts/azure/verify.mjs` (both real,
+        # version-sensitive dependents), so pin Node explicitly rather
+        # than relying on whatever happens to be preinstalled. Caches both
+        # existing lockfiles (verified present: catalog-site/package
+        # -lock.json, scripts/azure/package-lock.json) for faster, more
+        # reliable installs.
+
+      - name: Log in to Azure (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_GITHUB_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Query Static Web Apps hostname
+        # infra/runtime.bicep does not (and should not) output
+        # staticWebAppDefaultHostname -- the Static Web App resource is
+        # created by infra/bootstrap.bicep's foundation module, not by
+        # runtime.bicep, so a runtime deployment has nothing to output here.
+        # Query the already-provisioned resource directly instead. Also
+        # needed below to give the gateway an exact, no-wildcard CORS origin
+        # for this generated hostname (stagingSiteOrigin).
+        id: swa_site
+        run: |
+          HOSTNAME="$(az staticwebapp show \
+            --name stapp-yolo-prod \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --query defaultHostname -o tsv)"
+          if [ -z "$HOSTNAME" ]; then
+            echo "::error::Could not resolve stapp-yolo-prod's defaultHostname. Has infra/bootstrap.bicep been applied yet?" >&2
+            exit 1
+          fi
+          echo "hostname=${HOSTNAME}" >> "$GITHUB_OUTPUT"
+          echo "origin=https://${HOSTNAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Install Bicep CLI
+        run: az bicep install
+
+      - name: Install az containerapp extension (pinned, noninteractive)
+        # scripts/azure/deploy.sh calls `az containerapp update`, `az
+        # containerapp job start`, and `az containerapp job execution show`.
+        # `containerapp` is an az CLI *extension*, not a core command group
+        # (unlike `az staticwebapp`, confirmed core) -- GitHub-hosted
+        # runners do not guarantee it preinstalled, and az CLI's
+        # interactive dynamic-install prompt would hang/fail in this
+        # non-interactive shell rather than silently succeeding. Pinned to
+        # the version validated locally in this session (1.3.0b4), which
+        # supports all three commands above; --yes makes the install itself
+        # noninteractive regardless of the dynamic-install config. 1.3.0b4
+        # is itself a preview ("b4") package -- --yes only suppresses
+        # prompts, it does not override a runner whose az CLI config has
+        # preview extensions disabled (extension.use_dynamic_install=
+        # yes_without_prompt still refuses a preview version without this
+        # separate flag). --allow-preview true makes that acceptance
+        # explicit regardless of the runner's ambient config, rather than
+        # relying on GitHub-hosted runners' current (undocumented,
+        # unguaranteed) default.
+        run: az extension add --name containerapp --version 1.3.0b4 --allow-preview true --yes
+
+      - name: Build gateway + Copilot runtime images (ACR remote build, immutable Git-SHA tags)
+        id: build_images
+        env:
+          # Computed deterministically from build-images.sh's own naming
+          # convention (repo yolo/gateway + yolo/copilot-runtime, tag =
+          # full Git SHA), rather than parsed from the script's stdout: az
+          # acr build streams live build-log output to stdout, which would
+          # otherwise pollute the command-substitution capture inside
+          # build-images.sh's own build_one() helper. Computing the refs
+          # here keeps this workflow correct regardless of that script's
+          # internal output shape.
+          GATEWAY_IMAGE: ${{ format('{0}.azurecr.io/yolo/gateway:{1}', 'yolocurationsprod', github.sha) }}
+          COPILOT_IMAGE: ${{ format('{0}.azurecr.io/yolo/copilot-runtime:{1}', 'yolocurationsprod', github.sha) }}
+        run: |
+          if [ ! -x scripts/azure/build-images.sh ]; then
+            echo "scripts/azure/build-images.sh not present yet (separate lane) — cannot build images." >&2
+            exit 1
+          fi
+          scripts/azure/build-images.sh --apply --sha "${{ github.sha }}"
+          echo "gateway_image=${GATEWAY_IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "copilot_image=${COPILOT_IMAGE}" >> "$GITHUB_OUTPUT"
+
+      - name: az deployment group what-if (pre-apply preview)
+        run: |
+          az deployment group what-if \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --template-file infra/runtime.bicep \
+            --parameters infra/runtime.parameters.json \
+            --parameters environmentName=azure-staging \
+            --parameters gatewayImageTag="${{ steps.build_images.outputs.gateway_image }}" \
+            --parameters copilotImageTag="${{ steps.build_images.outputs.copilot_image }}" \
+            --parameters wyattStagingIpCidr="${{ vars.WYATT_STAGING_IP_CIDR }}" \
+            --parameters enableStagingIpRestriction=true \
+            --parameters stagingSiteOrigin="${{ steps.swa_site.outputs.origin }}" \
+            --parameters deploymentRevision="${{ env.DEPLOYMENT_REVISION_MARKER }}"
+
+      - name: az deployment group create — infra/runtime.bicep
+        id: deploy_infra
+        run: |
+          set -euo pipefail
+          outputs_file="$(mktemp)"
+          trap 'rm -f -- "$outputs_file"' EXIT
+          az deployment group create \
+            --name "yolo-runtime-azure-staging-${{ github.run_id }}" \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --template-file infra/runtime.bicep \
+            --parameters infra/runtime.parameters.json \
+            --parameters environmentName=azure-staging \
+            --parameters gatewayImageTag="${{ steps.build_images.outputs.gateway_image }}" \
+            --parameters copilotImageTag="${{ steps.build_images.outputs.copilot_image }}" \
+            --parameters wyattStagingIpCidr="${{ vars.WYATT_STAGING_IP_CIDR }}" \
+            --parameters enableStagingIpRestriction=true \
+            --parameters stagingSiteOrigin="${{ steps.swa_site.outputs.origin }}" \
+            --parameters deploymentRevision="${{ env.DEPLOYMENT_REVISION_MARKER }}" \
+            --query "properties.outputs" -o json | tee "$outputs_file"
+          gateway_fqdn="$(jq -er '.gatewayFqdn.value | select(type == "string" and length > 0)' "$outputs_file")"
+          echo "gateway_fqdn=${gateway_fqdn}" >> "$GITHUB_OUTPUT"
+
+      - name: Build Astro site (generated Azure gateway hostname — never api.curations.dev pre-cutover)
+        # api.curations.dev still resolves to Cloudflare until Stage 5 of
+        # .azure/deployment-plan.md. Building this pre-cutover azure-staging
+        # site against that hostname would silently exercise the OLD
+        # Cloudflare Worker instead of the new Azure gateway, defeating the
+        # entire point of staging validation (Stage 2/3). Always use the
+        # just-deployed generated gateway FQDN instead.
+        run: |
+          if [ -d catalog-site ]; then
+            (cd catalog-site && npm ci && PUBLIC_AGENT_API="https://${{ steps.deploy_infra.outputs.gateway_fqdn }}" npm run build)
+          else
+            echo "catalog-site/ not present — skipping Astro build."
+          fi
+
+      - name: Install scripts/azure dependencies (lockfile-pinned SWA CLI + Cosmos SDK)
+        # Same install verify already runs (npm ci --prefix scripts/azure
+        # under the Node 24 set up above), placed here in the deploy path
+        # too so the Static Web Apps deploy below resolves the SWA CLI from
+        # scripts/azure/package-lock.json's exact pinned version rather
+        # than a live npx registry resolution at deploy time -- deploy.sh
+        # currently invokes it via `npx --yes <pkg>@<version>` (see its own
+        # SWA_CLI_PACKAGE comment); once that is switched to resolve from
+        # this install instead (ops-owned, scripts/azure/**), this step is
+        # what makes the lockfile the actual source of truth rather than
+        # npm's registry at the moment of the call. Harmless no-op either
+        # way in the meantime: it is the same install already required
+        # before any real (non---fixture) Cosmos reconciliation in this
+        # lane.
+        run: |
+          if [ -f scripts/azure/package.json ]; then
+            npm ci --prefix scripts/azure
+          else
+            echo "scripts/azure/package.json not present yet (separate lane) — skipping."
+          fi
+
+      - name: Deploy images + Astro output to Static Web Apps
+        # Token retrieval, masking, and use are combined into this single
+        # step so the raw value never crosses a step boundary via
+        # $GITHUB_OUTPUT (which persists in job output state even when the
+        # rendered log text is masked) or $GITHUB_ENV. It exists only as a
+        # local shell variable for the lifetime of this one step, is passed
+        # to scripts/azure/deploy.sh as a single-command environment prefix
+        # (scoped to that one child process only, never exported to this
+        # step's own shell environment), and is explicitly unset
+        # immediately after. Coordinated with the current
+        # scripts/azure/deploy.sh interface: --swa-deployment-token-env
+        # defaults to SWA_DEPLOYMENT_TOKEN as of this writing; update the
+        # variable name below if that default changes.
+        run: |
+          set -euo pipefail
+          TOKEN="$(az staticwebapp secrets list \
+            --name stapp-yolo-prod \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --query "properties.apiKey" -o tsv)"
+          if [ -z "$TOKEN" ]; then
+            echo "Failed to retrieve the Static Web Apps deployment token." >&2
+            exit 1
+          fi
+          echo "::add-mask::$TOKEN"
+          if [ -x scripts/azure/deploy.sh ]; then
+            SWA_DEPLOYMENT_TOKEN="$TOKEN" scripts/azure/deploy.sh --apply \
+              --gateway-image "${{ steps.build_images.outputs.gateway_image }}" \
+              --copilot-image "${{ steps.build_images.outputs.copilot_image }}" \
+              --sha "${{ github.sha }}" \
+              --environment azure-staging \
+              --deployment-revision "${{ env.DEPLOYMENT_REVISION_MARKER }}" \
+              --verify-gateway
+          else
+            echo "scripts/azure/deploy.sh not present yet (separate lane) — skipping."
+          fi
+          unset TOKEN
+
+      - name: Post-deploy verification (site only, read-only)
+        # Only the public Static Web App is externally verified from this
+        # runner. ca-yolo-gateway sits behind the pre-cutover default-deny
+        # IP restriction (enableStagingIpRestriction=true, allow-listing
+        # only Wyatt's current IP) -- ingress is deliberately NOT weakened
+        # to let a GitHub-hosted runner through, so a --gateway-url check
+        # here would just fail on an IP it was never meant to admit.
+        # Gateway health/contract verification pre-cutover already ran
+        # above via --verify-gateway, which triggers caj-yolo-ops (now a
+        # bounded, exit-code-correct check against the gateway's INTERNAL
+        # fqdn -- see infra/modules/apps.bicep) and runs entirely inside
+        # cae-yolo-prod, never touching the public IP restriction. This
+        # step only covers what genuinely is safe to check externally.
+        run: |
+          if [ -f scripts/azure/verify.mjs ]; then
+            node scripts/azure/verify.mjs \
+              --site-url "${{ steps.swa_site.outputs.origin }}"
+          else
+            echo "scripts/azure/verify.mjs not present yet (separate lane) — skipping."
+          fi
+
+      - name: Install Visual Oracle browser
+        # Same tooling catalog-site's own CI (.github/workflows/catalog
+        # -site.yml) already uses for this exact suite -- no new install
+        # convention invented here.
+        working-directory: catalog-site
+        run: npx playwright install --with-deps chromium
+
+      - name: Cloud acceptance — Visual Oracle against the deployed SWA URL
+        # Same spec files, same config, same command catalog-site's own CI
+        # already runs (npm run test:visual:ci) -- only the target differs.
+        # Setting BASE_URL points playwright.config.mjs at the just
+        # -deployed generated Static Web Apps hostname instead of a local
+        # fixture-filled `astro dev` server; the config's own
+        # isExternalTarget branch (see playwright.config.mjs) then
+        # automatically narrows test/visual-oracle.spec.mjs to its
+        # content-agnostic structural/geometry/no-scroll/security-header
+        # assertions and skips the pixel-diff + marker-geometry checks that
+        # depend on deterministic fixture content -- no extra --grep or
+        # skip flag needed here; the cloud target cannot simplify what gets
+        # asserted beyond what the suite already, deliberately narrows
+        # itself to for any external target. Layout, typography, zero
+        # -radius/shadow, route, and responsive invariants all still run
+        # against the real deployed artifact.
+        working-directory: catalog-site
+        env:
+          BASE_URL: ${{ steps.swa_site.outputs.origin }}
+        run: npm run test:visual:ci
+
+  # ── Production cutover deploy: workflow_dispatch/manual only, gated by ──
+  # ── the GitHub `production` environment's branch policy (main only) ──
+  # ── plus any reviewer/wait-timer protection rules configured on it. ──
+  deploy-production:
+    name: Deploy production
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.target_environment == 'production'
+    runs-on: ubuntu-latest
+    # See the staging job's identical comment: bounded, not unlimited, to
+    # cover three sequential ACR builds + Bicep + SWA publish + remote
+    # Playwright without killing a healthy first (uncached) build mid
+    # -deploy.
+    timeout-minutes: 60
+    environment: production
+    env:
+      # See the staging job's identical env var for the full rationale.
+      DEPLOYMENT_REVISION_MARKER: ${{ github.run_id }}-${{ github.run_attempt }}-production
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Refuse anything but the main branch (defense in depth)
+        # The `production` GitHub environment's own deployment branch policy
+        # (custom, "main" only) is the real, GitHub-enforced gate -- this is
+        # a belt-and-suspenders check so a misconfigured or removed branch
+        # policy fails loudly here instead of silently deploying production
+        # from an arbitrary ref.
+        run: |
+          if [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "::error::deploy-production must run from refs/heads/main (got '${{ github.ref }}')." >&2
+            exit 1
+          fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            catalog-site/package-lock.json
+            scripts/azure/package-lock.json
+        # See the staging job's identical step: ubuntu-latest's ambient
+        # Node version is not a stable contract, and this job also runs
+        # `npm ci`/`npm run build` in catalog-site (requires Node
+        # >=22.12.0) plus `node scripts/azure/verify.mjs`.
+
+      - name: Log in to Azure (OIDC, production environment)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_GITHUB_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Query Static Web Apps hostname
+        # See the staging job's identical step: infra/runtime.bicep does not
+        # output staticWebAppDefaultHostname (that resource is created by
+        # infra/bootstrap.bicep, not runtime.bicep), so this is queried
+        # directly from the already-provisioned resource instead.
+        id: swa_site
+        run: |
+          HOSTNAME="$(az staticwebapp show \
+            --name stapp-yolo-prod \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --query defaultHostname -o tsv)"
+          if [ -z "$HOSTNAME" ]; then
+            echo "::error::Could not resolve stapp-yolo-prod's defaultHostname. Has infra/bootstrap.bicep been applied yet?" >&2
+            exit 1
+          fi
+          echo "hostname=${HOSTNAME}" >> "$GITHUB_OUTPUT"
+          echo "origin=https://${HOSTNAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Install Bicep CLI
+        run: az bicep install
+
+      - name: Install az containerapp extension (pinned, noninteractive)
+        # See the staging job's identical step for the full rationale,
+        # including why --allow-preview true is required alongside --yes
+        # for this preview ("b4") package version.
+        run: az extension add --name containerapp --version 1.3.0b4 --allow-preview true --yes
+
+      - name: Build gateway + Copilot runtime images (ACR remote build, immutable Git-SHA tags)
+        id: build_images
+        env:
+          # See the staging job's identical step for why these are computed
+          # deterministically rather than parsed from build-images.sh output.
+          GATEWAY_IMAGE: ${{ format('{0}.azurecr.io/yolo/gateway:{1}', 'yolocurationsprod', github.sha) }}
+          COPILOT_IMAGE: ${{ format('{0}.azurecr.io/yolo/copilot-runtime:{1}', 'yolocurationsprod', github.sha) }}
+        run: |
+          if [ ! -x scripts/azure/build-images.sh ]; then
+            echo "scripts/azure/build-images.sh not present yet (separate lane) — cannot build images." >&2
+            exit 1
+          fi
+          scripts/azure/build-images.sh --apply --sha "${{ github.sha }}"
+          echo "gateway_image=${GATEWAY_IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "copilot_image=${COPILOT_IMAGE}" >> "$GITHUB_OUTPUT"
+
+      - name: az deployment group what-if (pre-apply preview)
+        run: |
+          az deployment group what-if \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --template-file infra/runtime.bicep \
+            --parameters infra/runtime.parameters.json \
+            --parameters environmentName=production \
+            --parameters gatewayImageTag="${{ steps.build_images.outputs.gateway_image }}" \
+            --parameters copilotImageTag="${{ steps.build_images.outputs.copilot_image }}" \
+            --parameters enableStagingIpRestriction=false \
+            --parameters deploymentRevision="${{ env.DEPLOYMENT_REVISION_MARKER }}"
+
+      - name: az deployment group create — infra/runtime.bicep (production)
+        id: deploy_infra
+        # enableStagingIpRestriction is only ever set to false here, in the
+        # environment explicitly gated by GitHub's `production` protection
+        # rules, and only after every prior acceptance check has passed per
+        # .azure/deployment-plan.md Stage 5. deploymentRevision is always
+        # this run's DEPLOYMENT_REVISION_MARKER (job-level env, run_id +
+        # run_attempt + environment name) -- staging and production commonly
+        # deploy the identical image SHA, and this forces a genuinely new
+        # Container Apps revision so the versionless github-client-id/
+        # github-client-secret Key Vault references are re-read from
+        # whatever their latest version is at production cutover time,
+        # rather than potentially reusing a revision still running with
+        # staging's already-loaded OAuth secret values.
+        run: |
+          set -euo pipefail
+          outputs_file="$(mktemp)"
+          trap 'rm -f -- "$outputs_file"' EXIT
+          az deployment group create \
+            --name "yolo-runtime-production-${{ github.run_id }}" \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --template-file infra/runtime.bicep \
+            --parameters infra/runtime.parameters.json \
+            --parameters environmentName=production \
+            --parameters gatewayImageTag="${{ steps.build_images.outputs.gateway_image }}" \
+            --parameters copilotImageTag="${{ steps.build_images.outputs.copilot_image }}" \
+            --parameters enableStagingIpRestriction=false \
+            --parameters deploymentRevision="${{ env.DEPLOYMENT_REVISION_MARKER }}" \
+            --query "properties.outputs" -o json | tee "$outputs_file"
+          gateway_fqdn="$(jq -er '.gatewayFqdn.value | select(type == "string" and length > 0)' "$outputs_file")"
+          echo "gateway_fqdn=${gateway_fqdn}" >> "$GITHUB_OUTPUT"
+
+      - name: Build Astro site (rebuild same committed SHA against api.curations.dev)
+        # This is the Stage 4/5 rebuild: same source commit (github.sha)
+        # already validated in azure-staging against the generated gateway
+        # hostname, now rebuilt with the production API origin baked in.
+        # Trigger this job manually (workflow_dispatch, target_environment=
+        # production) only immediately before DNS cutover, per
+        # .azure/deployment-plan.md Stage 5 -- api.curations.dev must already
+        # be verified reachable (temporary ACME cert / Azure managed cert)
+        # before this output is published, or the site will publish with a
+        # production origin that isn't cut over yet.
+        run: |
+          if [ -d catalog-site ]; then
+            (cd catalog-site && npm ci && PUBLIC_AGENT_API="https://api.curations.dev" npm run build)
+          else
+            echo "catalog-site/ not present — skipping Astro build."
+          fi
+
+      - name: Install scripts/azure dependencies (lockfile-pinned SWA CLI + Cosmos SDK)
+        # See the staging job's identical step for rationale: makes the
+        # Static Web Apps deploy below resolve the SWA CLI from
+        # scripts/azure/package-lock.json's exact pinned version once
+        # deploy.sh is switched to consume it (ops-owned), rather than
+        # live npx registry resolution at deploy time.
+        run: |
+          if [ -f scripts/azure/package.json ]; then
+            npm ci --prefix scripts/azure
+          else
+            echo "scripts/azure/package.json not present yet (separate lane) — skipping."
+          fi
+
+      - name: Deploy images + Astro output to Static Web Apps (production)
+        # See the staging job's identical step for why token retrieval,
+        # masking, and use are combined into this single step (never
+        # written to $GITHUB_OUTPUT/$GITHUB_ENV; single-command env prefix
+        # only; explicit unset).
+        run: |
+          set -euo pipefail
+          TOKEN="$(az staticwebapp secrets list \
+            --name stapp-yolo-prod \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --query "properties.apiKey" -o tsv)"
+          if [ -z "$TOKEN" ]; then
+            echo "Failed to retrieve the Static Web Apps deployment token." >&2
+            exit 1
+          fi
+          echo "::add-mask::$TOKEN"
+          if [ -x scripts/azure/deploy.sh ]; then
+            SWA_DEPLOYMENT_TOKEN="$TOKEN" scripts/azure/deploy.sh --apply \
+              --gateway-image "${{ steps.build_images.outputs.gateway_image }}" \
+              --copilot-image "${{ steps.build_images.outputs.copilot_image }}" \
+              --sha "${{ github.sha }}" \
+              --environment production \
+              --deployment-revision "${{ env.DEPLOYMENT_REVISION_MARKER }}" \
+              --verify-gateway
+          else
+            echo "scripts/azure/deploy.sh not present yet (separate lane) — skipping."
+          fi
+          unset TOKEN
+
+      - name: Post-deploy verification (production, read-only)
+        # Production's gateway has no IP restriction
+        # (enableStagingIpRestriction=false), so this runner can also verify
+        # it directly here, in addition to --verify-gateway's internal
+        # caj-yolo-ops check above -- defense in depth, not a substitute
+        # for either check.
+        run: |
+          if [ -f scripts/azure/verify.mjs ]; then
+            node scripts/azure/verify.mjs \
+              --gateway-url "https://${{ steps.deploy_infra.outputs.gateway_fqdn }}" \
+              --site-url "${{ steps.swa_site.outputs.origin }}"
+          else
+            echo "scripts/azure/verify.mjs not present yet (separate lane) — skipping."
+          fi
+
+      - name: Install Visual Oracle browser
+        # See the staging job's identical step: same tooling catalog-site's
+        # own CI already uses, no new install convention invented here.
+        working-directory: catalog-site
+        run: npx playwright install --with-deps chromium
+
+      - name: Cloud acceptance — Visual Oracle against the deployed SWA URL
+        # See the staging job's identical step for the full rationale.
+        # Same command (npm run test:visual:ci), same config, only the
+        # target differs: production's just-deployed generated Static Web
+        # Apps hostname.
+        working-directory: catalog-site
+        env:
+          BASE_URL: ${{ steps.swa_site.outputs.origin }}
+        run: npm run test:visual:ci

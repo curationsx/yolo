@@ -1,0 +1,305 @@
+#!/usr/bin/env bash
+# Fixture Azure CLI stand-in used only by scripts/azure/test/**.
+# Behavior is controlled entirely by environment variables set by the test
+# harness. Every invocation is appended to $AZ_LEDGER (if set) so tests can
+# assert dry-run scripts never call mutating commands.
+set -euo pipefail
+
+if [[ -n "${AZ_LEDGER:-}" ]]; then
+  printf '%s\n' "$*" >> "$AZ_LEDGER"
+fi
+
+fail() { echo "$1" >&2; exit 1; }
+
+case "$1 $2" in
+  "account show")
+    [[ "${AZ_LOGIN:-1}" == "1" ]] || fail "az: not logged in"
+    printf '{"id":"%s","name":"fixture-subscription"}\n' "${AZ_ACCOUNT_ID:-86d88839-c524-4816-8af4-3a30045271e1}"
+    ;;
+  "ad signed-in-user")
+    # az ad signed-in-user show --query id -o tsv
+    [[ "${AZ_LOGIN:-1}" == "1" ]] || fail "az: not logged in"
+    printf '%s\n' "${AZ_SIGNED_IN_USER_ID:-fixture-user-id}"
+    ;;
+  "role assignment")
+    if [[ "${AZ_OWNER_ROLE:-1}" == "1" ]]; then
+      printf 'Owner\n'
+    else
+      printf ''
+    fi
+    ;;
+  "provider show")
+    if [[ "${AZ_PROVIDERS_REGISTERED:-1}" == "1" ]]; then
+      printf 'Registered\n'
+    else
+      printf 'NotRegistered\n'
+    fi
+    ;;
+  "acr check-name")
+    if [[ "${AZ_ACR_AVAILABLE:-1}" == "1" ]]; then
+      printf 'true\n'
+    else
+      printf 'false\n'
+    fi
+    ;;
+  "acr show")
+    if [[ "${AZ_ACR_OWNED:-0}" == "1" ]]; then
+      if [[ "$*" == *"--query name"* ]]; then
+        printf '%s\n' "${AZ_ACR_NAME_ECHO:-yolocurationsprod}"
+      else
+        printf '{"name":"%s"}\n' "${AZ_ACR_NAME_ECHO:-yolocurationsprod}"
+      fi
+    else
+      exit 1
+    fi
+    ;;
+  "keyvault show")
+    if [[ "${AZ_KV_EXISTS:-0}" == "1" ]]; then
+      if [[ "$*" == *"resourceGroup"* ]]; then
+        printf '%s\n' "${AZ_KV_RG:-rg-yolo-prod}"
+      else
+        printf '%s\n' "Succeeded"
+      fi
+    else
+      exit 1
+    fi
+    ;;
+  "containerapp env")
+    case "${3:-}" in
+      list-usages|"")
+        if [[ "${AZ_ENV_EXISTS:-1}" == "1" ]]; then
+          case "${AZ_QUOTA_PAYLOAD_SHAPE:-live}" in
+            live)
+              printf '{"value":[{"name":{"localizedValue":"Managed Environment Consumption Cores","value":"ManagedEnvironmentConsumptionCores"},"limit":%s,"currentValue":%s,"usage":%s}]}\n' \
+                "${AZ_QUOTA_LIMIT:-10}" "${AZ_QUOTA_CURRENT:-0}" "${AZ_QUOTA_CURRENT:-0}"
+              ;;
+            legacy)
+              printf '[{"name":{"value":"Consumption Cores"},"limit":%s,"currentValue":%s}]\n' \
+                "${AZ_QUOTA_LIMIT:-10}" "${AZ_QUOTA_CURRENT:-0}"
+              ;;
+            malformed)
+              printf '{"value":{"unexpected":"shape"}}\n'
+              ;;
+            *)
+              fail "fixture az: unknown quota payload shape"
+              ;;
+          esac
+        else
+          exit 1
+        fi
+        ;;
+      certificate)
+        case "${4:-}" in
+          upload)
+            if [[ "${AZ_CERT_UPLOAD_FAIL:-0}" == "1" ]]; then
+              fail "fixture az: simulated certificate upload failure"
+            fi
+            # Remembers the exact --certificate-name this upload call was
+            # given (in a state file next to the ledger, if one is set),
+            # so a subsequent `certificate list` call in the same test can
+            # echo it back -- letting certificate.sh's real
+            # name-filtered verification query actually find a match,
+            # the same way a real Azure account would.
+            if [[ -n "${AZ_LEDGER:-}" ]]; then
+              uploaded_name=""
+              prev=""
+              for arg in "$@"; do
+                if [[ "$prev" == "--certificate-name" ]]; then
+                  uploaded_name="$arg"
+                  break
+                fi
+                prev="$arg"
+              done
+              if [[ -n "$uploaded_name" ]]; then
+                printf '%s' "$uploaded_name" > "${AZ_LEDGER}.last-cert-name"
+              fi
+            fi
+            printf 'fixture: containerapp env certificate upload executed (mutating)\n'
+            ;;
+          list)
+            # Echoes back whatever thumbprint the test told this fixture
+            # to report as already-uploaded, so certificate.sh's own
+            # post-upload verification step can be exercised end-to-end
+            # without a live Azure account. The reported name prefers an
+            # explicit AZ_CERT_NAME_ECHO override, then the name recorded
+            # by the most recent `certificate upload` call above, then a
+            # generic fallback.
+            cert_name_echo="${AZ_CERT_NAME_ECHO:-}"
+            if [[ -z "$cert_name_echo" && -n "${AZ_LEDGER:-}" && -f "${AZ_LEDGER}.last-cert-name" ]]; then
+              cert_name_echo="$(cat "${AZ_LEDGER}.last-cert-name")"
+            fi
+            printf '[{"name":"%s","properties":{"thumbprint":"%s"}}]\n' \
+              "${cert_name_echo:-fixture-cert}" "${AZ_CERT_THUMBPRINT:-}"
+            ;;
+          *)
+            fail "fixture az: unhandled containerapp env certificate subcommand: $*"
+            ;;
+        esac
+        ;;
+      *)
+        fail "fixture az: unhandled containerapp env subcommand: $*"
+        ;;
+    esac
+    ;;
+  "containerapp update")
+    printf 'fixture: containerapp update executed (mutating)\n'
+    ;;
+  "containerapp job")
+    # az containerapp job start ... / az containerapp job execution show ...
+    case "${3:-}" in
+      start)
+        printf '%s\n' "${AZ_JOB_EXECUTION_NAME:-fixture-exec-001}"
+        ;;
+      execution)
+        printf '%s\n' "${AZ_JOB_EXECUTION_STATUS:-Succeeded}"
+        ;;
+      logs)
+        printf 'fixture: no logs\n'
+        ;;
+      *)
+        fail "fixture az: unhandled containerapp job subcommand: $*"
+        ;;
+    esac
+    ;;
+  "acr build")
+    docker_file_path=""
+    previous=""
+    for arg in "$@"; do
+      if [[ "$previous" == "--file" ]]; then
+        docker_file_path="$arg"
+        break
+      fi
+      previous="$arg"
+    done
+    [[ -n "$docker_file_path" ]] || fail "fixture az: acr build missing --file"
+    [[ -f "$docker_file_path" ]] || fail "ERROR: Unable to find '$docker_file_path'."
+    if [[ "${AZ_ACR_BUILD_FAIL:-0}" == "1" ]]; then
+      fail "fixture az: simulated acr build failure"
+    fi
+    printf 'fixture: acr build executed (mutating)\n'
+    ;;
+  "consumption budget")
+    case "${3:-}" in
+      show)
+        if [[ "${AZ_BUDGET_LOOKUP_FAIL:-0}" == "1" ]]; then
+          fail "fixture az: simulated budget lookup failure"
+        fi
+
+        budget_name=""
+        subscription_scope=0
+        previous=""
+        for arg in "$@"; do
+          if [[ "$previous" == "--budget-name" ]]; then budget_name="$arg"; fi
+          if [[ "$previous" == "--resource-group" && -z "$arg" ]]; then subscription_scope=1; fi
+          previous="$arg"
+        done
+        [[ -n "$budget_name" ]] || fail "fixture az: budget show missing --budget-name"
+
+        if [[ -n "${AZURE_DEFAULTS_GROUP:-}" && "$subscription_scope" != "1" ]]; then
+          fail "ERROR: (404) No budget found matching budgetName: $budget_name, under resource group ${AZURE_DEFAULTS_GROUP}"
+        fi
+
+        budget_exists="${AZ_BUDGET_EXISTS:-0}"
+        budget_start="${AZ_BUDGET_START_DATE:-2026-01-01T00:00:00Z}"
+        if [[ "$budget_name" == "budget-yolo-prod" ]]; then
+          budget_exists="${AZ_PROD_BUDGET_EXISTS:-$budget_exists}"
+          budget_start="${AZ_PROD_BUDGET_START_DATE:-$budget_start}"
+        elif [[ "$budget_name" == "budget-yolo-foundry" ]]; then
+          budget_exists="${AZ_FOUNDRY_BUDGET_EXISTS:-$budget_exists}"
+          budget_start="${AZ_FOUNDRY_BUDGET_START_DATE:-$budget_start}"
+        fi
+
+        if [[ "$budget_exists" == "1" ]]; then
+          printf '%s\n' "$budget_start"
+        else
+          fail "ERROR: (404) No budget found matching budgetName: $budget_name
+Code: 404"
+        fi
+        ;;
+      *)
+        fail "fixture az: unhandled consumption budget subcommand: $*"
+        ;;
+    esac
+    ;;
+  "deployment sub")
+    if [[ "${AZ_DEPLOY_SUB_FAIL:-0}" == "1" ]]; then
+      fail "fixture az: simulated deployment sub create failure"
+    fi
+    # bootstrap.sh's apply_bootstrap captures --query properties.outputs
+    # --output json directly from this call. Bicep never outputs secrets,
+    # so this fixture only ever needs to model the non-secret outputs
+    # apply_bootstrap actually reads by name.
+    printf '{"githubIdentityClientId":{"value":"%s"},"keyVaultName":{"value":"%s"}}\n' \
+      "${AZ_GITHUB_IDENTITY_CLIENT_ID-11111111-2222-4333-8444-555555555555}" \
+      "${AZ_KEY_VAULT_NAME-fixture-kv-yolo-prod}"
+    ;;
+  "keyvault secret")
+    case "${3:-}" in
+      list)
+        # RBAC-propagation readiness probe (wait_for_keyvault_write_access):
+        # AZ_KV_ACCESS_READY_AFTER_ATTEMPT models "not yet propagated for
+        # the first N attempts, then succeeds" using a small per-ledger
+        # counter file; AZ_KV_ACCESS_READY=0 alone means "never becomes
+        # ready" (for the bounded-retry-exhausted test).
+        counter_file="${AZ_LEDGER:-/dev/null}.kv-list-attempts"
+        attempt=0
+        [[ -f "$counter_file" ]] && attempt="$(cat "$counter_file")"
+        attempt=$((attempt + 1))
+        [[ "${AZ_LEDGER:-}" != "" ]] && printf '%s' "$attempt" > "$counter_file"
+        if [[ -n "${AZ_KV_LIST_FAIL_ON_ATTEMPT:-}" && "$attempt" == "$AZ_KV_LIST_FAIL_ON_ATTEMPT" ]]; then
+          fail "fixture az: simulated keyvault secret list failure"
+        fi
+        if [[ "${AZ_KV_ACCESS_READY:-1}" == "0" && -z "${AZ_KV_ACCESS_READY_AFTER_ATTEMPT:-}" ]]; then
+          exit 1
+        fi
+        if [[ -n "${AZ_KV_ACCESS_READY_AFTER_ATTEMPT:-}" ]]; then
+          if [[ "$attempt" -lt "${AZ_KV_ACCESS_READY_AFTER_ATTEMPT}" ]]; then
+            exit 1
+          fi
+        fi
+        if [[ -z "${AZ_KV_EXISTING_SECRETS:-}" ]]; then
+          printf '[]\n'
+        else
+          first=1
+          printf '['
+          IFS=',' read -r -a existing_secret_names <<< "$AZ_KV_EXISTING_SECRETS"
+          for existing_secret_name in "${existing_secret_names[@]}"; do
+            [[ -n "$existing_secret_name" ]] || continue
+            if [[ "$first" == "0" ]]; then printf ','; fi
+            printf '{"name":"%s"}' "$existing_secret_name"
+            first=0
+          done
+          printf ']\n'
+        fi
+        ;;
+      set)
+        if [[ "${AZ_KV_SECRET_SET_FAIL:-0}" == "1" ]]; then
+          fail "fixture az: simulated keyvault secret set failure"
+        fi
+        secret_name=""
+        secret_file=""
+        previous=""
+        for arg in "$@"; do
+          if [[ "$previous" == "--name" ]]; then secret_name="$arg"; fi
+          if [[ "$previous" == "--file" ]]; then secret_file="$arg"; fi
+          previous="$arg"
+        done
+        [[ -n "$secret_name" ]] || fail "fixture az: keyvault secret set missing --name"
+        [[ -f "$secret_file" ]] || fail "fixture az: keyvault secret set missing readable --file"
+        secret_value="$(cat "$secret_file")"
+        [[ "$secret_value" =~ ^[A-Za-z0-9_-]{43}$ ]] \
+          || fail "fixture az: generated secret '$secret_name' is not 32-byte unpadded base64url"
+        # Never echoes the file content -- only records which secret name and
+        # file path were supplied, so tests validate format without exposing
+        # the generated value.
+        printf 'fixture: keyvault secret set executed (mutating)\n'
+        ;;
+      *)
+        fail "fixture az: unhandled keyvault secret subcommand: $*"
+        ;;
+    esac
+    ;;
+  *)
+    fail "fixture az: unhandled invocation: $*"
+    ;;
+esac

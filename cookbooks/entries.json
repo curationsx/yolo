@@ -1,0 +1,62 @@
+{
+  "$schema": "../schemas/cookbook-entry.schema.json",
+  "version": "1.0.0",
+  "entries": [
+    {
+      "id": "rubber-duck",
+      "title": "Rubber-duck debugging",
+      "category": "engineering",
+      "version": "1.3.0",
+      "release_status": "preview",
+      "description": "Structured questions that surface the bug before anyone reaches for a fix.",
+      "source_prompt": "prompts/engineering-rubber-duck-debugging.md",
+      "source_prompt_id": "rubber-duck-debugging",
+      "source_version": "0.1.0",
+      "source_status": "draft",
+      "strong_fit": ["ollama", "supabase", "cloudflare"],
+      "partial_fit": ["n8n", "langfuse", "obsidian"]
+    },
+    {
+      "id": "source-synthesis",
+      "title": "Source synthesis",
+      "category": "research",
+      "version": "1.1.0",
+      "release_status": "preview",
+      "description": "Combine multiple sources into a cited summary with explicit confidence labels.",
+      "source_prompt": "prompts/research-source-synthesis.md",
+      "source_prompt_id": "source-synthesis",
+      "source_version": "0.1.0",
+      "source_status": "draft",
+      "strong_fit": ["supabase", "n8n", "langfuse", "obsidian"],
+      "partial_fit": ["ollama", "cloudflare"]
+    },
+    {
+      "id": "sop-drafting",
+      "title": "SOP drafting",
+      "category": "operations",
+      "version": "1.0.0",
+      "release_status": "preview",
+      "description": "Turn a rough process into a testable SOP draft with owners, evidence, and rollback.",
+      "source_prompt": "prompts/operations-sop-drafting.md",
+      "source_prompt_id": "sop-drafting",
+      "source_version": "0.1.0",
+      "source_status": "draft",
+      "strong_fit": ["ollama", "cloudflare", "n8n", "obsidian"],
+      "partial_fit": ["supabase", "langfuse"]
+    },
+    {
+      "id": "pre-mortem",
+      "title": "Pre-mortem",
+      "category": "safety",
+      "version": "1.2.0",
+      "release_status": "preview",
+      "description": "Imagine the plan failed, then work backward to signals, causes, and mitigations.",
+      "source_prompt": "prompts/safety-pre-mortem.md",
+      "source_prompt_id": "pre-mortem",
+      "source_version": "0.1.0",
+      "source_status": "draft",
+      "strong_fit": ["ollama", "supabase", "cloudflare", "langfuse"],
+      "partial_fit": ["n8n", "obsidian"]
+    }
+  ]
+}

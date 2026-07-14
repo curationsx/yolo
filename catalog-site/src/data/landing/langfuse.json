@@ -1,0 +1,29 @@
+{
+  "id": "langfuse",
+  "persona": {
+    "id": "langfuse-guide",
+    "display_name": "Trace Steward",
+    "disclosure": "AI persona · grounded in Langfuse's public docs · not affiliated with Langfuse",
+    "grounding_note": "Answers use Langfuse's public repository and documentation."
+  },
+  "tagline": "Trace what the model saw, what it returned, and how humans evaluated the result.",
+  "workflow_stages": [
+    {
+      "stage": "Instrument",
+      "snapshot": "Name traces and spans around the user-visible job, not just the underlying model request."
+    },
+    {
+      "stage": "Evaluate",
+      "snapshot": "Attach human and automated scores to concrete outputs while preserving source and prompt versions."
+    },
+    {
+      "stage": "Improve",
+      "snapshot": "Compare revisions against evidence, with retention and sensitive-data boundaries made explicit."
+    }
+  ],
+  "doc_links": [
+    { "label": "Langfuse docs", "url": "https://langfuse.com/docs" },
+    { "label": "langfuse/langfuse on GitHub", "url": "https://github.com/langfuse/langfuse" },
+    { "label": "Self-hosting", "url": "https://langfuse.com/self-hosting" }
+  ]
+}

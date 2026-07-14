@@ -1,0 +1,81 @@
+---
+import '../styles/global.css';
+import { withBase, REPO_URL, ENTRIES_URL, SUBMIT_URL } from '../lib/labels';
+import AuthButton from '../components/AuthButton.astro';
+
+interface Props {
+  title: string;
+  description: string;
+}
+
+const { title, description } = Astro.props;
+const apiBase = import.meta.env.PUBLIC_AGENT_API ?? '';
+const boardFixtures =
+  import.meta.env.DEV && import.meta.env.PUBLIC_BOARD_FIXTURES === 'true';
+const canonicalUrl = new URL(Astro.url.pathname, Astro.site ?? Astro.url.origin);
+const currentPath = Astro.url.pathname;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <meta name="generator" content={Astro.generator} />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <link rel="canonical" href={canonicalUrl} />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="CURATIONS.DEV" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonicalUrl} />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <link rel="icon" type="image/svg+xml" href={withBase('/favicon.svg')} />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@600;700;800;900&family=Manrope:wght@400;500;600;700;800&family=VT323&display=swap"
+    />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+    />
+    <title>{title}</title>
+  </head>
+  <body
+    data-agent-api={apiBase}
+    data-board-fixtures={boardFixtures ? 'true' : undefined}
+  >
+    <header class="site-header">
+      <div class="wrap">
+        <a class="brand" href={withBase('/')}>CURATIONS<span>X</span></a>
+        <nav class="site-nav" aria-label="Site">
+          <a class:list={{ active: currentPath === '/' }} href={withBase('/')}>Stacks</a>
+          <a class:list={{ active: currentPath.startsWith('/cookbooks') }} href={withBase('/cookbooks/')}>Cookbooks</a>
+          <a href={withBase('/#universal-feed')}>Feed</a>
+          <a class:list={{ active: currentPath.startsWith('/methodology') }} href={withBase('/methodology/')}>Method</a>
+        </nav>
+        <AuthButton />
+      </div>
+    </header>
+
+    <main class="wrap">
+      <slot />
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        <span>Human × AI software intelligence. No paid placement.</span>
+        <a href={withBase('/cookbooks/')}>Cookbooks</a>
+        <a href={ENTRIES_URL}>View source data</a>
+        <a href={withBase('/submit/')}>Propose a tool or company</a>
+        <a href={`${REPO_URL}/issues/new`}>Suggest a correction</a>
+        <a href={REPO_URL}>GitHub</a>
+      </div>
+    </footer>
+  </body>
+</html>

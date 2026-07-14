@@ -2,11 +2,14 @@
 
 A curated, job-to-be-done directory of tools relevant to Human × AI work. This is **not** an affiliate list, a ranking, or an endorsement — it's a map of categories with well-known reference points, maintained under a transparent policy.
 
-The machine-readable entries live in [entries.json](entries.json), validated against [schemas/software-entry.schema.json](../schemas/software-entry.schema.json). Browse with `python tools/yolo.py list software`.
+The machine-readable entries live in [entries.json](entries.json), validated
+against [schemas/software-entry.schema.json](../schemas/software-entry.schema.json).
+Browse at [curations.dev](https://curations.dev), or use
+`python tools/yolo.py list software`.
 
 ## ⚠️ Verify before you rely
 
-Tool facts decay fast. **Always verify directly with the vendor before deciding:** current pricing, terms of service, data retention, whether your data is used for model training, and compliance posture (e.g., regional data residency, industry certifications). Nothing in this directory substitutes for that check, and entries deliberately omit fields that go stale.
+Tool facts decay fast. **Always verify directly with the vendor before deciding:** current pricing, terms of service, data retention, whether your data is used for model training, and compliance posture (e.g., regional data residency, industry certifications). Nothing in this directory substitutes for that check. Entries deliberately omit fields that go stale, except source-grounded startup programs that carry an explicit checked date.
 
 ## Inclusion criteria
 
@@ -25,7 +28,9 @@ We do not list tools:
 - That we can only describe with marketing claims we can't verify.
 - Whose primary purpose conflicts with the [manifesto](../MANIFESTO.md) (e.g., covert surveillance of people without consent).
 
-Absence from this list means nothing — probably nobody has proposed it yet. See [SUBMIT.md](SUBMIT.md).
+Absence from this list means nothing — probably nobody has proposed it yet. Use
+the guided form at [curations.dev/submit](https://curations.dev/submit/) or read
+[SUBMIT.md](SUBMIT.md).
 
 ## Evaluation rubric (neutral)
 
@@ -44,13 +49,24 @@ When comparing tools *for your own decision*, we suggest these dimensions — th
 ## Disclosure and update policy
 
 - No entry is paid for or traded. Contributors must disclose affiliations in submissions ([SUBMIT.md](SUBMIT.md)).
-- Entries carry only durable fields; we don't publish pricing or feature inventories that rot.
+- Entries carry durable fields. The narrow startup-program exception requires official sources, a checked date, and an explicit no-public-offer state when a fixed package cannot be verified.
 - Anyone may propose corrections via PR; obviously stale or misleading entries get fixed or removed on evidence.
 - Entry changes go through normal PR review like any other artifact.
+- Community upvotes show interest, not truth. They do not create paid placement
+  or automatically control the editorial `featured` flag.
 
 ## Categories and starter collection
 
-The starter collection lists well-known tools per category as *reference points*. Fields per entry: primary use, deployment shape, notable strength, a trade-off or question to verify, and the official reference. See [entries.json](entries.json) for the data; a rendered summary:
+The starter collection lists well-known tools per category as *reference points*.
+Fields per entry: entity type, primary use, deployment shape, notable strength,
+a trade-off or question to verify, and the official reference. Entries may also
+carry optional trust metadata: `license` (a coarse bucket — open-source,
+source-available, open-weight, proprietary-free-tier, proprietary, or mixed;
+these are **not interchangeable terms**), `source_repository`, `platforms`,
+`tags`, plus `last_reviewed` and `review_status` so staleness is visible instead
+of hidden. Company entries may carry source-grounded `startup_credits` with a
+separate checked date. `featured` selects a temporary editorial rail and remains
+separate from community vote count. See [entries.json](entries.json) for the data.
 
 ### Research
 - **Zotero** — reference and source management; local-first with sync option; strong open ecosystem; verify sync storage handling for sensitive sources. (zotero.org)
@@ -68,10 +84,14 @@ The starter collection lists well-known tools per category as *reference points*
 ### Knowledge / data
 - **Obsidian** — local-first knowledge base in Markdown; local with optional sync; durable plain-text storage; verify plugin trustworthiness — plugins run with local access. (obsidian.md)
 - **SQLite** — embedded database for local, auditable data work; local library; zero-dependency durability; verify concurrency fit for multi-writer scenarios. (sqlite.org)
+- **Supabase** — Postgres-based backend platform; hosted or self-hosted; portable
+  database foundation; verify Row Level Security and current plan limits.
+  (supabase.com)
 
 ### Development
 - **Git** — version control and the provenance backbone of this repository; local with any host; complete history and diff evidence; verify your history-rewriting norms so provenance survives. (git-scm.com)
 - **Visual Studio Code** — extensible editor common in AI-assisted development; local app; large extension ecosystem; verify telemetry and extension data-handling settings. (code.visualstudio.com)
+- **Cloudflare** — edge development platform; hosted Workers, Pages, storage, and networking; verify runtime limits and data-locality needs. (cloudflare.com)
 
 ### Design / content
 - **Pandoc** — universal document conversion; local CLI; deterministic, scriptable output; verify fidelity for complex layouts before relying on it. (pandoc.org)
@@ -82,4 +102,5 @@ The starter collection lists well-known tools per category as *reference points*
 
 ## Proposing a tool
 
-See [SUBMIT.md](SUBMIT.md). Evidence, not promotion.
+Start at [curations.dev/submit](https://curations.dev/submit/), or read
+[SUBMIT.md](SUBMIT.md). Evidence, not promotion.

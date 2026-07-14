@@ -1,0 +1,569 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import {
+  createAzureCommunityStore,
+  createAzureVoteStore,
+  reconcileAllScoresFromVotes,
+  reconcileLegacyScoresContainer,
+  reconcileScoreFromVotes,
+} from "../src/platform/azure/community.ts";
+import { isGatewayError } from "../src/platform/azure/errors.ts";
+import { FakeCosmosContainer } from "./helpers/fake-cosmos-container.mjs";
+
+function communityStore() {
+  const containers = new Map();
+  const containerFor = (name) => {
+    let container = containers.get(name);
+    if (!container) {
+      // The discussions/engagements containers are partitioned by tool_id.
+      container = new FakeCosmosContainer("tool_id");
+      containers.set(name, container);
+    }
+    return container;
+  };
+  return { containerFor, containers };
+}
+
+test("Azure community store creates, reads, upserts, deletes, and queries documents", async () => {
+  const { containerFor } = communityStore();
+  const store = createAzureCommunityStore(containerFor);
+
+  await store.createDocument("discussions", { id: "thread-1", tool_id: "cloudflare", body: "hi" }, "cloudflare");
+  const read = await store.readDocument("discussions", "thread-1", "cloudflare");
+  assert.equal(read.body, "hi");
+
+  await store.upsertDocument("discussions", { id: "thread-1", tool_id: "cloudflare", body: "edited" }, "cloudflare");
+  const updated = await store.readDocument("discussions", "thread-1", "cloudflare");
+  assert.equal(updated.body, "edited");
+
+  await store.deleteDocument("discussions", "thread-1", "cloudflare");
+  assert.equal(await store.readDocument("discussions", "thread-1", "cloudflare"), null);
+
+  // Deleting again (already gone) must not throw.
+  await store.deleteDocument("discussions", "thread-1", "cloudflare");
+});
+
+test("Azure community store readDocument returns null for a missing document", async () => {
+  const { containerFor } = communityStore();
+  const store = createAzureCommunityStore(containerFor);
+  assert.equal(await store.readDocument("discussions", "missing", "cloudflare"), null);
+});
+
+test("Azure community store deleteDocument rethrows unexpected errors", async () => {
+  const { containerFor, containers } = communityStore();
+  const store = createAzureCommunityStore(containerFor);
+  await store.createDocument("discussions", { id: "thread-1", tool_id: "cloudflare" }, "cloudflare");
+  containers.get("discussions").failNext("delete", 500);
+  await assert.rejects(store.deleteDocument("discussions", "thread-1", "cloudflare"));
+});
+
+test("Azure community store deleteDocument rethrows errors without a numeric code", async () => {
+  const { containerFor, containers } = communityStore();
+  const store = createAzureCommunityStore(containerFor);
+  await store.createDocument("discussions", { id: "thread-1", tool_id: "cloudflare" }, "cloudflare");
+  containers.get("discussions").failNext("delete", undefined);
+  await assert.rejects(store.deleteDocument("discussions", "thread-1", "cloudflare"));
+});
+
+test("Azure community store queries documents scoped to their container and partition", async () => {
+  const { containerFor } = communityStore();
+  const store = createAzureCommunityStore(containerFor);
+  await store.createDocument("discussions", { id: "t1", tool_id: "cloudflare", kind: "thread" }, "cloudflare");
+  await store.createDocument("discussions", { id: "t2", tool_id: "supabase", kind: "thread" }, "supabase");
+  const results = await store.queryDocuments(
+    "discussions",
+    "SELECT VALUE COUNT(1) FROM c WHERE c.kind = @kind",
+    [{ name: "@kind", value: "thread" }],
+    "cloudflare",
+  );
+  assert.deepEqual(results, [1]);
+});
+
+test("Azure vote store add is idempotent and increments the same-partition score once", async () => {
+  const votesContainer = new FakeCosmosContainer();
+  const store = createAzureVoteStore(votesContainer);
+
+  const first = await store.setVote("software:cloudflare", "123", true);
+  assert.deepEqual(first, { target_id: "software:cloudflare", voted: true, count: 1 });
+
+  // Voting again while already voted is a no-op — no double count.
+  const second = await store.setVote("software:cloudflare", "123", true);
+  assert.deepEqual(second, { target_id: "software:cloudflare", voted: true, count: 1 });
+
+  assert.deepEqual(await store.getViewerVotes("123", ["software:cloudflare"]), ["software:cloudflare"]);
+});
+
+test("Azure vote store remove is idempotent and decrements only once", async () => {
+  const votesContainer = new FakeCosmosContainer();
+  const store = createAzureVoteStore(votesContainer);
+  await store.setVote("software:cloudflare", "123", true);
+
+  const removed = await store.setVote("software:cloudflare", "123", false);
+  assert.deepEqual(removed, { target_id: "software:cloudflare", voted: false, count: 0 });
+
+  // Removing again when there is no vote is a no-op.
+  const removedAgain = await store.setVote("software:cloudflare", "123", false);
+  assert.deepEqual(removedAgain, { target_id: "software:cloudflare", voted: false, count: 0 });
+});
+
+test("Azure vote store keeps two viewers' counts correct on the same target", async () => {
+  const votesContainer = new FakeCosmosContainer();
+  const store = createAzureVoteStore(votesContainer);
+  await store.setVote("software:cloudflare", "1", true);
+  await store.setVote("software:cloudflare", "2", true);
+  const summary = await store.setVote("software:cloudflare", "1", true); // idempotent re-vote
+  assert.equal(summary.count, 2);
+  assert.deepEqual(
+    (await store.getViewerVotes("2", ["software:cloudflare"])),
+    ["software:cloudflare"],
+  );
+});
+
+test("Azure vote store retries the transactional batch once when a concurrent write conflicts", async () => {
+  const votesContainer = new FakeCosmosContainer();
+  const store = createAzureVoteStore(votesContainer);
+  votesContainer.failNext("batch", 429);
+  const result = await store.setVote("software:cloudflare", "123", true);
+  assert.deepEqual(result, { target_id: "software:cloudflare", voted: true, count: 1 });
+});
+
+test("Azure vote store surfaces a typed dependency error when the batch keeps conflicting", async () => {
+  const votesContainer = new FakeCosmosContainer();
+  const store = createAzureVoteStore(votesContainer);
+  for (let i = 0; i < 10; i += 1) votesContainer.failNext("batch", "conflict");
+  await assert.rejects(store.setVote("software:cloudflare", "999", true), (error) => {
+    assert.ok(isGatewayError(error));
+    assert.equal(error.code, "dependency_throttled");
+    return true;
+  });
+});
+
+test("Azure vote store rethrows unexpected batch errors", async () => {
+  const votesContainer = new FakeCosmosContainer();
+  const store = createAzureVoteStore(votesContainer);
+  votesContainer.failNext("batch", 500);
+  await assert.rejects(store.setVote("software:cloudflare", "123", true));
+});
+
+test("getViewerVotes returns an empty list for targets with no vote", async () => {
+  const votesContainer = new FakeCosmosContainer();
+  const store = createAzureVoteStore(votesContainer);
+  assert.deepEqual(await store.getViewerVotes("123", ["software:cloudflare", "software:supabase"]), []);
+});
+
+test("getCounts reads the same-partition score metadata setVote writes, never the legacy scores container", async () => {
+  const votesContainer = new FakeCosmosContainer();
+  const store = createAzureVoteStore(votesContainer);
+  await store.setVote("software:cloudflare", "1", true);
+  await store.setVote("software:cloudflare", "2", true);
+  await store.setVote("software:supabase", "1", true);
+
+  const counts = await store.getCounts(["software:cloudflare", "software:supabase", "software:never-voted"]);
+  assert.deepEqual(counts, { "software:cloudflare": 2, "software:supabase": 1 });
+});
+
+test("getCounts reflects a vote immediately, proving it never depends on the legacy scores container", async () => {
+  const votesContainer = new FakeCosmosContainer();
+  const store = createAzureVoteStore(votesContainer);
+  assert.deepEqual(await store.getCounts(["software:cloudflare"]), {});
+
+  await store.setVote("software:cloudflare", "1", true);
+  assert.deepEqual(await store.getCounts(["software:cloudflare"]), { "software:cloudflare": 1 });
+
+  await store.setVote("software:cloudflare", "1", false);
+  assert.deepEqual(await store.getCounts(["software:cloudflare"]), { "software:cloudflare": 0 });
+});
+
+test("reconcileScoreFromVotes rebuilds the score document from vote documents", async () => {
+  const votesContainer = new FakeCosmosContainer();
+  const store = createAzureVoteStore(votesContainer);
+  await store.setVote("software:cloudflare", "1", true);
+  await store.setVote("software:cloudflare", "2", true);
+
+  // Corrupt the score doc to prove reconciliation recomputes it from votes.
+  await votesContainer.items.upsert({ id: "score", doc_type: "score", target_id: "software:cloudflare", count: 999 });
+
+  const reconciled = await reconcileScoreFromVotes(votesContainer, "software:cloudflare");
+  assert.deepEqual(reconciled, { target_id: "software:cloudflare", count: 2 });
+});
+
+test("reconcileScoreFromVotes reports zero for a target with no vote documents", async () => {
+  const votesContainer = new FakeCosmosContainer();
+  const reconciled = await reconcileScoreFromVotes(votesContainer, "software:never-voted");
+  assert.deepEqual(reconciled, { target_id: "software:never-voted", count: 0 });
+});
+
+test("reconcileScoreFromVotes never regresses a concurrent setVote's count (CAS, not blind upsert)", async () => {
+  // Deterministically interleaves a live setVote between reconciliation's
+  // score-doc read and its write: the first time reconciliation reads the
+  // score doc, this wrapper lets a full concurrent vote land (and commit,
+  // via the real transactional batch) before returning reconciliation's
+  // (now stale) snapshot. A blind upsert would then overwrite the
+  // concurrent vote's result with a stale, lower count; the CAS-based
+  // implementation must instead detect the ETag conflict and retry
+  // against fresh state.
+  const votesContainer = new FakeCosmosContainer();
+  const store = createAzureVoteStore(votesContainer);
+  await store.setVote("software:cloudflare", "1", true);
+  await store.setVote("software:cloudflare", "2", true);
+  // Seed a deliberately stale score doc, as if an earlier reconciliation
+  // or backfill pass had run before these two votes were cast.
+  await votesContainer.items.upsert({
+    id: "score",
+    doc_type: "score",
+    target_id: "software:cloudflare",
+    count: 0,
+    updated_at: new Date(0).toISOString(),
+  });
+
+  let racedOnce = false;
+  const racingContainer = {
+    items: votesContainer.items,
+    item(id, partitionKey) {
+      const real = votesContainer.item(id, partitionKey);
+      if (id !== "score" || racedOnce) return real;
+      return {
+        ...real,
+        read: async () => {
+          const snapshot = await real.read();
+          racedOnce = true;
+          // A third viewer votes and fully commits while reconciliation
+          // still holds only the pre-race snapshot above.
+          await store.setVote("software:cloudflare", "3", true);
+          return snapshot;
+        },
+      };
+    },
+  };
+
+  const reconciled = await reconcileScoreFromVotes(racingContainer, "software:cloudflare");
+  // All three votes (1, 2, and the interleaved 3) must be reflected —
+  // never the pre-race count of 2, and never the stale seeded 0.
+  assert.deepEqual(reconciled, { target_id: "software:cloudflare", count: 3 });
+  assert.equal(racedOnce, true);
+
+  const finalRead = await votesContainer.item("score", "software:cloudflare").read();
+  assert.equal(finalRead.resource.count, 3);
+});
+
+test("reconcileScoreFromVotes retries once on a 429 while reading the score doc", async () => {
+  const votesContainer = new FakeCosmosContainer();
+  votesContainer.failNext("read", 429, 1);
+  const reconciled = await reconcileScoreFromVotes(votesContainer, "software:cloudflare");
+  assert.deepEqual(reconciled, { target_id: "software:cloudflare", count: 0 });
+});
+
+test("reconcileScoreFromVotes rethrows an unexpected error while reading the score doc", async () => {
+  const votesContainer = new FakeCosmosContainer();
+  votesContainer.failNext("read", 500);
+  await assert.rejects(reconcileScoreFromVotes(votesContainer, "software:cloudflare"));
+});
+
+test("reconcileScoreFromVotes retries once on a 429 while counting votes", async () => {
+  const votesContainer = new FakeCosmosContainer();
+  votesContainer.failNext("query", 429);
+  const reconciled = await reconcileScoreFromVotes(votesContainer, "software:cloudflare");
+  assert.deepEqual(reconciled, { target_id: "software:cloudflare", count: 0 });
+});
+
+test("reconcileScoreFromVotes rethrows an unexpected error while counting votes", async () => {
+  const votesContainer = new FakeCosmosContainer();
+  votesContainer.failNext("query", 500);
+  await assert.rejects(reconcileScoreFromVotes(votesContainer, "software:cloudflare"));
+});
+
+test("reconcileScoreFromVotes never issues a conditional Replace with an undefined ifMatch, even when the score read unexpectedly omits an ETag", async () => {
+  const votesContainer = new FakeCosmosContainer();
+  const store = createAzureVoteStore(votesContainer);
+  await store.setVote("software:cloudflare", "1", true);
+  await store.setVote("software:cloudflare", "2", true);
+
+  let missingEtagOnce = true;
+  const replaceIfMatchValues = [];
+  const noEtagContainer = {
+    items: {
+      ...votesContainer.items,
+      batch: (operations, partitionKey) => {
+        // Capture what every Replace was actually conditioned on. A
+        // Replace with `ifMatch: undefined` is an unconditional write —
+        // it must never be issued, even when the preceding read gave us
+        // no ETag to work with.
+        for (const operation of operations) {
+          if (operation.operationType === "Replace") replaceIfMatchValues.push(operation.ifMatch);
+        }
+        return votesContainer.items.batch(operations, partitionKey);
+      },
+    },
+    item(id, partitionKey) {
+      const real = votesContainer.item(id, partitionKey);
+      if (id !== "score" || !missingEtagOnce) return real;
+      return {
+        ...real,
+        read: async () => {
+          // Defensive scenario: the driver returns a resource but no
+          // ETag. Reconciliation must back off and re-read fresh state
+          // rather than proceed to a Replace conditioned on nothing.
+          const snapshot = await real.read();
+          missingEtagOnce = false;
+          return { ...snapshot, etag: undefined };
+        },
+      };
+    },
+  };
+
+  const reconciled = await reconcileScoreFromVotes(noEtagContainer, "software:cloudflare");
+  assert.deepEqual(reconciled, { target_id: "software:cloudflare", count: 2 });
+  assert.equal(missingEtagOnce, false);
+  assert.ok(replaceIfMatchValues.length > 0, "expected at least one Replace operation");
+  assert.ok(
+    replaceIfMatchValues.every((ifMatch) => typeof ifMatch === "string" && ifMatch.length > 0),
+    `every Replace must be conditioned on a real ETag, never issued unconditionally (saw: ${JSON.stringify(replaceIfMatchValues)})`,
+  );
+});
+
+test("reconcileScoreFromVotes retries once on a 429 during the conditional write", async () => {
+  const votesContainer = new FakeCosmosContainer();
+  votesContainer.failNext("batch", 429);
+  const reconciled = await reconcileScoreFromVotes(votesContainer, "software:cloudflare");
+  assert.deepEqual(reconciled, { target_id: "software:cloudflare", count: 0 });
+});
+
+test("reconcileScoreFromVotes rethrows an unexpected error during the conditional write", async () => {
+  const votesContainer = new FakeCosmosContainer();
+  votesContainer.failNext("batch", 500);
+  await assert.rejects(reconcileScoreFromVotes(votesContainer, "software:cloudflare"));
+});
+
+test("reconcileScoreFromVotes returns a typed dependency error when the write keeps conflicting", async () => {
+  const votesContainer = new FakeCosmosContainer();
+  for (let i = 0; i < 10; i += 1) votesContainer.failNext("batch", "conflict");
+  await assert.rejects(reconcileScoreFromVotes(votesContainer, "software:cloudflare"), (error) => {
+    assert.ok(isGatewayError(error));
+    assert.equal(error.code, "dependency_throttled");
+    return true;
+  });
+});
+
+test("reconcileScoreFromVotes counts legacy (no doc_type) and Azure-native vote docs together, excluding the score doc", async () => {
+  const votesContainer = new FakeCosmosContainer();
+  // True legacy Cloudflare shape — no doc_type field (vote-guard.ts:237-243).
+  await votesContainer.items.upsert({
+    id: "github-1",
+    target_id: "software:cloudflare",
+    user_id: "1",
+    created_at: new Date().toISOString(),
+  });
+  // Azure-native shape.
+  await votesContainer.items.upsert({
+    id: "github-2",
+    doc_type: "vote",
+    target_id: "software:cloudflare",
+    user_id: "2",
+    created_at: new Date().toISOString(),
+  });
+  // The score metadata document itself must never be counted as a vote.
+  await votesContainer.items.upsert({
+    id: "score",
+    doc_type: "score",
+    target_id: "software:cloudflare",
+    count: 0,
+  });
+
+  const reconciled = await reconcileScoreFromVotes(votesContainer, "software:cloudflare");
+  assert.deepEqual(reconciled, { target_id: "software:cloudflare", count: 2 });
+});
+
+test("reconcileAllScoresFromVotes backfills every target's score metadata in one pass", async () => {
+  const votesContainer = new FakeCosmosContainer();
+  const store = createAzureVoteStore(votesContainer);
+  await store.setVote("software:cloudflare", "1", true);
+  await store.setVote("software:cloudflare", "2", true);
+  await store.setVote("software:supabase", "1", true);
+
+  const results = await reconcileAllScoresFromVotes(votesContainer, [
+    "software:cloudflare",
+    "software:supabase",
+    "software:never-voted",
+  ]);
+  assert.deepEqual(results, [
+    { target_id: "software:cloudflare", count: 2 },
+    { target_id: "software:supabase", count: 1 },
+    { target_id: "software:never-voted", count: 0 },
+  ]);
+});
+
+test("reconcileAllScoresFromVotes is idempotent — repeated runs converge without double-counting", async () => {
+  const votesContainer = new FakeCosmosContainer();
+  const store = createAzureVoteStore(votesContainer);
+  await store.setVote("software:cloudflare", "1", true);
+  await store.setVote("software:cloudflare", "2", true);
+
+  const first = await reconcileAllScoresFromVotes(votesContainer, ["software:cloudflare"]);
+  const second = await reconcileAllScoresFromVotes(votesContainer, ["software:cloudflare"]);
+  const third = await reconcileAllScoresFromVotes(votesContainer, ["software:cloudflare"]);
+  assert.deepEqual(first, [{ target_id: "software:cloudflare", count: 2 }]);
+  assert.deepEqual(first, second);
+  assert.deepEqual(second, third);
+});
+
+test("reconcileAllScoresFromVotes absorbs true legacy-shaped Cloudflare vote docs (no doc_type) written late during the DNS TTL race window", async () => {
+  const votesContainer = new FakeCosmosContainer();
+  const store = createAzureVoteStore(votesContainer);
+
+  // Pre-cutover backfill: no votes yet.
+  const preCutover = await reconcileAllScoresFromVotes(votesContainer, ["software:cloudflare"]);
+  assert.deepEqual(preCutover, [{ target_id: "software:cloudflare", count: 0 }]);
+
+  // Cutover happens. During Cloudflare's proxied DNS TTL window, some
+  // clients still resolve to the legacy Worker, which writes a vote
+  // document directly through vote-guard.ts's durable path (see
+  // vote-guard.ts:237-243): `{id, target_id, user_id, created_at}` with NO
+  // `doc_type` field at all — it never updates this same-partition score
+  // metadata document. Simulated here with a true legacy-shaped document
+  // (not the Azure-native `doc_type: "vote"` shape).
+  await votesContainer.items.upsert({
+    id: "github-999",
+    target_id: "software:cloudflare",
+    user_id: "999",
+    created_at: new Date().toISOString(),
+  });
+
+  // Immediately after cutover, Azure's own score metadata is still stale —
+  // it does not yet reflect the legacy Worker's late write.
+  const staleRead = await votesContainer.item("score", "software:cloudflare").read();
+  assert.equal(staleRead.resource.count, 0);
+
+  // After waiting at least one old-DNS TTL (10 minutes preferred), the
+  // post-cutover reconciliation run absorbs the late legacy-shaped vote —
+  // proving the count query no longer relies on `doc_type` being present.
+  const postCutover = await reconcileAllScoresFromVotes(votesContainer, ["software:cloudflare"]);
+  assert.deepEqual(postCutover, [{ target_id: "software:cloudflare", count: 1 }]);
+
+  // A normal Azure-side vote also still commits correctly afterward, and
+  // re-running the reconciliation again stays idempotent.
+  await store.setVote("software:cloudflare", "1", true);
+  const again = await reconcileAllScoresFromVotes(votesContainer, ["software:cloudflare"]);
+  assert.deepEqual(again, [{ target_id: "software:cloudflare", count: 2 }]);
+  const repeat = await reconcileAllScoresFromVotes(votesContainer, ["software:cloudflare"]);
+  assert.deepEqual(repeat, again);
+});
+
+test("reconcileLegacyScoresContainer rebuilds the legacy scores container for every target", async () => {
+  const votesContainer = new FakeCosmosContainer();
+  const legacyScoresContainer = new FakeCosmosContainer("scope");
+  const store = createAzureVoteStore(votesContainer);
+  await store.setVote("software:cloudflare", "1", true);
+  await store.setVote("software:supabase", "1", true);
+  await store.setVote("software:supabase", "2", true);
+
+  const results = await reconcileLegacyScoresContainer(votesContainer, legacyScoresContainer, [
+    "software:cloudflare",
+    "software:supabase",
+  ]);
+  assert.deepEqual(results, [
+    { target_id: "software:cloudflare", count: 1 },
+    { target_id: "software:supabase", count: 2 },
+  ]);
+
+  const legacyCloudflare = await legacyScoresContainer.item("software:cloudflare", "global").read();
+  assert.equal(legacyCloudflare.resource.count, 1);
+  const legacySupabase = await legacyScoresContainer.item("software:supabase", "global").read();
+  assert.equal(legacySupabase.resource.count, 2);
+});
+
+test("Azure community store deleteDocument swallows a string-typed 404 status code", async () => {
+  const { containerFor, containers } = communityStore();
+  const store = createAzureCommunityStore(containerFor);
+  await store.createDocument("discussions", { id: "thread-1", tool_id: "cloudflare" }, "cloudflare");
+  // Defensive: some Cosmos error shapes surface `.code` as a numeric string
+  // rather than a number. cosmosStatus() must still parse it.
+  containers.get("discussions").failNext("delete", "404");
+  await assert.doesNotReject(store.deleteDocument("discussions", "thread-1", "cloudflare"));
+});
+
+test("Azure community store deleteDocument rethrows a non-numeric string status code", async () => {
+  const { containerFor, containers } = communityStore();
+  const store = createAzureCommunityStore(containerFor);
+  await store.createDocument("discussions", { id: "thread-1", tool_id: "cloudflare" }, "cloudflare");
+  containers.get("discussions").failNext("delete", "ETIMEDOUT");
+  await assert.rejects(store.deleteDocument("discussions", "thread-1", "cloudflare"));
+});
+
+test("Azure vote store treats a malformed batch response (fewer results than operations) as a conflict and retries", async () => {
+  const votesContainer = new FakeCosmosContainer();
+  let calls = 0;
+  const malformedOnce = {
+    item: (id, partitionKey) => votesContainer.item(id, partitionKey),
+    items: {
+      ...votesContainer.items,
+      batch: async (operations, partitionKey) => {
+        calls += 1;
+        if (calls === 1) {
+          // Simulate a malformed/partial SDK response: fewer results than
+          // operations submitted. This must never be treated as success.
+          return { code: 200, result: [{ statusCode: 201 }] };
+        }
+        return votesContainer.items.batch(operations, partitionKey);
+      },
+    },
+  };
+  const store = createAzureVoteStore(malformedOnce);
+  const result = await store.setVote("software:cloudflare", "1", true);
+  assert.deepEqual(result, { target_id: "software:cloudflare", voted: true, count: 1 });
+  assert.equal(calls, 2);
+});
+
+test("Azure vote store retries when a transactional batch response omits its result array", async () => {
+  const votesContainer = new FakeCosmosContainer();
+  let calls = 0;
+  const noResultOnce = {
+    item: (id, partitionKey) => votesContainer.item(id, partitionKey),
+    items: {
+      ...votesContainer.items,
+      batch: async (operations, partitionKey) => {
+        calls += 1;
+        if (calls === 1) return { code: 200 }; // malformed: no `.result`
+        return votesContainer.items.batch(operations, partitionKey);
+      },
+    },
+  };
+  const store = createAzureVoteStore(noResultOnce);
+  const result = await store.setVote("software:cloudflare", "1", true);
+  assert.deepEqual(result, { target_id: "software:cloudflare", voted: true, count: 1 });
+  assert.equal(calls, 2);
+});
+
+test("reconcileScoreFromVotes treats an empty count-query result as zero votes", async () => {
+  const votesContainer = new FakeCosmosContainer();
+  const noRowsContainer = {
+    item: (id, partitionKey) => votesContainer.item(id, partitionKey),
+    items: {
+      ...votesContainer.items,
+      // Defensive: a COUNT query should always return one row, but the
+      // fallback (`?? 0`) must hold even if the driver ever returns none.
+      query: () => ({ fetchAll: async () => ({ resources: [] }) }),
+    },
+  };
+  const reconciled = await reconcileScoreFromVotes(noRowsContainer, "software:cloudflare");
+  assert.deepEqual(reconciled, { target_id: "software:cloudflare", count: 0 });
+});
+
+test("reconcileScoreFromVotes retries when its conditional write response omits a result array", async () => {
+  const votesContainer = new FakeCosmosContainer();
+  let calls = 0;
+  const noResultOnce = {
+    item: (id, partitionKey) => votesContainer.item(id, partitionKey),
+    items: {
+      ...votesContainer.items,
+      batch: async (operations, partitionKey) => {
+        calls += 1;
+        if (calls === 1) return { code: 200 }; // malformed: no `.result`
+        return votesContainer.items.batch(operations, partitionKey);
+      },
+    },
+  };
+  const reconciled = await reconcileScoreFromVotes(noResultOnce, "software:cloudflare");
+  assert.deepEqual(reconciled, { target_id: "software:cloudflare", count: 0 });
+  assert.equal(calls, 2);
+});

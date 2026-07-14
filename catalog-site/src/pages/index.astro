@@ -1,0 +1,121 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import BoardActivityFeed from '../components/BoardActivityFeed.astro';
+import SoftwareCard from '../components/SoftwareCard.astro';
+import {
+  CATEGORY_LABELS,
+  DEPLOYMENT_LABELS,
+  LICENSE_LABELS,
+  withBase,
+} from '../lib/labels';
+
+const featuredOrder = new Map(
+  ['ollama', 'supabase', 'cloudflare', 'n8n', 'langfuse', 'obsidian'].map(
+    (id, index) => [id, index],
+  ),
+);
+const entries = (await getCollection('software')).map((e) => e.data);
+const featuredEntries = entries.filter((entry) => entry.featured);
+const directoryEntries = entries.filter((entry) => !entry.featured);
+featuredEntries.sort(
+  (a, b) =>
+    (featuredOrder.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
+      (featuredOrder.get(b.id) ?? Number.MAX_SAFE_INTEGER) ||
+    a.name.localeCompare(b.name),
+);
+directoryEntries.sort((a, b) => a.name.localeCompare(b.name));
+const feedTools = featuredEntries.map((entry) => ({ id: entry.id, name: entry.name }));
+
+const categories = [...new Set(entries.map((e) => e.category))].sort();
+const deployments = [...new Set(entries.map((e) => e.deployment))].sort();
+const licenses = [...new Set(entries.flatMap((e) => (e.license ? [e.license] : [])))].sort();
+---
+
+<BaseLayout
+  title="CURATIONS.DEV — software for Human × AI work"
+  description="A curated, job-to-be-done directory of software for Human × AI workflows. Not a ranking. No paid placement. Verify current terms directly."
+>
+  <section class="board-search-shell" aria-labelledby="board-search-label">
+    <form class="board-search" role="search">
+      <label class="visually-hidden" id="board-search-label" for="filter-search">
+        Search the CURATIONSX Board
+      </label>
+      <span class="board-search-icon" aria-hidden="true">⌕</span>
+      <input
+        type="search"
+        id="filter-search"
+        placeholder='Ask the Board — "Where do I start on my PRD?"'
+        autocomplete="off"
+      />
+      <button type="submit">Search</button>
+    </form>
+    <p>Curated search · results link to source evidence · no paid placement</p>
+  </section>
+
+  <div class="board-filter-bar">
+    <div>
+      <label for="filter-category">Category</label>
+      <select id="filter-category">
+        <option value="">All</option>
+        {categories.map((c) => <option value={c}>{CATEGORY_LABELS[c]}</option>)}
+      </select>
+    </div>
+    <div>
+      <label for="filter-deployment">Deployment</label>
+      <select id="filter-deployment">
+        <option value="">All</option>
+        {deployments.map((d) => <option value={d}>{DEPLOYMENT_LABELS[d]}</option>)}
+      </select>
+    </div>
+    <div>
+      <label for="filter-license">Licensing</label>
+      <select id="filter-license">
+        <option value="">All</option>
+        {licenses.map((l) => <option value={l}>{LICENSE_LABELS[l]}</option>)}
+      </select>
+    </div>
+    <p class="result-count" data-result-count aria-live="polite">
+      {entries.length} stacks
+    </p>
+  </div>
+
+  <div class="board-home-layout">
+    <div class="board-stack-column">
+      {
+        featuredEntries.length > 0 && (
+          <section id="featured-stacks" class="board-list-section" data-card-section>
+            <header class="board-list-heading">
+              <h1>Featured stacks</h1>
+              <span>sorted by community upvotes</span>
+            </header>
+            <ul class="stack-list" data-directory-grid>
+              {featuredEntries.map((entry) => <SoftwareCard entry={entry} />)}
+            </ul>
+          </section>
+        )
+      }
+
+      <section class="board-list-section board-list-section-all" data-card-section>
+        <header class="board-list-heading">
+          <h2>All stacks</h2>
+          <span>durable facts · verify current terms directly</span>
+        </header>
+        <ul class="stack-list" data-directory-grid>
+          {directoryEntries.map((entry) => <SoftwareCard entry={entry} />)}
+        </ul>
+      </section>
+
+      <a class="board-submit-stack" href={withBase('/submit/')}>Submit a stack</a>
+    </div>
+
+    <BoardActivityFeed tools={feedTools} />
+  </div>
+</BaseLayout>
+
+<script>
+  import { initFilters } from '../components/SoftwareFilters';
+  import { initSoftwareVotes } from '../components/SoftwareVotes';
+  initFilters();
+  void initSoftwareVotes();
+</script>
