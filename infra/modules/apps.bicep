@@ -304,7 +304,10 @@ resource gatewayApp 'Microsoft.App/containerApps@2025-01-01' = {
         }
       ]
       scale: {
-        minReplicas: 0
+        // Keep one gateway replica always warm: the GitHub OAuth callback is
+        // latency-sensitive, and a scale-from-zero cold start makes sign-in
+        // hang for 30-60s on first hit.
+        minReplicas: 1
         maxReplicas: 2
         rules: [
           {
