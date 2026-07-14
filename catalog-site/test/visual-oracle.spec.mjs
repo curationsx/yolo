@@ -9,6 +9,7 @@ import {
   RESPONSIVE_SWEEP_WIDTHS,
   MARKER_TOLERANCE_RATIO,
   HEADER_ALIGNMENT_TOLERANCE_PX,
+  FIXTURE_AGENT_API,
   installDeterministicNetwork,
   assertOracleScreenshot,
 } from './support/constants.mjs';
@@ -313,6 +314,44 @@ test.describe('Public repository proof + cookbook inventory (ACCEPTANCE.md #11-#
 });
 
 test.describe('Client module health', () => {
+  test('identity initialization survives a scale-to-zero cold start', async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      isExternalTarget(testInfo),
+      'Synthetic gateway failures are only injected into the deterministic local fixture.',
+    );
+    let configAttempts = 0;
+    await page.route(`${FIXTURE_AGENT_API}/api/auth/config`, async (route) => {
+      configAttempts += 1;
+      if (configAttempts === 1) {
+        await route.abort('failed');
+        return;
+      }
+      if (configAttempts === 2) {
+        await route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: 'gateway warming' }),
+        });
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ github: true }),
+      });
+    });
+
+    await page.goto('/');
+    const signIn = page.locator('[data-auth-sign-in]');
+    const status = page.locator('[data-auth-status]');
+    await expect(status).toHaveText('Waking identity gateway...');
+    await expect(signIn).toBeEnabled({ timeout: 5_000 });
+    await expect(status).toHaveText('');
+    expect(configAttempts).toBe(3);
+  });
+
   test('Astro JavaScript loads without redirects or HTTP failures', async ({ page }) => {
     const failedAssets = [];
     page.on('response', (response) => {

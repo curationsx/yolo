@@ -3,7 +3,7 @@ const apiBase = import.meta.env.PUBLIC_AGENT_API ?? '';
 ---
 
 <div class="auth-control" data-auth-control data-api={apiBase}>
-  <button type="button" class="auth-sign-in" data-auth-sign-in>
+  <button type="button" class="auth-sign-in" data-auth-sign-in disabled>
     Sign in with GitHub
   </button>
   <a class="auth-profile" data-auth-profile href="#" rel="noopener" hidden>
@@ -11,7 +11,7 @@ const apiBase = import.meta.env.PUBLIC_AGENT_API ?? '';
     <span data-auth-name></span>
   </a>
   <button type="button" class="auth-sign-out" data-auth-sign-out hidden>Sign out</button>
-  <span class="auth-status" data-auth-status aria-live="polite"></span>
+  <span class="auth-status" data-auth-status aria-live="polite">Checking GitHub identity...</span>
 </div>
 
 <script>
@@ -22,6 +22,7 @@ const apiBase = import.meta.env.PUBLIC_AGENT_API ?? '';
     clearSession,
     consumeOAuthResult,
     currentUser,
+    fetchAuthResponse,
   } from '../lib/browser-auth';
 
   for (const root of document.querySelectorAll<HTMLElement>('[data-auth-control]')) {
@@ -41,7 +42,7 @@ const apiBase = import.meta.env.PUBLIC_AGENT_API ?? '';
     };
 
     const result = consumeOAuthResult();
-    if (result.error) status.textContent = 'GitHub sign-in was not completed.';
+    const oauthError = result.error ? 'GitHub sign-in was not completed.' : '';
 
     if (!api) {
       signIn.disabled = true;
@@ -63,18 +64,34 @@ const apiBase = import.meta.env.PUBLIC_AGENT_API ?? '';
     });
 
     try {
-      const config = await fetch(`${api}/api/auth/config`).then((response) => response.json());
+      const retryOptions = {
+        onRetry: () => {
+          status.textContent = 'Waking identity gateway...';
+        },
+      };
+      const configResponse = await fetchAuthResponse(
+        `${api}/api/auth/config`,
+        {},
+        retryOptions,
+      );
+      if (!configResponse.ok) {
+        throw new Error(`identity configuration failed: ${configResponse.status}`);
+      }
+      const config = (await configResponse.json()) as { github?: boolean };
       if (!config.github) {
         signIn.disabled = true;
         status.textContent = 'GitHub SSO setup pending';
         renderSignedOut();
         continue;
       }
-      const user = await currentUser(api);
+      const user = await currentUser(api, retryOptions);
       if (!user) {
+        signIn.disabled = false;
+        status.textContent = oauthError;
         renderSignedOut();
         continue;
       }
+      signIn.disabled = false;
       signIn.hidden = true;
       signOut.hidden = false;
       profile.hidden = false;
@@ -85,7 +102,8 @@ const apiBase = import.meta.env.PUBLIC_AGENT_API ?? '';
       status.textContent = '';
       broadcastAuth(user);
     } catch {
-      status.textContent = 'Identity temporarily unavailable';
+      signIn.disabled = false;
+      status.textContent = 'Identity temporarily unavailable. Try again.';
       renderSignedOut();
     }
   }
