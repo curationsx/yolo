@@ -370,7 +370,20 @@ test.describe('Client module health', () => {
     expect(failedAssets).toEqual([]);
   });
 
-  test('Sign in with GitHub starts the configured gateway OAuth route', async ({ page }) => {
+  test('Sign in with GitHub starts the configured gateway OAuth route', async ({
+    page,
+  }, testInfo) => {
+    if (isExternalTarget(testInfo)) {
+      // The staging gateway intentionally allows only Wyatt's IP, not ephemeral
+      // GitHub-hosted runners. The separate Azure ops job verifies the live API.
+      await page.route('**/api/auth/config', async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ github: true }),
+        });
+      });
+    }
     await page.goto('/');
     const auth = page.locator('[data-auth-control]');
     const signIn = auth.locator('[data-auth-sign-in]');
