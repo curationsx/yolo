@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/staticwebapp.config.json",
-  "trailingSlash": "always",
+  "trailingSlash": "auto",
   "navigationFallback": {
     "rewrite": "/index.html",
     "exclude": ["/*"]

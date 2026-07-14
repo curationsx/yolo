@@ -2466,6 +2466,7 @@ code {
   height: 3rem;
   border: 2px solid var(--border-color);
   background: var(--cookbook-accent);
+  color: #fff;
   font-family: var(--font-mono);
   font-size: 0.82rem;
   font-weight: 900;
@@ -2493,7 +2494,7 @@ code {
 .cookbook-category {
   border: 2px solid var(--border-color);
   background: var(--cookbook-accent);
-  color: var(--editorial-ink);
+  color: #fff;
   padding: 0.18rem 0.45rem;
 }
 

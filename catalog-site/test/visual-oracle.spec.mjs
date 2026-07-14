@@ -271,4 +271,66 @@ test.describe('Public repository proof + cookbook inventory (ACCEPTANCE.md #11-#
     await expect(firstCard.locator('[data-fit-badge]')).toBeVisible();
     await expect(firstCard.locator('[data-handoff-open]')).toBeVisible();
   });
+
+  test('saturated cookbook markers keep white, heavy text', async ({ page }) => {
+    await page.goto('/cookbooks/');
+    const markers = page.locator('.cookbook-glyph, .cookbook-category');
+    expect(await markers.count()).toBeGreaterThan(0);
+    const styles = await markers.evaluateAll((elements) =>
+      elements.map((element) => {
+        const style = getComputedStyle(element);
+        return { color: style.color, fontWeight: Number(style.fontWeight) };
+      }),
+    );
+    for (const style of styles) {
+      expect(style.color).toBe('rgb(255, 255, 255)');
+      expect(style.fontWeight).toBeGreaterThanOrEqual(700);
+    }
+  });
+});
+
+test.describe('Client module health', () => {
+  test('Astro JavaScript loads without redirects or HTTP failures', async ({ page }) => {
+    const failedAssets = [];
+    page.on('response', (response) => {
+      const url = new URL(response.url());
+      if (
+        url.pathname.includes('/_astro/') &&
+        url.pathname.includes('.js') &&
+        response.status() >= 300
+      ) {
+        failedAssets.push({ status: response.status(), url: response.url() });
+      }
+    });
+
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    expect(failedAssets).toEqual([]);
+  });
+
+  test('Sign in with GitHub starts the configured gateway OAuth route', async ({ page }) => {
+    await page.goto('/');
+    const auth = page.locator('[data-auth-control]');
+    const signIn = auth.locator('[data-auth-sign-in]');
+    const api = await auth.getAttribute('data-api');
+    expect(api).toMatch(/^https:\/\//);
+    await expect(signIn).toBeEnabled();
+
+    const returnTo = page.url();
+    const oauthRequest = page.waitForRequest(
+      (request) => request.url().startsWith(`${api}/api/auth/github/start?`),
+    );
+    await page.route(`${api}/api/auth/github/start?*`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/html',
+        body: '<!doctype html><title>OAuth handoff captured</title>',
+      });
+    });
+    await signIn.click();
+
+    const requestUrl = new URL((await oauthRequest).url());
+    expect(requestUrl.pathname).toBe('/api/auth/github/start');
+    expect(requestUrl.searchParams.get('return_to')).toBe(returnTo);
+  });
 });

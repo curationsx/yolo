@@ -37,6 +37,10 @@ test.describe('staticwebapp.config.json — caching + security contract', () => 
     expect(route?.headers?.['cache-control']).toMatch(/max-age=31536000/);
   });
 
+  test('keeps Astro asset URLs exact so relative ESM imports remain loadable', () => {
+    expect(config.trailingSlash).toBe('auto');
+  });
+
   test('versioned /copilot/ and /cookbooks/ prompt artifacts get immutable caching', () => {
     const copilot = config.routes.find((r) => r.route === '/copilot/*');
     const cookbooks = config.routes.find((r) => r.route === '/cookbooks/*');
