@@ -480,7 +480,7 @@ apply_issue_cloudflare_dns_plugin() {
   log_step "Uploading the certificate to Container Apps environment ${YOLO_CONTAINERAPPS_ENV}"
   # az containerapp env certificate upload has no file-based password
   # option (unlike this script's own openssl -passout file:... convention
-  # elsewhere) -- --certificate-password is a plain CLI argument, an
+  # elsewhere) -- --password is a plain CLI argument, an
   # inherent Azure CLI interface limitation this script cannot work around.
   # The value is read from the 0600 password file only for the instant of
   # this one call, never logged, and never assigned to a variable that
@@ -492,7 +492,7 @@ apply_issue_cloudflare_dns_plugin() {
     --name "$YOLO_CONTAINERAPPS_ENV" \
     --resource-group "$YOLO_RESOURCE_GROUP" \
     --certificate-file "$pfx_out" \
-    --certificate-password "$(cat "$password_file")" \
+    --password "$(cat "$password_file")" \
     --certificate-name "$cert_name" \
     >/dev/null
   log_info "Certificate uploaded to $YOLO_CONTAINERAPPS_ENV as $cert_name."
