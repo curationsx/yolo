@@ -371,7 +371,11 @@ order:
    validation TXT record in Cloudflare. This is purely additive — it never
    touches the existing CNAMEs/proxying, so it cannot affect live traffic —
    and the tool waits (bounded, injectable-delay poll) for Azure to report
-   each hostname `Ready` before continuing.
+   each hostname `Ready` before continuing. Azure requires a second
+   `hostname set` after the TXT record is public, and live validation can
+   take several minutes; the tool retriggers that operation, waits up to
+   five minutes, and skips any hostname already `Ready` so interrupted runs
+   resume without requiring Azure's retired validation token.
 2. **`verify-asuid-api`** — additive, and deliberately run *before*
    `cut-api` ever touches the Worker Custom Domain: reads
    `ca-yolo-gateway`'s non-secret `properties.customDomainVerificationId`

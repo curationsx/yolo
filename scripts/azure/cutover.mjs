@@ -360,12 +360,7 @@ export class RealAzureSwaHostnameClient {
     }
   }
 
-  // `--no-wait`: this call must return as soon as Azure accepts the
-  // request and begins issuing a validation token, never block until
-  // validation completes -- that's what getSwaHostnameStatus's poll
-  // (waitForSwaHostnameReady) is for. Idempotent on Azure's side: calling
-  // this again for an already-pending hostname is a harmless no-op.
-  async requestSwaHostnameValidation(hostname) {
+  async triggerSwaHostnameValidation(hostname) {
     await this._execFile("az", [
       "staticwebapp",
       "hostname",
@@ -380,6 +375,15 @@ export class RealAzureSwaHostnameClient {
       "dns-txt-token",
       "--no-wait",
     ]);
+  }
+
+  // `--no-wait`: this call must return as soon as Azure accepts the
+  // request and begins issuing a validation token, never block until
+  // validation completes -- that's what getSwaHostnameStatus's poll
+  // (waitForSwaHostnameReady) is for. Idempotent on Azure's side: calling
+  // this again for an already-pending hostname is a harmless no-op.
+  async requestSwaHostnameValidation(hostname) {
+    await this.triggerSwaHostnameValidation(hostname);
 
     const existing = await this._hostnameShow(hostname);
     const rawToken = existing && existing.validationToken;
@@ -555,6 +559,9 @@ export class ComposedRealClient {
   }
   requestSwaHostnameValidation(hostname) {
     return this.swaClient.requestSwaHostnameValidation(hostname);
+  }
+  triggerSwaHostnameValidation(hostname) {
+    return this.swaClient.triggerSwaHostnameValidation(hostname);
   }
   getSwaHostnameStatus(hostname) {
     return this.swaClient.getSwaHostnameStatus(hostname);
@@ -781,6 +788,11 @@ export class FixtureCloudflareClient {
     this.state.swaHostnames[hostname] = { status: "Validating", validationToken, txtRecordName };
     this._persist();
     return { validationToken, txtRecordName };
+  }
+
+  async triggerSwaHostnameValidation() {
+    // Azure requires a second `hostname set` after the TXT record is public.
+    // The fixture's status check observes the same state transition directly.
   }
 
   // Reports the current SWA hostname-validation status. In this fixture,
@@ -1043,7 +1055,7 @@ async function defaultVerifyStep(step, client) {
  * validation can take a little time to propagate/poll; the fixture client
  * resolves to Ready on the very next check, so tests never actually sleep.
  */
-async function waitForSwaHostnameReady(client, hostname, { retries = 5, delayMs = 2_000, sleepFn = defaultSleep } = {}) {
+async function waitForSwaHostnameReady(client, hostname, { retries = 30, delayMs = 10_000, sleepFn = defaultSleep } = {}) {
   for (let attempt = 0; attempt < retries; attempt++) {
     const status = await client.getSwaHostnameStatus(hostname);
     if (status === "Ready") return { ok: true, status };
@@ -1219,9 +1231,15 @@ export async function runCutover(options, deps) {
         // and publish its _dnsauth TXT record. Existing CNAMEs/proxying for
         // this hostname are untouched, so production keeps being served by
         // Cloudflare Pages throughout this step.
-        const { validationToken, txtRecordName } = await client.requestSwaHostnameValidation(step.hostname);
-        await client.upsertDnsRecord(txtRecordName, { type: "TXT", content: validationToken, proxied: false });
-        await waitForSwaHostnameReady(client, step.hostname, deps.swaPollOptions);
+        const currentStatus = await client.getSwaHostnameStatus(step.hostname);
+        if (currentStatus !== "Ready") {
+          const { validationToken, txtRecordName } = await client.requestSwaHostnameValidation(step.hostname);
+          await client.upsertDnsRecord(txtRecordName, { type: "TXT", content: validationToken, proxied: false });
+          // Azure's first `hostname set` returns the token; a second call
+          // after that TXT is public starts the actual domain validation.
+          await client.triggerSwaHostnameValidation(step.hostname);
+          await waitForSwaHostnameReady(client, step.hostname, deps.swaPollOptions);
+        }
       } else if (step.kind === "asuid-verify") {
         // Non-traffic-affecting, additive, and deliberately run BEFORE
         // cut-api touches the Worker Custom Domain at all: publish the

@@ -181,6 +181,75 @@ test("runCutover apply refuses to proceed to cut-api/cut-root/cut-www if SWA val
   assert.equal(finalState.workerCustomDomain.hostname, "api.curations.dev", "API must not be cut either");
 });
 
+test("runCutover resumes past an SWA hostname that Azure already reports Ready without requiring its retired token", async () => {
+  const fixture = freshZoneFixture("swa-already-ready.json");
+  const state = JSON.parse(fs.readFileSync(fixture, "utf8"));
+  state.swaHostnames = {
+    "curations.dev": {
+      status: "Ready",
+      validationToken: null,
+      txtRecordName: "_dnsauth.curations.dev",
+    },
+  };
+  fs.writeFileSync(fixture, `${JSON.stringify(state, null, 2)}\n`);
+
+  const client = new FixtureCloudflareClient(fixture);
+  const originalRequest = client.requestSwaHostnameValidation.bind(client);
+  client.requestSwaHostnameValidation = async (hostname) => {
+    if (hostname === "curations.dev") {
+      throw new Error("already-ready apex must not request a retired validation token");
+    }
+    return originalRequest(hostname);
+  };
+
+  const report = await runCutover(
+    {
+      hostnames: HOSTNAMES,
+      acceptancePath: ACCEPTANCE_READY,
+      apply: true,
+      confirm: PRODUCTION_CONFIRM_PHRASE,
+      manifestDir: path.join(SCRATCH, "manifests-swa-already-ready"),
+      confirmedManualSteps: [SET_DEFAULT_DOMAIN_STEP],
+    },
+    { client }
+  );
+
+  assert.equal(report.applied, true);
+});
+
+test("runCutover retriggers Azure validation only after publishing each SWA TXT record", async () => {
+  const fixture = freshZoneFixture("swa-retrigger.json");
+  const client = new FixtureCloudflareClient(fixture);
+  const events = [];
+  const originalUpsert = client.upsertDnsRecord.bind(client);
+  client.upsertDnsRecord = async (hostname, options) => {
+    if (hostname.startsWith("_dnsauth.")) events.push(`txt:${hostname}`);
+    return originalUpsert(hostname, options);
+  };
+  client.triggerSwaHostnameValidation = async (hostname) => {
+    events.push(`trigger:${hostname}`);
+  };
+
+  await runCutover(
+    {
+      hostnames: HOSTNAMES,
+      acceptancePath: ACCEPTANCE_READY,
+      apply: true,
+      confirm: PRODUCTION_CONFIRM_PHRASE,
+      manifestDir: path.join(SCRATCH, "manifests-swa-retrigger"),
+      confirmedManualSteps: [SET_DEFAULT_DOMAIN_STEP],
+    },
+    { client }
+  );
+
+  assert.deepEqual(events.slice(0, 4), [
+    "txt:_dnsauth.curations.dev",
+    "trigger:curations.dev",
+    "txt:_dnsauth.www.curations.dev",
+    "trigger:www.curations.dev",
+  ]);
+});
+
 // --- runCutover: dry run and refusal gates --------------------------------
 
 test("runCutover dry run never mutates the fixture and requires acceptance", async () => {
@@ -1291,6 +1360,9 @@ test("ComposedRealClient routes Cloudflare-concern methods to the Cloudflare cli
       swaCalls.push(`requestSwaHostnameValidation:${h}`);
       return { validationToken: "tok", txtRecordName: `_dnsauth.${h}` };
     },
+    triggerSwaHostnameValidation: async (h) => {
+      swaCalls.push(`triggerSwaHostnameValidation:${h}`);
+    },
     getSwaHostnameStatus: async (h) => {
       swaCalls.push(`getSwaHostnameStatus:${h}`);
       return "Ready";
@@ -1306,6 +1378,7 @@ test("ComposedRealClient routes Cloudflare-concern methods to the Cloudflare cli
   await composed.removeWorkerCustomDomain("api.curations.dev");
   await composed.attachWorkerCustomDomain("api.curations.dev", { service: "svc", environment: "production", zoneId: "z" });
   const swaResult = await composed.requestSwaHostnameValidation("curations.dev");
+  await composed.triggerSwaHostnameValidation("curations.dev");
   const status = await composed.getSwaHostnameStatus("curations.dev");
 
   assert.deepEqual(cloudflareCalls, [
@@ -1317,7 +1390,11 @@ test("ComposedRealClient routes Cloudflare-concern methods to the Cloudflare cli
     "removeWorkerCustomDomain:api.curations.dev",
     "attachWorkerCustomDomain:api.curations.dev:svc",
   ]);
-  assert.deepEqual(swaCalls, ["requestSwaHostnameValidation:curations.dev", "getSwaHostnameStatus:curations.dev"]);
+  assert.deepEqual(swaCalls, [
+    "requestSwaHostnameValidation:curations.dev",
+    "triggerSwaHostnameValidation:curations.dev",
+    "getSwaHostnameStatus:curations.dev",
+  ]);
   assert.deepEqual(swaResult, { validationToken: "tok", txtRecordName: "_dnsauth.curations.dev" });
   assert.equal(status, "Ready");
 });
@@ -1463,4 +1540,3 @@ test("runCutover dry run never calls preflight() (no need to touch Cloudflare be
   await runCutover({ hostnames: HOSTNAMES, acceptancePath: ACCEPTANCE_READY }, { client });
   assert.equal(preflightCalls, 0);
 });
-
