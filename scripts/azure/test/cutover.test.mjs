@@ -1169,6 +1169,34 @@ test("RealCloudflareClient's Worker Custom Domain methods never call a Worker-sc
   assert.ok(!paths.some((p) => p.includes("/pages/")), "must never call a Pages endpoint");
 });
 
+test("RealCloudflareClient accepts an empty successful response after detaching a Worker Custom Domain", async () => {
+  const fetchImpl = async (url, init) => {
+    const parsed = new URL(url);
+    if (parsed.pathname === "/client/v4/accounts/acct-1/workers/domains" && init.method === "GET") {
+      return {
+        status: 200,
+        ok: true,
+        json: async () => ({
+          success: true,
+          result: [{ id: "wd-1", hostname: "api.curations.dev", service: "svc", environment: "production" }],
+        }),
+      };
+    }
+    if (parsed.pathname === "/client/v4/accounts/acct-1/workers/domains/wd-1" && init.method === "DELETE") {
+      return {
+        status: 200,
+        ok: true,
+        json: async () => {
+          throw new SyntaxError("empty response body");
+        },
+      };
+    }
+    throw new Error(`unexpected request: ${init.method} ${parsed.pathname}`);
+  };
+  const client = new RealCloudflareClient({ apiToken: "t", accountId: "acct-1", fetchImpl });
+  await assert.doesNotReject(() => client.removeWorkerCustomDomain("api.curations.dev"));
+});
+
 test("RealCloudflareClient.attachWorkerCustomDomain PUTs hostname/service/environment/zone_id", async () => {
   let capturedBody = null;
   const fetchImpl = async (url, init) => {
