@@ -215,7 +215,7 @@ does not fail, on a mismatch — a brief Azure propagation delay is
 possible); and lets the EXIT/INT/TERM trap securely remove the entire
 temporary directory (venv, credentials file, PFX, PFX password, and all
 Certbot state together). `az containerapp env certificate upload` has no
-file-based password option — `--certificate-password` is a plain CLI
+file-based password option — `--password` is a plain CLI
 argument, an inherent Azure CLI interface limitation, not a choice made
 here; the value is read from its `0600` file only for the instant of that
 one call and never logged. Without a Cloudflare token, `--apply` falls
@@ -538,16 +538,14 @@ by default.
   releases at install time — bump deliberately, not implicitly, once a
   newer pinned trio is verified. Also assumes `az containerapp env
   certificate upload` accepts `--certificate-name <name>` to pin the
-  resulting resource's name (confirmed against Azure CLI's published
-  reference, not against a live upload), and that
-  `--certificate-password` has no file-based alternative (an inherent
-  interface limitation, not a choice made here) — none of the
-  install/issue/upload/verify sequence has been exercised against real
-  PyPI/Let's Encrypt/Azure in this task; only against
+  resulting resource's name and `--password <value>` for the PFX password
+  (confirmed against the installed Azure CLI extension's live help), and
+  that the password has no file-based alternative (an inherent interface
+  limitation, not a choice made here). The install and certificate-issuance
+  sequence has been exercised against real PyPI and Let's Encrypt; upload
+  and verification remain covered by
   `test/fixtures/bin/pip`/`test/fixtures/bin/certbot` and the fixture
-  `az` binary. Re-verify all of the above (including that the real
-  `certbot certonly` CLI's flag names/behavior exactly match what this
-  script assumes) once a real, authorized issuance is performed.
+  `az` binary until the authorized Azure upload completes.
 - `cutover.mjs`'s `set-default-domain` step assumes that, as of this
   writing, the Azure CLI has **no documented command** for marking a
   Static Web Apps custom domain as the default (the setting that makes
