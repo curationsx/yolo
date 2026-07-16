@@ -1,0 +1,91 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import MasterIndexRail from '../../components/MasterIndexRail.astro';
+import ProjectRow from '../../components/ProjectRow.astro';
+import {
+  activeProjects,
+  projectsForStack,
+  stackCombinations,
+  stackFixtures,
+  stackRoles,
+} from '../../data/community-preview';
+import { withBase } from '../../lib/labels';
+
+const stackIndex = [...stackRoles]
+  .sort((a, b) => a.name.localeCompare(b.name))
+  .map((role) => ({
+    title: role.name,
+    items: role.stackSlugs
+      .map((stackSlug) => stackFixtures[stackSlug])
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((stack) => ({
+        label: stack.name,
+        href: withBase(`/stacks/tools/${stack.slug}/`),
+        count: projectsForStack(stack.slug).length,
+      })),
+  }));
+---
+
+<BaseLayout
+  title="Stacks — CURATIONS.DEV"
+  description="Explore the tools and combinations appearing in voluntarily shared Projects."
+  communityPreview
+>
+  <a class="community-page-back" href={withBase('/')}>← Community Board</a>
+
+  <header class="discovery-header">
+    <div>
+      <p class="discovery-eyebrow">Stacks showing up</p>
+      <h1>Stacks</h1>
+      <p>Tools and combinations appearing across shared Projects.</p>
+    </div>
+    <span class="community-action">Follow Stacks</span>
+  </header>
+
+  <nav class="discovery-tabs" aria-label="Stack conversation views">
+    <a class="is-active" href="#stack-conversations">Active</a>
+    <a href="#stack-conversations">New</a>
+    <a href="#stack-conversations">Top</a>
+    <a href="#stack-conversations">Recently improved</a>
+  </nav>
+
+  <div class="board-home-layout discovery-layout">
+    <main class="board-stack-column">
+      <section id="stack-conversations" class="board-list-section">
+        <header class="board-list-heading">
+          <h2>Active Stack conversations</h2>
+          <span>where people are asking for help</span>
+        </header>
+        <div class="project-list">
+          {activeProjects.map((project) => <ProjectRow project={project} />)}
+        </div>
+      </section>
+
+      <section class="board-list-section board-list-section-all">
+        <header class="board-list-heading">
+          <h2>Common combinations</h2>
+          <span>tools appearing together</span>
+        </header>
+        <div class="stack-combination-list">
+          {
+            stackCombinations.map((combination) => (
+              <a
+                class="stack-combination-row"
+                href={withBase(`/stacks/${combination.slug}/`)}
+              >
+                <span class="stack-combination-score">{combination.projectCount}</span>
+                <span>
+                  <strong>{combination.name}</strong>
+                  <small>{combination.description}</small>
+                  <em>{combination.conversationCount} active conversations</em>
+                </span>
+              </a>
+            ))
+          }
+        </div>
+      </section>
+    </main>
+
+    <MasterIndexRail title="Stack index" sections={stackIndex} />
+  </div>
+</BaseLayout>

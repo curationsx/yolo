@@ -1,0 +1,107 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import MasterIndexRail from '../../components/MasterIndexRail.astro';
+import StackPill from '../../components/StackPill.astro';
+import { libraryFixtures, stackFixtures } from '../../data/community-preview';
+import { withBase } from '../../lib/labels';
+
+const libraryTypes = ['Cookbook', 'Review', 'Skill'].map((type) => ({
+  label: `${type}s`,
+  href: withBase('/library/#library-resources'),
+  count: libraryFixtures.filter((resource) => resource.type === type).length,
+}));
+const usefulStacks = [
+  ...new Set(libraryFixtures.flatMap((resource) => resource.stackSlugs)),
+]
+  .map((stackSlug) => stackFixtures[stackSlug])
+  .sort((a, b) => a.name.localeCompare(b.name))
+  .map((stack) => ({
+    label: stack.name,
+    href: withBase(`/stacks/tools/${stack.slug}/`),
+    count: libraryFixtures.filter((resource) => resource.stackSlugs.includes(stack.slug)).length,
+  }));
+const recentlyUpdated = [...libraryFixtures]
+  .slice(0, 4)
+  .map((resource) => ({
+    label: resource.title,
+    href: withBase(`/library/#${resource.slug}`),
+    count: resource.updated,
+  }));
+const libraryIndex = [
+  { title: 'Resource types', items: libraryTypes },
+  { title: 'Useful by Stack', items: usefulStacks },
+  { title: 'Recently updated', items: recentlyUpdated },
+];
+---
+
+<BaseLayout
+  title="Community Library — CURATIONS.DEV"
+  description="Reviews, skills, and Cookbooks builders are finding useful."
+  communityPreview
+>
+  <a class="community-page-back" href={withBase('/')}>← Community Board</a>
+
+  <header class="discovery-header">
+    <div>
+      <p class="discovery-eyebrow">Useful this week</p>
+      <h1>Community Library</h1>
+      <p>Reviews, skills, and Cookbooks people are finding useful.</p>
+    </div>
+    <span class="community-action">Share a resource</span>
+  </header>
+
+  <nav class="discovery-tabs" aria-label="Library time range">
+    <a class="is-active" href="#library-resources">Week</a>
+    <a href="#library-resources">Month</a>
+    <a href="#library-resources">Year</a>
+    <a href="#library-resources">All time</a>
+  </nav>
+
+  <div class="board-home-layout discovery-layout">
+    <main class="board-stack-column">
+      <section id="library-resources" class="board-list-section">
+        <header class="board-list-heading">
+          <h2>Useful now</h2>
+          <span>explicit community signals · preview data</span>
+        </header>
+        <div class="library-list">
+          {
+            libraryFixtures.map((resource) => (
+              <article class="library-row" id={resource.slug}>
+                <div class="project-score" aria-label={`${resource.score} useful votes`}>
+                  <span aria-hidden="true">▲</span>
+                  <strong>{resource.score}</strong>
+                </div>
+                <div>
+                  <header>
+                    <a href={`#${resource.slug}`}>{resource.title}</a>
+                    <span class={`library-type library-type-${resource.type.toLowerCase()}`}>
+                      {resource.type}
+                    </span>
+                  </header>
+                  <p>{resource.description}</p>
+                  <div class="library-meta">
+                    <span>{resource.version}</span>
+                    <span>·</span>
+                    <span>{resource.outcome}</span>
+                    <span>·</span>
+                    <span>updated {resource.updated}</span>
+                  </div>
+                  {
+                    resource.stackSlugs.length > 0 && (
+                      <div class="project-context">
+                        {resource.stackSlugs.map((stackSlug) => <StackPill slug={stackSlug} />)}
+                      </div>
+                    )
+                  }
+                </div>
+              </article>
+            ))
+          }
+        </div>
+      </section>
+    </main>
+
+    <MasterIndexRail title="Library index" sections={libraryIndex} />
+  </div>
+</BaseLayout>

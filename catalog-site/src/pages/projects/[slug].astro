@@ -1,0 +1,143 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import StackPill from '../../components/StackPill.astro';
+import { allProjects, type ProjectFixture } from '../../data/community-preview';
+import { withBase } from '../../lib/labels';
+
+export function getStaticPaths() {
+  return allProjects.map((project) => ({
+    params: { slug: project.slug },
+    props: { project },
+  }));
+}
+
+interface Props {
+  project: ProjectFixture;
+}
+
+const { project } = Astro.props;
+---
+
+<BaseLayout
+  title={`${project.project} — CURATIONS.DEV`}
+  description={project.summary}
+  communityPreview
+>
+  <a class="community-page-back" href={withBase('/projects/')}>← All Projects</a>
+
+  <header class="project-detail-header">
+    <div class="project-score project-detail-score" aria-label={`${project.score} community votes`}>
+      <span aria-hidden="true">▲</span>
+      <strong>{project.score}</strong>
+    </div>
+    <div>
+      <p class="discovery-eyebrow">Public Project plan</p>
+      <h1>{project.project}</h1>
+      <p class="project-detail-question">“{project.question}”</p>
+      <div class="project-detail-meta">
+        <span class={`project-stage project-stage-${project.stageClass}`}>{project.stage}</span>
+        <a href={withBase(`/projects/types/${project.categorySlug}/`)}>
+          {project.category}
+        </a>
+        <span>shared by <strong>{project.author}</strong></span>
+        <span>{project.comments} replies</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="board-home-layout discovery-layout">
+    <main class="board-stack-column">
+      <section class="project-detail-section">
+        <header>
+          <p class="discovery-eyebrow">Working plan</p>
+          <h2>{project.summary}</h2>
+        </header>
+        <div class="project-plan-grid">
+          <article>
+            <span>Problem</span>
+            <p>{project.plan.problem}</p>
+          </article>
+          <article>
+            <span>Who it is for</span>
+            <p>{project.plan.audience}</p>
+          </article>
+          <article>
+            <span>Next decision</span>
+            <p>{project.plan.nextDecision}</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="project-detail-section">
+        <header>
+          <p class="discovery-eyebrow">Stack</p>
+          <h2>Tools named in this Project</h2>
+        </header>
+        <p class="project-detail-copy">
+          Every letter-stamped stack pill is a link to that tool’s corresponding
+          landing page.
+        </p>
+        <div class="project-detail-stacks">
+          {project.stackSlugs.map((stackSlug) => <StackPill slug={stackSlug} />)}
+        </div>
+      </section>
+
+      <section class="project-detail-section">
+        <header>
+          <p class="discovery-eyebrow">Conversation</p>
+          <h2>Feedback on the current plan</h2>
+        </header>
+        <div class="project-comment project-comment-human">
+          <strong>{project.author}</strong>
+          <p>
+            I’m looking for the gaps that would become expensive after other
+            people start relying on this Project.
+          </p>
+        </div>
+        {
+          project.agent && (
+            <div class="project-comment project-comment-agent">
+              <strong><span>AI</span> Project Guide</strong>
+              <p>
+                Suggestion: turn the next decision into one testable rule, then
+                ask a reviewer to challenge the failure case before adding more
+                features.
+              </p>
+            </div>
+          )
+        }
+        <div class="project-comment project-comment-human">
+          <strong>@community-reviewer</strong>
+          <p>
+            The one-line description is clear. I would keep it and add a single
+            example showing what success looks like for the first user.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <aside class="board-feed discovery-rail">
+      <h2>Project snapshot</h2>
+      <section class="community-pulse-section">
+        <h3>Current state</h3>
+        <p>{project.stage} · updated {project.age}</p>
+        <p>{project.people} people in the conversation</p>
+      </section>
+      <section class="community-pulse-section">
+        <h3>Attributes</h3>
+        <div class="community-tag-bar discovery-attribute-list">
+          {project.attributes.map((attribute) => <span>{attribute}</span>)}
+        </div>
+      </section>
+      <section class="community-pulse-section">
+        <h3>Suggested next resource</h3>
+        <a class="discovery-feature-link" href={withBase('/library/#project-plan-gap-review')}>
+          Project-plan gap review →
+        </a>
+      </section>
+      <p class="community-pulse-note">
+        Public preview fixture. No repository action or AI run occurs on this page.
+      </p>
+    </aside>
+  </div>
+</BaseLayout>
