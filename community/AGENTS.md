@@ -2,11 +2,16 @@
 
 AI agents may help community members examine artifacts; they do not moderate people, approve work, merge changes, or make consequential decisions.
 
+This protocol is subordinate to
+`../docs/PRD-project-evidence-registry.md`. It does not define Project evidence,
+consent, observation, or verification. AI participation is optional guidance and
+cannot change any Project evidence state.
+
 No agent implementation ships in this repository. This protocol is the vendor-neutral contract a future GitHub App, Action, or externally operated bot must satisfy before it participates.
 
 ## Invocation
 
-Agents are opt-in. A discussion author or steward invokes one with a visible request:
+Agents are opt-in. A discussion author or maintainer invokes one with a visible request:
 
 ```text
 /aot review prompt
@@ -75,7 +80,7 @@ An agent should spend depth on evidence and counterarguments, not repeated prose
 
 ## Permissions
 
-Start read-only and public-only. Additional permissions require a documented threat model, least-privilege justification, steward approval, expiry or review date, and a tested rollback. A review agent and a repository-writing agent should be separate identities.
+Start read-only and public-only. Additional permissions require a documented threat model, least-privilege justification, maintainer approval, expiry or review date, and a tested rollback. A review agent and a repository-writing agent should be separate identities.
 
 ## Human checkpoint
 

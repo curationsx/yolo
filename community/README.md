@@ -20,7 +20,6 @@ This is a design and activation kit, not a claim that the board or its agents ar
 | Share a public product requirements document | **PRD Showcase** | A review against intent, users, risks, measures, and open decisions |
 | Recommend a collection, framework, or tool | **Resource Exchange** | A classified, disclosed, source-linked resource |
 | Share an exercised pattern | **Patterns & Field Notes** | Context, outcome, evidence, limitations, and reusable learning |
-| Shape rules or challenge a decision | **Stewardship** | A transparent proposal, trade-offs, and accountable decision |
 
 Use an issue for a bounded repository bug or task. Use a pull request for a concrete versioned change. Use a discussion when the answer should be developed with others first.
 
@@ -36,7 +35,6 @@ GitHub Discussion categories are created in repository settings, not from files.
 | Showcase | PRD Showcase | `prd-showcase` | Open-ended | `prd-showcase.yml` |
 | Discover | Resource Exchange | `resource-exchange` | Open-ended | `resource-exchange.yml` |
 | Learn | Patterns & Field Notes | `patterns-field-notes` | Open-ended | Freeform |
-| Govern | Stewardship | `stewardship` | Open-ended | Freeform |
 | Project | Announcements | `announcements` | Announcement | Maintainers only |
 
 Suggested emoji and section styling are presentation choices; names, slugs, formats, and purpose are the durable contract. Pin one welcome discussion that links to this page, the [manifesto](../MANIFESTO.md), and the [Start Here guide](../docs/START-HERE.md).
@@ -64,7 +62,7 @@ Frame → Share → Invite → Examine → Human decides → Version → Report 
 - Disclose affiliations and material AI assistance.
 - No promotional drops, engagement farming, fabricated evidence, or “best” claims without a stated comparison method.
 - Human owners remain accountable for decisions and published changes.
-- Maintainers may hide unsafe material, lock circular threads, or restrict abusive participants. Significant moderation and governance decisions should include a public rationale when doing so would not amplify harm or expose private information.
+- Maintainers may hide unsafe material, lock circular threads, or restrict abusive participants. Significant moderation decisions should include a public rationale when doing so would not amplify harm or expose private information.
 
 ## Top 0.1% questions
 
@@ -80,12 +78,11 @@ These questions are release gates, not branding copy. A “yes” needs evidence
 | Can deep agent help use enterprise capacity without unbounded spend? | Requested depth plus maintainer-set hard limits | Measured cost, latency, and usefulness |
 | Can a PRD author receive useful critique without surrendering authorship? | Review lenses, opt-in scope, and author decision log | Public showcase outcomes |
 | Are resources discoverable without becoming a popularity contest? | Job-based classification, disclosure, and verification date | Curated accepted submissions |
-| Can disagreement change governance? | Stewardship lane and public decision rationale | First challenged and revised decision |
 | Are the experience and artifacts accessible and portable? | Text-first forms, semantic Markdown, exportable Git history | Accessibility review |
 
 ## From conversation to repository value
 
-A steward may propose distillation when a discussion produces a reusable prompt, workflow, rubric, taxonomy change, field note, or resource entry. The author must be credited, AI assistance disclosed, and the resulting PR linked back to the discussion. Closing a discussion without merging is also valid; record what was learned and why no change followed.
+A maintainer may propose distillation when a discussion produces a reusable prompt, workflow, rubric, taxonomy change, field note, or resource entry. The author must be credited, AI assistance disclosed, and the resulting PR linked back to the discussion. Closing a discussion without merging is also valid; record what was learned and why no change followed.
 
 ## Activation checklist
 
@@ -93,7 +90,7 @@ A steward may propose distillation when a discussion produces a reusable prompt,
 - [ ] Create the categories and exact slugs in the board blueprint.
 - [ ] Confirm each category form renders and required fields work.
 - [ ] Publish and pin the welcome discussion.
-- [ ] Name initial human stewards and an escalation contact.
+- [ ] Name the responsible maintainers and an escalation contact.
 - [ ] Run privacy, accessibility, and abuse-case reviews.
 - [ ] If an agent is deployed, publish its identity, permissions, model/provider disclosure, limits, and change log.
 - [ ] Exercise each route manually before calling it operational.

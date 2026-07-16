@@ -2,19 +2,25 @@
 
 **Status:** Draft · **Owner:** CurationsX · **Scope:** GitHub Discussions activation, forms, distillation pipeline, and moderation
 
+> **Product authority:** This optional contributor-discussion surface is
+> subordinate to
+> [`PRD-project-evidence-registry.md`](PRD-project-evidence-registry.md).
+> GitHub Discussions is not the canonical Project registry, Project submission
+> flow, or Project evidence store.
+
 ## 1. Purpose
 
-Activate the Community Grid specified in `community/README.md` as a functioning GitHub Discussions board: eight categories with exact slugs, structured discussion forms, a discussion-to-artifact distillation pipeline, and a moderation compact — so community members can ask questions, expand prompts, review workflows, share PRDs and resources, and turn useful conversations into versioned repository artifacts.
+Activate the Community Grid specified in `community/README.md` as a functioning GitHub Discussions board: seven categories with exact slugs, structured discussion forms, a discussion-to-artifact distillation pipeline, and a moderation compact — so community members can ask questions, expand prompts, review workflows, share PRDs and resources, and turn useful conversations into versioned repository artifacts.
 
 ## 2. Background
 
-`community/README.md` fully specifies the board: eight categories, slugs, formats, forms, a collaboration loop, a compact, and an activation checklist. The four structured forms (`.github/DISCUSSION_TEMPLATE/prompt-lab.yml`, `workflow-clinic.yml`, `prd-showcase.yml`, `resource-exchange.yml`) now exist in the repository. GitHub Discussions has not yet been enabled for the repository; enabling it and creating the categories in repository settings is a one-step maintainer action.
+`community/README.md` fully specifies the board: seven categories, slugs, formats, forms, a collaboration loop, a compact, and an activation checklist. The four structured forms (`.github/DISCUSSION_TEMPLATE/prompt-lab.yml`, `workflow-clinic.yml`, `prd-showcase.yml`, `resource-exchange.yml`) now exist in the repository. GitHub Discussions has not yet been enabled for the repository; enabling it and creating the categories in repository settings is a one-step maintainer action.
 
 The ROADMAP lists "Enable and manually exercise the Community Grid" as a **Next** milestone. This PRD drives that milestone to completion.
 
 ## 3. Goals
 
-1. **Activate** GitHub Discussions with the eight blueprint categories and exact slugs.
+1. **Activate** GitHub Discussions with the seven blueprint categories and exact slugs.
 2. **Wire discussion forms** so structured categories render required fields and reduce low-quality posts.
 3. **Define a distillation pipeline** that converts high-value discussions into versioned repository artifacts (prompts, workflows, field notes, taxonomy changes).
 4. **Document moderation and compact rules** so maintainers can apply them consistently without ad-hoc decisions.
@@ -23,7 +29,7 @@ The ROADMAP lists "Enable and manually exercise the Community Grid" as a **Next*
 ## 4. Non-Goals
 
 - Building a custom discussion platform (GitHub Discussions is the board).
-- Automating moderation decisions — a human steward reviews and acts.
+- Automating moderation decisions — a human maintainer reviews and acts.
 - Capturing or showcasing agent session logs.
 - Metrics dashboards or engagement scoring.
 - Replacing the PR review process for code changes.
@@ -52,7 +58,6 @@ A maintainer must create the following categories in **Settings → Discussions*
 | Showcase | PRD Showcase | `prd-showcase` | Open-ended | `prd-showcase.yml` |
 | Discover | Resource Exchange | `resource-exchange` | Open-ended | `resource-exchange.yml` |
 | Learn | Patterns & Field Notes | `patterns-field-notes` | Open-ended | Freeform |
-| Govern | Stewardship | `stewardship` | Open-ended | Freeform |
 | Project | Announcements | `announcements` | Announcement | Maintainers only |
 
 ### 6.2 Discussion forms
@@ -73,11 +78,11 @@ The "Human decides" step is non-negotiable: no discussion closes by agent action
 
 ### 6.4 Distillation pipeline
 
-When a discussion produces a reusable artifact, a steward may propose distillation:
+When a discussion produces a reusable artifact, a maintainer may propose distillation:
 
 ```mermaid
 flowchart TD
-    D([Discussion]) --> L{Steward labels\n'distill'}
+    D([Discussion]) --> L{Maintainer labels\n'distill'}
     L --> S([Scaffold PR])
     S --> V{Human author\nreviews draft}
     V -- Accepts --> M([Merged artifact\nin repository])
@@ -90,7 +95,7 @@ Distillation rules:
 - The human author of the discussion must be credited in the artifact's frontmatter.
 - Any material AI assistance in drafting the artifact must be disclosed.
 - The resulting PR must link back to the source discussion.
-- Closing without merging is valid; the steward records what was learned and why no change followed.
+- Closing without merging is valid; the maintainer records what was learned and why no change followed.
 
 ### 6.5 Moderation compact
 
@@ -111,10 +116,10 @@ Significant moderation decisions include a public rationale unless publishing it
 The following steps must be completed before describing the board as **operational**:
 
 - [ ] Enable GitHub Discussions for the repository (Settings → General → Features → Discussions).
-- [ ] Create the eight categories with exact names and slugs from §6.1.
+- [ ] Create the seven categories with exact names and slugs from §6.1.
 - [ ] Confirm each structured form renders and required fields enforce submission.
 - [ ] Publish and pin a welcome discussion linking to `community/README.md`, `MANIFESTO.md`, and `docs/START-HERE.md`.
-- [ ] Name initial human stewards and an escalation contact.
+- [ ] Name the responsible maintainers and an escalation contact.
 - [ ] Run privacy, accessibility, and abuse-case reviews.
 - [ ] If an agent is deployed: publish its identity, permissions, model/provider disclosure, limits, and change log (see `docs/PRD-aot-agent-protocol.md`).
 - [ ] Exercise each route manually before calling it operational.
@@ -137,11 +142,10 @@ flowchart LR
         PS([PRD Showcase])
         RE([Resource Exchange])
         PF([Patterns & Field Notes])
-        ST([Stewardship])
     end
 
     subgraph distill [Distillation Pipeline]
-        L{Steward\nlabels distill}
+        L{Maintainer\nlabels distill}
         SC([Scaffold PR])
         HR{Human\nreviews}
     end
@@ -165,9 +169,9 @@ flowchart LR
 
 ## 8. Success Criteria
 
-- All eight categories exist with correct slugs; forms render and enforce required fields.
+- All seven categories exist with correct slugs; forms render and enforce required fields.
 - Welcome discussion pinned and linking to orientation docs.
-- Initial human stewards named.
+- Responsible maintainers named.
 - At least one discussion distilled into a versioned repository artifact under the pipeline.
 - Privacy, accessibility, and abuse-case reviews completed.
 - Board-health CI validates form YAML and slugs on each pull request.
@@ -180,7 +184,7 @@ flowchart LR
 
 ## 10. Milestones
 
-1. **M1 — Activation:** Enable Discussions, create categories, confirm forms, pin welcome post, name stewards.
+1. **M1 — Activation:** Enable Discussions, create categories, confirm forms, pin welcome post, and name the responsible maintainers.
 2. **M2 — First distillation:** Complete the first discussion-to-artifact pipeline end-to-end with a real community contribution.
 3. **M3 — Board-health CI:** CI validates form YAML and slugs automatically on PRs.
 4. **M4 — Accessibility review:** All discussion forms reviewed against an accessibility checklist.

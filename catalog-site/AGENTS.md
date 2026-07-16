@@ -8,6 +8,13 @@ astro dev --background
 
 Manage the background server with `astro dev stop`, `astro dev status`, and `astro dev logs`.
 
+## Product source of truth
+
+Read `../docs/PRD-project-evidence-registry.md` before changing public claims,
+Project submission, repository evidence, tool-page Project rails, personas,
+Cookbooks, or execution handoffs. The Visual Oracle controls presentation; the
+Project Evidence Registry PRD controls product meaning and public language.
+
 ## Visual Oracle
 
 The epiphany, operationalized. Claude Design's Board render is the Visual Oracle

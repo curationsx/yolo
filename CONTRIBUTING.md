@@ -33,11 +33,11 @@ python tools/yolo.py catalog                 # regenerate if you changed artifac
 
 ## Review process
 
-A maintainer (steward) reviews against the [rubric](docs/QUALITY.md). Expect specific, kind, quote-anchored feedback — the [constructive-critique prompt](prompts/creative-constructive-critique.md) sets the tone we aim for. Prompts and workflows get checked for realistic human review requirements and accurate privacy notes, not just formatting.
+A maintainer reviews against the [rubric](docs/QUALITY.md). Expect specific, kind, quote-anchored feedback — the [constructive-critique prompt](prompts/creative-constructive-critique.md) sets the tone we aim for. Prompts and workflows get checked for realistic human review requirements and accurate privacy notes, not just formatting.
 
 ## Governance
 
-Early-stage: decisions rest with maintainers, made in the open on PRs and issues. The stewardship model in [docs/PRD-digital-stewardship.md](docs/PRD-digital-stewardship.md) describes where governance is headed as the community grows.
+Early-stage decisions rest with maintainers and are made in the open on pull requests and issues.
 
 ## Questions
 

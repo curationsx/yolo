@@ -4,6 +4,11 @@
 
 > ✅ **This integration is now LIVE (2026-07-12).** `FOUNDRY_MODE=azure` calls a real Azure OpenAI deployment (`gpt-5.4-mini` on `yolo-foundry`, eastus2), guarded by the Tier 1 allowlist, per-run caps, and a git-ignored azure ledger. The local offline simulator (`foundry-sim/`) remains the default mode (`FOUNDRY_MODE=sim`) and the only mode CI runs.
 
+> **Product authority:** This infrastructure and spend-control PRD is
+> subordinate to
+> [`PRD-project-evidence-registry.md`](PRD-project-evidence-registry.md).
+> Foundry provides optional guidance; it does not establish Project evidence.
+
 ## 1. Purpose
 
 Document the design for connecting the CurationsX YOLO repository to Azure AI Foundry using first-party Azure OpenAI deployments, with guardrails that keep all spend within Microsoft for Startups (Founders Hub) credit terms. Establish the `FOUNDRY_MODE=sim|azure` seam so switching from the emulator to the real client is a configuration change, not a code rewrite.

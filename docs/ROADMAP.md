@@ -1,50 +1,75 @@
 # Roadmap
 
-Now / Next / Later. No dates, no promises — direction, honestly stated. Items move only when someone does the work.
+Now / Next / Later. No dates, no promises — direction, honestly stated. Items
+move only when someone does the work.
 
-## Now (in this foundation)
+The governing delivery order is the
+[Project Evidence Registry PRD](PRD-project-evidence-registry.md). Feature PRDs
+remain implementation references and may not reorder its trust gates.
 
-- Front door: README, START-HERE, manifesto, AoT explainer, quality model, glossary.
-- Prompt playbook and an initial set of eight prompts with consistent metadata.
-- Five workflows with actors, checkpoints, evidence, and rollback.
-- Curated software directory with a neutral rubric and submission path.
-- Versioned machine-readable taxonomy and JSON Schemas for prompts, workflows, and software entries.
-- Standard-library CLI: `doctor`, `list`, `search`, `show`, `catalog` — offline, no telemetry.
-- Contribution guide.
-- Proposed Community Grid with discussion forms, PRD showcase, resource exchange, and a vendor-neutral agent protocol.
-- Full PRD suite: [Community Discussion Board](PRD-community-discussion-board.md), [AoT Agent Protocol](PRD-aot-agent-protocol.md), [Azure Foundry Integration](PRD-azure-foundry-integration.md), [Catalog Surface](PRD-catalog-surface.md).
-- Local offline Foundry emulator (`foundry-sim/`) — zero-cost, no network, standard-library-only staging layer for evaluating personas, workflows, and ROI before connecting real Azure keys.
-- Published Astro catalog and Board surface at `curations.dev`.
-- Versioned Cookbooks with two user-funded lanes: **Use My Copilot** and **Run in My Terminal**. No silent CURATIONS-funded inference fallback.
+## Now
 
-## Next (as the community forms)
+- Governing Project Evidence Registry product contract.
+- Published Astro Board surface on Azure Static Web Apps at `curations.dev`.
+- Azure Container Apps gateway, Cosmos DB persistence, GitHub identity, and
+  bounded Azure AI Foundry integration.
+- Curated software directory with neutral records and a Git-backed submission
+  path.
+- Existing public-repository check for six tool families, currently embedded in
+  per-tool discussions rather than a first-class Project.
+- Versioned Cookbooks with **Use My Copilot** and **Run in My Terminal**. No
+  silent CURATIONS-funded fallback.
+- Prompt and workflow libraries, taxonomy, schemas, offline CLI, quality model,
+  and contribution guide.
+- Local `foundry-sim` emulator for deterministic, zero-cost fixture testing.
 
-- First externally contributed prompt and workflow merged under the stewardship process.
-- Promote initial artifacts from `draft` to `tested` by using them in real work and recording outcomes.
-- Guardrail registry and stewardship charter from the [Digital Stewardship PRD](PRD-digital-stewardship.md).
-- CI that runs `python tools/yolo.py doctor` on pull requests.
-- Prompt evaluation notes: lightweight before/after records when prompts are revised.
-- Expand the software directory using [software/SUBMIT.md](../software/SUBMIT.md) submissions.
-- Enable and manually exercise the [Community Grid](../community/README.md); name initial human stewards before deploying any agent (see [Community Discussion Board PRD](PRD-community-discussion-board.md)).
-- Evaluate a read-only agent on public fictional fixtures via `foundry-sim/` before any community pilot (see [AoT Agent Protocol PRD](PRD-aot-agent-protocol.md)).
-- Build out personas and workflows in `foundry-sim/personas/` and `foundry-sim/workflows/` to validate ROI before connecting to real Azure (maintainer-owned).
-- Migrate embedded Copilot delegation from the shared OAuth App to a GitHub App if finer permissions or shorter-lived user tokens materially improve the trust boundary.
+## Next — Phase 0 trust gate
 
-## Later (earned, not scheduled)
+- Make public agent invocation explicit and default-off.
+- Replace generic "verified" presentation with declaration, observation,
+  consent, review, and freshness language.
+- Enforce repository-owner match for existing public-PRD submissions.
+- Surface or reject fork, archived, stale, unavailable, and revoked states.
+- Add builder revocation and maintainer moderation paths.
+- Rename the two distinct actions: **Propose a tool** and **Submit your Project**.
+- Make Project evidence methodology public and inspectable.
+- Retire or hard-gate the legacy Cloudflare production deployment lane after the
+  completed Azure domain cutover.
+- Complete Phase 0 before opening Project submissions.
 
-- Connect real Azure AI Foundry (first-party Azure OpenAI only; see [Azure Foundry Integration PRD](PRD-azure-foundry-integration.md) — gated behind sim validation and Startup Credits guardrails).
-- CURATIONS Credits: an explicit hosted-execution product with purchased usage, visible limits, and no connection to a visitor's GitHub Copilot entitlement.
-- Worked case studies of workflows applied end-to-end, with evidence.
-- Taxonomy v2 informed by real usage, with migration notes.
-- Accessibility review of all artifacts against a documented checklist.
-- Localization of core documents if contributors materialize for it.
-- Signature experience refinements based on what users actually reach for.
-- Evidence-backed discussion-to-artifact distillation and progressively expanded agent capabilities, only after the prior permission tier is proven.
+## Next — Phase 1 thin pilot
+
+- Add first-class Project, Snapshot, and ToolClaim records.
+- Add `/projects/`, `/projects/{owner}/{repo}/`, and `/submit/project/`.
+- Pin PRD and evidence reads to one repository commit.
+- Pilot with five invited builders, personal public repositories, and
+  Cloudflare/Supabase evidence rules.
+- Require an exact public-page preview, explicit consent, and manual review.
+- Test the falsification criteria in the governing PRD before expansion.
+
+## Later — earned after the pilot
+
+- Refresh history, organization/collaborator consent, additional evidence rules,
+  and separate declared/observed aggregate counts.
+- Human comments and peer review only after moderation controls exist.
+- Project-scoped Bookbags containing exact, reviewed, version-pinned Cookbook
+  references.
+- Optional catalog-grounded persona recommendations that users explicitly save
+  or run.
+- Profiles, human-mediated mentoring, build attestations, and broader Project
+  collections after each prior boundary is proven.
+- CURATIONS Credits only as a separately approved hosted-execution product.
+- Opt-in public-repository discovery only through a separate future PRD.
 
 ## What we will not do
 
-- Spend CURATIONS model credits for a user who selected **Use My Copilot** or **Run in My Terminal**.
-- Collect telemetry of any kind.
-- Publish fake badges, invented testimonials, or adoption claims we can't evidence.
-- Lock any workflow to a specific vendor.
-- Treat enterprise AI capacity as permission for unbounded or invisible agent usage.
+- Source or crawl repositories their builders did not submit.
+- Claim that a PRD or configuration file proves real-world production use.
+- Rank tools or projects as "best" from counts or votes.
+- Auto-install, auto-update, auto-activate, or auto-run external skills.
+- Spend CURATIONS model credits for a user who selected **Use My Copilot** or
+  **Run in My Terminal**.
+- Collect product analytics or behavioral profiles. Necessary security,
+  rate-limit, reliability, and cost logs must be content-minimized, documented,
+  and retained only as long as needed.
+- Treat available AI capacity as permission for invisible or unbounded use.

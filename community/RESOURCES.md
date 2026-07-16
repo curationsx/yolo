@@ -11,7 +11,6 @@ An awesome-list-style discovery route for Human × AI practice, curated for fitn
 | Tool categories and trade-offs | [Software directory](../software/) |
 | Shared classification | [AoT taxonomy](../taxonomy/) |
 | Artifact quality review | [Quality model](../docs/QUALITY.md) |
-| Digital stewardship direction | [Stewardship PRD](../docs/PRD-digital-stewardship.md) |
 
 ## External starting points
 
@@ -57,4 +56,4 @@ Affiliation:
 AI assistance:
 ```
 
-A steward can accept a resource into this page through a PR, redirect it to the software directory, request evidence, or decline it with a rationale. Links are periodically rechecked; stale or unsafe entries are corrected or removed without preserving them for list size.
+A maintainer can accept a resource into this page through a PR, redirect it to the software directory, request evidence, or decline it with a rationale. Links are periodically rechecked; stale or unsafe entries are corrected or removed without preserving them for list size.

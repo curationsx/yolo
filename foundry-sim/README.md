@@ -198,7 +198,7 @@ foundry-sim/
 │   └── rubber-duck.json       ← canned response: rubber-duck debugging
 ├── personas/
 │   ├── README.md              ← schema + how to add personas
-│   └── example-steward.json   ← EXAMPLE persona (maintainer builds out)
+│   └── example-reviewer.json  ← EXAMPLE persona (maintainer builds out)
 ├── workflows/
 │   ├── README.md              ← schema + how to add workflows
 │   └── example-research-synthesis.json  ← EXAMPLE workflow (maintainer builds out)
@@ -260,7 +260,7 @@ Use Git Bash, WSL, or run the manual verification steps directly with Python. Th
 ## Extending the simulator
 
 ### Add a persona
-Copy `personas/example-steward.json`, edit the fields, and use the `system_prompt` as the first message (`role: "system"`) in your `client.chat()` calls. See `personas/README.md` for the full schema.
+Copy `personas/example-reviewer.json`, edit the fields, and use the `system_prompt` as the first message (`role: "system"`) in your `client.chat()` calls. See `personas/README.md` for the full schema.
 
 ### Add a workflow
 Copy `workflows/example-research-synthesis.json`, edit the steps, and iterate over them in your script. See `workflows/README.md` for the full schema.

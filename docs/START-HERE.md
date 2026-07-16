@@ -37,6 +37,7 @@ Open [workflows/](../workflows/) and pick the one closest to your work. Each wor
 | --- | --- |
 | Understand the philosophy | [MANIFESTO.md](../MANIFESTO.md) |
 | Understand AoT properly | [AOT.md](AOT.md) |
+| Understand the `curations.dev` product contract | [Project Evidence Registry PRD](PRD-project-evidence-registry.md) |
 | Write your own prompt | [PLAYBOOK.md](../PLAYBOOK.md) + [prompts/README.md](../prompts/README.md) |
 | Write your own workflow | [workflows/README.md](../workflows/README.md) |
 | Explore the proposed prompt lab, workflow clinic, and PRD showcase | [community/README.md](../community/README.md) |

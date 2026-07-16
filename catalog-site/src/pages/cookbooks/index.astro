@@ -131,7 +131,7 @@ const apiBase = import.meta.env.PUBLIC_AGENT_API ?? '';
               <div class="cookbook-agent-avatar" aria-hidden="true">AI</div>
               <div>
                 <div class="cookbook-agent-line">
-                  <strong>Steward preview</strong>
+                  <strong>Persona fit check</strong>
                   <span class="badge badge-ai">AI · DESIGN PROTOTYPE</span>
                   <span class:list={['fit-badge', !initialStrong && 'is-partial']} data-fit-badge>
                     {initialStrong ? 'STRONG FIT' : 'PARTIAL FIT'}
@@ -139,7 +139,7 @@ const apiBase = import.meta.env.PUBLIC_AGENT_API ?? '';
                 </div>
                 <p data-fit-note>{presentation.fitNote.ollama}</p>
                 <a data-stack-board href={`${basePath}/software/ollama/#company-board`}>
-                  Ask the Ollama steward on its board -&gt;
+                  Ask the Ollama guide on its board -&gt;
                 </a>
               </div>
             </div>

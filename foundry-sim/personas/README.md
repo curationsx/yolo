@@ -29,7 +29,7 @@ All fields except `id` and `system_prompt` are optional but encouraged.
 
 ## How to add a persona
 
-1. Copy `example-steward.json` to a new file (e.g., `my-persona.json`).
+1. Copy `example-reviewer.json` to a new file (e.g., `my-persona.json`).
 2. Edit the fields to match your use case.
 3. In your code, pass the `system_prompt` as the first message with `"role": "system"` before your user messages.
 4. Run `python foundry-sim/dash.py` to see the persona reflected in the topology panel.
@@ -42,4 +42,4 @@ When `FOUNDRY_MODE=azure` is enabled (see `docs/PRD-azure-foundry-integration.md
 
 | File | Description |
 | --- | --- |
-| `example-steward.json` | EXAMPLE — a fictional community steward persona |
+| `example-reviewer.json` | EXAMPLE — a fictional community reviewer persona |

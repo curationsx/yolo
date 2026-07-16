@@ -44,4 +44,4 @@ Surface uncertainty, ambiguity, and judgment points instead of hiding them behin
 
 ---
 
-*These principles extend the [Digital Stewardship PRD](docs/PRD-digital-stewardship.md) and are versioned with this repository. Propose changes via pull request — see [CONTRIBUTING.md](CONTRIBUTING.md).*
+*These principles are versioned with this repository. Propose changes via pull request — see [CONTRIBUTING.md](CONTRIBUTING.md).*

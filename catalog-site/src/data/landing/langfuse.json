@@ -2,7 +2,7 @@
   "id": "langfuse",
   "persona": {
     "id": "langfuse-guide",
-    "display_name": "Trace Steward",
+    "display_name": "Trace Guide",
     "disclosure": "AI persona · grounded in Langfuse's public docs · not affiliated with Langfuse",
     "grounding_note": "Answers use Langfuse's public repository and documentation."
   },
