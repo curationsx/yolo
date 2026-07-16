@@ -7,9 +7,10 @@ interface Props {
   title: string;
   description: string;
   communityPreview?: boolean;
+  noindex?: boolean;
 }
 
-const { title, description, communityPreview = false } = Astro.props;
+const { title, description, communityPreview = false, noindex = false } = Astro.props;
 const apiBase = import.meta.env.PUBLIC_AGENT_API ?? '';
 const boardFixtures =
   import.meta.env.DEV && import.meta.env.PUBLIC_BOARD_FIXTURES === 'true';
@@ -23,6 +24,7 @@ const currentPath = Astro.url.pathname;
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
+    {noindex && <meta name="robots" content="noindex,follow" />}
     <meta name="generator" content={Astro.generator} />
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     <link rel="canonical" href={canonicalUrl} />
