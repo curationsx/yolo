@@ -23,7 +23,7 @@ The author retains authorship and decision authority. Reviewers may recommend; t
 3. **Agent reviews**, only if requested, under the [Community Agent Protocol](AGENTS.md).
 4. **Author decides** which findings are accepted, adapted, declined, or deferred.
 5. **Author links the outcome** — a revision, issue, PR, decision note, or explicit no-change result.
-6. **Steward distills** a reusable pattern only with attribution and provenance.
+6. **Maintainer distills** a reusable pattern only with attribution and provenance.
 
 ## Review lenses
 

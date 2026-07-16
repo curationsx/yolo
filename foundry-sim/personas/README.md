@@ -42,4 +42,4 @@ When `FOUNDRY_MODE=azure` is enabled (see `docs/PRD-azure-foundry-integration.md
 
 | File | Description |
 | --- | --- |
-| `example-steward.json` | EXAMPLE — a fictional community steward persona |
+| `example-steward.json` | EXAMPLE - a fictional community steward persona |

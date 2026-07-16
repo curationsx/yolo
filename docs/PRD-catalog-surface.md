@@ -1,10 +1,21 @@
 # PRD — CURATIONS.DEV Human × AI Software Intelligence
 
 **Status:** Implementation · **Owner:** CURATIONS · **Canonical domain:** `https://curations.dev`
-**Source repository:** `curationsx/yolo` · **Frontend:** Astro on Cloudflare Pages
-**Community gateway:** Cloudflare Worker · **Data:** Azure Cosmos DB serverless
+**Source repository:** `curationsx/yolo` · **Frontend:** Astro on Azure Static Web Apps
+**Community gateway:** Azure Container Apps · **Data:** Azure Cosmos DB serverless
 **Community agents:** Azure OpenAI `gpt-5.4-mini`, pay-as-you-go only
 **Cookbook execution:** User-funded GitHub Copilot or the user's local terminal
+
+> **Product authority:** This is an implementation reference subordinate to
+> [`PRD-curations-community.md`](PRD-curations-community.md). The governing PRD
+> controls conversation-first Project architecture, public language, AI
+> boundaries, and delivery order. The subordinate
+> [`PRD-project-evidence-registry.md`](PRD-project-evidence-registry.md) controls
+> evidence language, consent, snapshots, freshness, and revocation.
+>
+> Hosting references later in this document describe the legacy Cloudflare
+> implementation that preceded the completed Azure cutover. Current production
+> topology is defined by `infra/runtime.bicep` and the subordinate evidence PRD.
 
 ## 1. Product statement
 
@@ -453,4 +464,4 @@ flowchart LR
 3. **Harden:** Add flags, moderator controls, trust levels, score compaction, and
    company-page claim verification.
 4. **Scale:** Add companies only when grounding sources and a responsible page
-   steward exist.
+   reviewer exist.

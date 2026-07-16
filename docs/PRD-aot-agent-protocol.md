@@ -2,6 +2,12 @@
 
 **Status:** Draft · **Owner:** CurationsX · **Scope:** Opt-in, read-only, disclosed, bounded-spend agent protocol for the Community Grid
 
+> **Product authority:** This permission protocol is subordinate to
+> [`PRD-curations-community.md`](PRD-curations-community.md). AI is optional
+> guidance and cannot create, approve, or change Project evidence or a human
+> outcome. Evidence-specific constraints remain in
+> [`PRD-project-evidence-registry.md`](PRD-project-evidence-registry.md).
+
 ## 1. Purpose
 
 Define a safe, auditable protocol for deploying a read-only AI agent in the Community Grid — one that is explicitly opt-in, discloses its identity and limits in every session, operates within maintainer-set hard limits, and preserves human primacy over every outcome. This protocol is a prerequisite for any agent deployment in the community board.
@@ -119,12 +125,12 @@ In `auto` profile (the default in `foundry-sim`), the agent does not pin a speci
 sequenceDiagram
     participant H as Human (discussion author)
     participant F as Discussion Form
-    participant M as Maintainer / Steward
+    participant M as Maintainer
     participant A as Agent (FoundryClient)
     participant R as Repository
 
     H->>F: Submit with "Agent review" selected
-    F->>M: Notify steward of opt-in request
+    F->>M: Notify maintainer of opt-in request
     M->>A: Invoke agent with stated scope + depth
     A-->>A: Check hard limits (tokens, cost, timeout)
     A->>M: Return labeled response (fact/assumption/suggestion/question)

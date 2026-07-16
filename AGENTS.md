@@ -10,6 +10,12 @@
 - This project is separate from `/Users/wyattstephens/los-angeles`.
 - Do not modify CurationsLA while executing a YOLO task unless Wyatt explicitly
   requests a cross-repository change.
+- Product source of truth: `docs/PRD-curations-community.md`. Read it before
+  changing public claims, Project submission, community surfaces, personas,
+  Cookbooks, or execution lanes. Read `docs/PRD-project-evidence-registry.md`
+  before changing repository intake, evidence, consent, snapshots, freshness, or
+  revocation. When documents conflict, the Community PRD controls product purpose
+  and delivery; the Evidence Registry PRD controls its subordinate trust layer.
 
 ## 2. Local executive memory
 

@@ -10,6 +10,13 @@
 - **AoT — Artificial of Things** is the connective practice of composing *people, context, models, tools, evidence, controls, and feedback* into useful systems. Not a product. A discipline.
 - **YOLO** here means *Your Operations, Leverage, and Orchestration*: ambitious experimentation with explicit review, recovery, and accountability — not reckless automation.
 
+The governing product contract for `curations.dev` is the
+[CURATIONS.DEV Vibe Coding Community PRD](docs/PRD-curations-community.md):
+builders share public Projects and working plans, ask human questions, receive
+human and explicitly requested AI guidance, and return with stronger revisions.
+The [Project Evidence Registry PRD](docs/PRD-project-evidence-registry.md)
+defines the subordinate GitHub intake and trust layer.
+
 🦆 A rubber duck appears throughout as our thinking companion: explain it to the duck before you ship it.
 
 ## Who is this for?
@@ -64,7 +71,8 @@ Read the full treatment in [docs/AOT.md](docs/AOT.md).
 | [docs/QUALITY.md](docs/QUALITY.md) | Quality ladder and scoring rubric |
 | [docs/GLOSSARY.md](docs/GLOSSARY.md) | Shared vocabulary |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Now / Next / Later |
-| [docs/PRD-digital-stewardship.md](docs/PRD-digital-stewardship.md) | Digital stewardship PRD |
+| [docs/PRD-curations-community.md](docs/PRD-curations-community.md) | **Governing CURATIONS.DEV product PRD** — conversation-first Project improvement community |
+| [docs/PRD-project-evidence-registry.md](docs/PRD-project-evidence-registry.md) | Subordinate GitHub intake and evidence trust-layer PRD |
 | [docs/PRD-community-discussion-board.md](docs/PRD-community-discussion-board.md) | Community Discussion Board PRD — activation, forms, distillation pipeline |
 | [docs/PRD-aot-agent-protocol.md](docs/PRD-aot-agent-protocol.md) | AoT Agent Protocol PRD — opt-in, read-only, bounded-spend agent protocol |
 | [docs/PRD-azure-foundry-integration.md](docs/PRD-azure-foundry-integration.md) | Azure Foundry Integration PRD — design gated behind the sim emulator |
