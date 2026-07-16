@@ -51,6 +51,12 @@ param keyVaultName string = 'kv-yolo-prod-curations'
 @description('Existing Container Apps environment name created by infra/bootstrap.bicep.')
 param containerAppsEnvironmentName string = 'cae-yolo-prod'
 
+@description('Custom production hostname already validated for ca-yolo-gateway. Runtime deployments must declare it so ARM reconciliation does not remove the binding.')
+param gatewayCustomDomainName string = 'api.curations.dev'
+
+@description('Existing Container Apps environment certificate bound to gatewayCustomDomainName. Update this parameter when the certificate is renewed or replaced.')
+param gatewayCertificateName string = 'cert-api-curations-dev-20260714t020234z'
+
 @description('Existing gateway user-assigned identity name created by infra/bootstrap.bicep.')
 param gatewayIdentityName string = 'id-yolo-gateway'
 
@@ -143,6 +149,8 @@ resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2025-01-01'
   name: containerAppsEnvironmentName
 }
 
+var gatewayCertificateId = '${containerAppsEnvironment.id}/certificates/${gatewayCertificateName}'
+
 resource gatewayIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' existing = {
   name: gatewayIdentityName
 }
@@ -157,6 +165,8 @@ module apps 'modules/apps.bicep' = {
     location: location
     containerAppsEnvironmentId: containerAppsEnvironment.id
     containerAppsEnvironmentDefaultDomain: containerAppsEnvironment.properties.defaultDomain
+    gatewayCustomDomainName: gatewayCustomDomainName
+    gatewayCertificateId: gatewayCertificateId
     acrLoginServer: acr.properties.loginServer
     keyVaultUri: keyVault.properties.vaultUri
     gatewayIdentityId: gatewayIdentity.id
