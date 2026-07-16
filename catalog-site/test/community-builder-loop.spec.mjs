@@ -109,6 +109,12 @@ test('existing-plan fixture reaches an exact pending public preview without API 
   await expect(
     page.locator('[data-project-repository]').first(),
   ).toHaveAttribute('href', 'https://github.com/curationsx/yolo');
+  await expect(
+    page.locator('[data-project-plan-link]').first(),
+  ).toHaveAttribute(
+    'href',
+    'https://github.com/curationsx/yolo/blob/main/docs/PRD-curations-community.md',
+  );
   const hiddenTypeScriptPills = page.locator(
     '.project-public-preview [data-stack-slug="typescript"]',
   );

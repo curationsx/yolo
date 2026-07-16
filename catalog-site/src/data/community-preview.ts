@@ -365,7 +365,7 @@ export const builderJourneyProject: ProjectFixture = {
   project: 'CURATIONS.DEV',
   repositoryUrl: 'https://github.com/curationsx/yolo',
   planUrl:
-    'https://github.com/curationsx/yolo/blob/frank/project-evidence-registry/docs/PRD-curations-community.md',
+    'https://github.com/curationsx/yolo/blob/main/docs/PRD-curations-community.md',
   author: '@curationsx',
   stage: 'Needs feedback',
   stageClass: 'feedback',

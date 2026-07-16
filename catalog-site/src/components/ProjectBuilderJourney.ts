@@ -60,15 +60,12 @@ function validPlanPath(value: string): boolean {
 }
 
 function githubPlanUrl(repositoryUrl: string, planPath: string): string {
-  const repository = new URL(repositoryUrl);
-  const isYoloFixture = repository.pathname.toLowerCase() === '/curationsx/yolo';
-  const ref = isYoloFixture ? 'frank/project-evidence-registry' : 'main';
   const encodedPath = planPath
     .split('/')
     .filter(Boolean)
     .map((segment) => encodeURIComponent(segment))
     .join('/');
-  return `${repositoryUrl}/blob/${ref}/${encodedPath}`;
+  return `${repositoryUrl}/blob/main/${encodedPath}`;
 }
 
 function text(root: ParentNode, selector: string, value: string): void {
