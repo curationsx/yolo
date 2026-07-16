@@ -5,13 +5,18 @@
 expansion  
 **Product principle:** Evidence is the trust layer, not the product headline
 
+**Current checkpoint (2026-07-16):** The discovery shell is live as an
+illustrative fixture preview. Gate 1 is drafted in PR #12; the remaining Gate 2
+proof is the builder onboarding, private Project Review, public preview, and
+minimal profile journey.
+
 ## Product direction
 
 CURATIONS.DEV should connect four surfaces:
 
 1. **Community Board** — active Project questions and feedback.
 2. **Project Review** — working plan, stack map, gaps, and revisions.
-3. **Skill Library** — matched prompts, workflows, skills, and Cookbooks.
+3. **Community Library** — matched prompts, workflows, skills, and Cookbooks.
 4. **Member Profile** — Projects, Stack, Feedback, and Library contributions.
 
 The core loop is:
@@ -77,7 +82,9 @@ reading five rows without opening methodology documentation.
 
 ## Gate 3 — Build one thin end-to-end Project loop
 
-Start with five invited builders and personal public repositories.
+Start with one maintainer-controlled personal public repository, then one invited
+builder without publication, one approved public Project, and finally five
+invited builders.
 
 ```text
 GitHub sign-in
@@ -175,6 +182,9 @@ Do not build during these gates:
 2. Obtain human approval of that contract.
 3. Build the fixture-only visual proof.
 4. Validate newcomer comprehension before backend expansion.
-5. Implement the five-builder vertical slice.
-6. Reuse its review contract for the terminal lane.
-7. Add skill matching and trends only after real Project outcomes exist.
+5. Exercise one maintainer-controlled personal repository privately.
+6. Observe one invited builder without publishing.
+7. Publish one approved Project.
+8. Expand to five invited builders.
+9. Reuse the review contract for the terminal lane.
+10. Add skill matching and trends only after real Project outcomes exist.

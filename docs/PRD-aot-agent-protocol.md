@@ -3,8 +3,10 @@
 **Status:** Draft · **Owner:** CurationsX · **Scope:** Opt-in, read-only, disclosed, bounded-spend agent protocol for the Community Grid
 
 > **Product authority:** This permission protocol is subordinate to
-> [`PRD-project-evidence-registry.md`](PRD-project-evidence-registry.md). AI is
-> optional guidance and cannot create, approve, or change Project evidence.
+> [`PRD-curations-community.md`](PRD-curations-community.md). AI is optional
+> guidance and cannot create, approve, or change Project evidence or a human
+> outcome. Evidence-specific constraints remain in
+> [`PRD-project-evidence-registry.md`](PRD-project-evidence-registry.md).
 
 ## 1. Purpose
 

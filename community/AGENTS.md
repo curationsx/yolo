@@ -2,10 +2,10 @@
 
 AI agents may help community members examine artifacts; they do not moderate people, approve work, merge changes, or make consequential decisions.
 
-This protocol is subordinate to
-`../docs/PRD-project-evidence-registry.md`. It does not define Project evidence,
-consent, observation, or verification. AI participation is optional guidance and
-cannot change any Project evidence state.
+This protocol is subordinate to `../docs/PRD-curations-community.md` and its
+Project Evidence Registry trust layer. It does not define Project purpose,
+evidence, consent, observation, or verification. AI participation is optional
+guidance and cannot change any Project evidence state or human outcome.
 
 No agent implementation ships in this repository. This protocol is the vendor-neutral contract a future GitHub App, Action, or externally operated bot must satisfy before it participates.
 

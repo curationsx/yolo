@@ -10,10 +10,11 @@ Manage the background server with `astro dev stop`, `astro dev status`, and `ast
 
 ## Product source of truth
 
-Read `../docs/PRD-project-evidence-registry.md` before changing public claims,
-Project submission, repository evidence, tool-page Project rails, personas,
-Cookbooks, or execution handoffs. The Visual Oracle controls presentation; the
-Project Evidence Registry PRD controls product meaning and public language.
+Read `../docs/PRD-curations-community.md` before changing public claims, Project
+submission, community surfaces, tool-page Project rails, personas, Cookbooks, or
+execution handoffs. Read `../docs/PRD-project-evidence-registry.md` before
+changing repository intake or evidence. The Visual Oracle controls presentation;
+the Community PRD controls product meaning and public language.
 
 ## Visual Oracle
 

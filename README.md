@@ -11,10 +11,11 @@
 - **YOLO** here means *Your Operations, Leverage, and Orchestration*: ambitious experimentation with explicit review, recovery, and accountability — not reckless automation.
 
 The governing product contract for `curations.dev` is the
-[Project Evidence Registry PRD](docs/PRD-project-evidence-registry.md): builders
-voluntarily submit their own public repository and PRD; Curations publishes
-exactly what they declared and what deterministic checks observed at a dated
-commit, then offers optional, human-controlled guidance.
+[CURATIONS.DEV Vibe Coding Community PRD](docs/PRD-curations-community.md):
+builders share public Projects and working plans, ask human questions, receive
+human and explicitly requested AI guidance, and return with stronger revisions.
+The [Project Evidence Registry PRD](docs/PRD-project-evidence-registry.md)
+defines the subordinate GitHub intake and trust layer.
 
 🦆 A rubber duck appears throughout as our thinking companion: explain it to the duck before you ship it.
 
@@ -70,7 +71,8 @@ Read the full treatment in [docs/AOT.md](docs/AOT.md).
 | [docs/QUALITY.md](docs/QUALITY.md) | Quality ladder and scoring rubric |
 | [docs/GLOSSARY.md](docs/GLOSSARY.md) | Shared vocabulary |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Now / Next / Later |
-| [docs/PRD-project-evidence-registry.md](docs/PRD-project-evidence-registry.md) | **Governing CURATIONS.DEV product PRD** — Project-centered, evidence-led, opt-in |
+| [docs/PRD-curations-community.md](docs/PRD-curations-community.md) | **Governing CURATIONS.DEV product PRD** — conversation-first Project improvement community |
+| [docs/PRD-project-evidence-registry.md](docs/PRD-project-evidence-registry.md) | Subordinate GitHub intake and evidence trust-layer PRD |
 | [docs/PRD-community-discussion-board.md](docs/PRD-community-discussion-board.md) | Community Discussion Board PRD — activation, forms, distillation pipeline |
 | [docs/PRD-aot-agent-protocol.md](docs/PRD-aot-agent-protocol.md) | AoT Agent Protocol PRD — opt-in, read-only, bounded-spend agent protocol |
 | [docs/PRD-azure-foundry-integration.md](docs/PRD-azure-foundry-integration.md) | Azure Foundry Integration PRD — design gated behind the sim emulator |

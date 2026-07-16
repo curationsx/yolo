@@ -7,14 +7,15 @@
 **Cookbook execution:** User-funded GitHub Copilot or the user's local terminal
 
 > **Product authority:** This is an implementation reference subordinate to
-> [`PRD-project-evidence-registry.md`](PRD-project-evidence-registry.md). The
-> governing PRD controls Project-centered information architecture, evidence
-> language, consent, AI boundaries, and delivery order when this document
-> conflicts with it.
+> [`PRD-curations-community.md`](PRD-curations-community.md). The governing PRD
+> controls conversation-first Project architecture, public language, AI
+> boundaries, and delivery order. The subordinate
+> [`PRD-project-evidence-registry.md`](PRD-project-evidence-registry.md) controls
+> evidence language, consent, snapshots, freshness, and revocation.
 >
 > Hosting references later in this document describe the legacy Cloudflare
 > implementation that preceded the completed Azure cutover. Current production
-> topology is defined by the governing PRD and `infra/runtime.bicep`.
+> topology is defined by `infra/runtime.bicep` and the subordinate evidence PRD.
 
 ## 1. Product statement
 

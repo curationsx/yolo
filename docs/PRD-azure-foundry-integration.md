@@ -6,8 +6,10 @@
 
 > **Product authority:** This infrastructure and spend-control PRD is
 > subordinate to
+> [`PRD-curations-community.md`](PRD-curations-community.md). Foundry provides
+> optional guidance; it does not establish Project evidence, initiate itself, or
+> execute work for a builder. Evidence-specific constraints remain in
 > [`PRD-project-evidence-registry.md`](PRD-project-evidence-registry.md).
-> Foundry provides optional guidance; it does not establish Project evidence.
 
 ## 1. Purpose
 

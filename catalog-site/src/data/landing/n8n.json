@@ -2,7 +2,7 @@
   "id": "n8n",
   "persona": {
     "id": "n8n-guide",
-    "display_name": "Workflow Guide",
+    "display_name": "Workflow Steward",
     "disclosure": "AI persona · grounded in n8n's public docs · not affiliated with n8n",
     "grounding_note": "Answers use n8n's public repository and documentation."
   },

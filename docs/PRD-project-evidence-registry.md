@@ -1,6 +1,6 @@
 # PRD — CURATIONS.DEV Project Evidence Registry
 
-**Status:** Approved product direction; implementation not started  
+**Status:** Approved trust-layer direction; implementation not started
 **Owner:** CURATIONSX  
 **Approved:** 2026-07-15  
 **Canonical product:** `https://curations.dev`  
@@ -8,7 +8,15 @@
 
 ## 0. Authority
 
-This is the governing product PRD for CURATIONS.DEV.
+This is the subordinate GitHub intake and evidence trust-layer PRD for
+CURATIONS.DEV.
+
+[`PRD-curations-community.md`](PRD-curations-community.md) governs product
+purpose, the canonical social object, community surfaces, onboarding, public
+information architecture, and delivery order. This document governs repository
+consent, deterministic observations, evidence language, snapshots, review,
+freshness, and revocation. When the two conflict, the Community PRD controls the
+product and this PRD controls only its trust-layer details.
 
 The repository `AGENTS.md` and `MANIFESTO.md` continue to define safety and human
 accountability. When a feature PRD or older implementation note conflicts with
@@ -17,6 +25,7 @@ delivery order.
 
 | Existing document | Relationship to this PRD |
 | --- | --- |
+| `docs/PRD-curations-community.md` | Governing CURATIONS.DEV product contract. |
 | `docs/PRD-catalog-surface.md` | Current directory, identity, Board, persona, and Cookbook implementation reference. It must migrate toward the Project-centered model here. |
 | `docs/PRD-community-discussion-board.md` | Optional contributor discussion and artifact-feedback surface. It is not the Project registry or its source of truth. |
 | `docs/PRD-aot-agent-protocol.md` | Subordinate permission and disclosure contract for explicitly requested AI participation. |
@@ -27,13 +36,14 @@ typography, identity color, and interaction hierarchy. Its historical names and
 mock copy are not product requirements and must not be surfaced merely because
 they appear in the immutable reference package.
 
-## 1. Product contract
+## 1. Trust-layer contract
 
 > A builder voluntarily submits their own public repository and PRD. Curations
 > publishes exactly what they declared and what was observed at a dated commit,
 > then offers optional, human-controlled guidance.
 
-The Project is the center. Evidence is the spine. AI is a disclosed helper.
+Within this trust layer, the Project is the center. Evidence is the spine. AI is
+a disclosed helper outside the evidence pipeline.
 
 CURATIONS.DEV does not certify that a person uses a product in production. It
 publishes narrow, inspectable facts about user-authorized public material.
@@ -190,7 +200,7 @@ Preferred language names the literal fact:
 
 > `wrangler.toml` matched the Wrangler configuration rule at commit `abc1234`.
 
-## 8. Phase 1: thin proof pilot
+## 8. Evidence subsystem: thin proof pilot
 
 ### 8.1 Scope
 
@@ -276,7 +286,7 @@ never implies agent consent.
 
 ```text
 curations.dev/
-├── /                         Tool directory + evidence-led project activity
+├── /                         Conversation-first Project feed + Community Pulse
 ├── /software/{id}/           Curated tool record
 │   └── Projects              Declared and observed examples, never a ranking
 ├── /projects/                Opt-in public Project registry
@@ -538,6 +548,9 @@ CURATIONS must not:
 
 ## 18. Delivery sequence
 
+This sequence applies to the evidence subsystem and must remain inside the
+governing Community PRD's delivery gates.
+
 ### Phase 0 — Trust gate
 
 1. Make every agent invocation explicit and default-off. In
@@ -612,8 +625,8 @@ participant's knowledge. They do not require hidden product analytics.
 
 ## 20. Acceptance criteria
 
-1. This PRD is linked as the governing product contract from README, START-HERE,
-   ROADMAP, and each subordinate PRD.
+1. This PRD is linked from the governing Community PRD and repository navigation
+   as the Project intake and evidence trust-layer contract.
 2. A signed-out visitor can read published Project pages and methodology.
 3. Project preview, create, refresh, and revoke return `401` without a valid
    CURATIONS GitHub session.

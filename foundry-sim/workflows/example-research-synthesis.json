@@ -8,7 +8,7 @@
     {
       "step": 1,
       "phase": "Intent",
-      "persona": "example-reviewer",
+      "persona": "example-steward",
       "instruction": "State the research question, scope, and constraints. What is the intended audience and output format?",
       "human_checkpoint": true,
       "checkpoint_description": "Human confirms the question is correctly framed before gathering sources."
@@ -24,7 +24,7 @@
     {
       "step": 3,
       "phase": "Compose",
-      "persona": "example-reviewer",
+      "persona": "example-steward",
       "instruction": "Synthesize the listed sources into a structured summary. Label each claim with its source. Flag conflicting evidence explicitly. Use confidence labels: high / medium / low.",
       "human_checkpoint": false,
       "checkpoint_description": null
@@ -40,7 +40,7 @@
     {
       "step": 5,
       "phase": "Verify",
-      "persona": "example-reviewer",
+      "persona": "example-steward",
       "instruction": "Review the draft against the original intent. Flag any unsupported claims, missing citations, or conclusions that exceed the evidence.",
       "human_checkpoint": true,
       "checkpoint_description": "Human reviews the verification report and decides whether to publish, revise, or discard."

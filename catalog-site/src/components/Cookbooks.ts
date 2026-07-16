@@ -169,7 +169,7 @@ function initCards(dialog: HTMLDialogElement): void {
       fitBadge.classList.toggle('is-partial', !strong);
       fitText.textContent = data.fitNote[stackId];
       boardLink.href = `${data.base}/software/${stackId}/#company-board`;
-      boardLink.textContent = `Ask the ${stack.name} guide on its board ->`;
+      boardLink.textContent = `Ask the ${stack.name} steward on its board ->`;
     };
 
     select.addEventListener('change', render);

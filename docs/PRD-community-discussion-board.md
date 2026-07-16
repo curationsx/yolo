@@ -4,9 +4,9 @@
 
 > **Product authority:** This optional contributor-discussion surface is
 > subordinate to
-> [`PRD-project-evidence-registry.md`](PRD-project-evidence-registry.md).
-> GitHub Discussions is not the canonical Project registry, Project submission
-> flow, or Project evidence store.
+> [`PRD-curations-community.md`](PRD-curations-community.md). GitHub Discussions
+> is not the canonical Project community, Project submission flow, conversation
+> store, or evidence store.
 
 ## 1. Purpose
 
