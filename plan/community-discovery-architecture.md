@@ -289,6 +289,70 @@ The shared shell preserves:
 
 Do not introduce generic card grids or editorial-scale hero sections.
 
+## Project identity and required GitHub backlinks
+
+Every public Project must include a canonical, publicly readable GitHub
+repository root URL. A Project cannot publish without it.
+
+Project links have distinct jobs:
+
+| Element | Destination |
+| --- | --- |
+| Human feedback question | Internal Project conversation and working-plan page |
+| Project name, such as `Backstage` | Canonical public GitHub repository root |
+| `Project plan` metadata | Exact public PRD or working-plan path when supplied |
+| Letter-stamped Stack pill | Corresponding Stack landing page |
+
+Whenever a Project name is linked to GitHub:
+
+- render it in the Board's established red link color rather than black;
+- use the same treatment in Project rows, category feeds, Stack feeds, profiles,
+  and the Project-detail title;
+- append an understated external-link cue where space permits;
+- use `rel="noopener"` and an accessible label naming the destination; and
+- never silently redirect the Project name to an unrelated internal route.
+
+The question remains the entry into the community conversation. The red Project
+name is the direct proof path back to the builder's public repository.
+
+Fixture names such as `Backstage` are illustrative. Real records obtain their
+name and repository URL from the builder-confirmed Project submission.
+
+## Homepage conversation views
+
+The homepage uses one conversation-feed region rather than rendering separate
+Active and New lists on top of each other.
+
+```text
+[Active] [New] [Needs Feedback] [Recently Improved]
+
+ACTIVE CONVERSATIONS
+────────────────────────────────────────────────────
+▲ Project conversation row
+▲ Project conversation row
+▲ Project conversation row
+▲ Project conversation row
+▲ Project conversation row
+```
+
+Behavior:
+
+1. **Active** is the default server-rendered view.
+2. The main feed uses the vertical space previously occupied by the separate
+   **New This Week** section, allowing more Active conversations to appear.
+3. Selecting **New** replaces the feed contents with New This Week Projects.
+4. **Needs Feedback** and **Recently Improved** use the same region and row
+   contract.
+5. A view is never duplicated elsewhere on the homepage at the same time.
+6. The selected view is reflected in the URL (for example `?view=new`) so it can
+   be linked and restored.
+7. Without client JavaScript, each tab remains a normal link that requests the
+   chosen server-rendered view.
+8. Loading and empty states preserve the feed's dimensions and plain-language
+   explanation.
+
+The right-side Community Pulse remains visible while tabs change the main feed.
+
 ## Data model implications
 
 The discovery model requires distinct records:
@@ -312,6 +376,10 @@ tools, and Stack combinations.
 The homepage Community Pulse is a read model derived from these records. It is
 not a separately curated source of truth.
 
+`Project` includes a required canonical public GitHub repository URL and an
+optional exact public working-plan URL. `Conversation` views are queryable by
+the homepage view states defined above.
+
 ## Delivery order
 
 1. Add three compact View All links to the local Community Pulse.
@@ -319,10 +387,13 @@ not a separately curated source of truth.
 3. Add one fixture Project category page.
 4. Add one fixture Stack-combination page.
 5. Reuse the homepage Project row and subtitle pattern everywhere.
-6. Review the full click path at desktop and narrow viewports.
-7. Lock taxonomy and action meanings before connecting votes, follows, or live
+6. Make Project names consistently backlink to their public GitHub repositories.
+7. Consolidate homepage conversations into one tab-controlled feed with Active
+   as the default.
+8. Review the full click path at desktop and narrow viewports.
+9. Lock taxonomy and action meanings before connecting votes, follows, or live
    data.
-8. Connect real data only after the visual and semantic model receives human
+10. Connect real data only after the visual and semantic model receives human
    approval.
 
 ## Acceptance checks
@@ -338,3 +409,10 @@ not a separately curated source of truth.
 8. Trend displays include timeframe and sample size.
 9. The three master pages visibly belong to the same product.
 10. No new route replaces the approved Board with a generic card directory.
+11. Every published Project name links in red to its canonical public GitHub
+    repository.
+12. Stack pills link to their corresponding Stack landing pages.
+13. The homepage renders one conversation feed, with Active as its default
+    server-rendered state.
+14. Selecting New, Needs Feedback, or Recently Improved replaces that feed
+    instead of adding another static section.
