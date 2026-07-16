@@ -15,6 +15,12 @@ param containerAppsEnvironmentId string
 @description('Default domain of the existing cae-yolo-prod Container Apps environment (e.g. <random>.eastus2.azurecontainerapps.io), used to construct ca-yolo-gateway\'s INTERNAL fqdn for caj-yolo-ops\'s health check. Calling the gateway\'s external fqdn from inside the same environment is still subject to its ipSecurityRestrictions (confirmed: only traffic via the internal fqdn bypasses external ingress restrictions entirely); the internal fqdn avoids that path altogether rather than requiring a new same-environment allow rule.')
 param containerAppsEnvironmentDefaultDomain string
 
+@description('Validated custom hostname for ca-yolo-gateway. It remains bound in staging and production because both deployment labels reconcile the same Container App resource.')
+param gatewayCustomDomainName string
+
+@description('Resource ID of the existing Container Apps environment certificate for gatewayCustomDomainName.')
+param gatewayCertificateId string
+
 @description('Login server of the existing yolocurationsprod registry, e.g. yolocurationsprod.azurecr.io.')
 param acrLoginServer string
 
@@ -213,6 +219,13 @@ resource gatewayApp 'Microsoft.App/containerApps@2025-01-01' = {
         transport: 'auto'
         allowInsecure: false
         ipSecurityRestrictions: stagingIpRestrictions
+        customDomains: [
+          {
+            name: gatewayCustomDomainName
+            bindingType: 'SniEnabled'
+            certificateId: gatewayCertificateId
+          }
+        ]
       }
       registries: [
         {

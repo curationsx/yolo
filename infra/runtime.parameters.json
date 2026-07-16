@@ -14,6 +14,12 @@
     "containerAppsEnvironmentName": {
       "value": "cae-yolo-prod"
     },
+    "gatewayCustomDomainName": {
+      "value": "api.curations.dev"
+    },
+    "gatewayCertificateName": {
+      "value": "cert-api-curations-dev-20260714t020234z"
+    },
     "gatewayIdentityName": {
       "value": "id-yolo-gateway"
     },

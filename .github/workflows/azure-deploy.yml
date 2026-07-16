@@ -647,7 +647,7 @@ jobs:
         # production origin that isn't cut over yet.
         run: |
           if [ -d catalog-site ]; then
-            (cd catalog-site && npm ci && PUBLIC_AGENT_API="https://api.curations.dev" npm run build)
+            (cd catalog-site && npm ci && PUBLIC_COMMUNITY_PREVIEW=true PUBLIC_AGENT_API="https://api.curations.dev" npm run build)
           else
             echo "catalog-site/ not present — skipping Astro build."
           fi

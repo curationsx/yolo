@@ -32,6 +32,7 @@ const { combination, projects } = Astro.props;
   title={`${combination.name} — CURATIONS.DEV`}
   description={combination.description}
   communityPreview
+  noindex
 >
   <a class="community-page-back" href={withBase('/stacks/')}>← All Stacks</a>
 
@@ -44,7 +45,7 @@ const { combination, projects } = Astro.props;
         {combination.stackSlugs.map((stackSlug) => <StackPill slug={stackSlug} />)}
       </div>
       <p class="discovery-count">
-        {combination.projectCount} submitted projects · {combination.conversationCount} conversations
+        {projects.length} illustrative Projects · public submissions opening soon
       </p>
     </div>
     <span class="community-action">Follow combination</span>

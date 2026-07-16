@@ -36,6 +36,7 @@ const commonStacks = [
   title={`${category.name} Projects — CURATIONS.DEV`}
   description={category.description}
   communityPreview
+  noindex
 >
   <a class="community-page-back" href={withBase('/projects/')}>← All Project types</a>
 
@@ -45,7 +46,7 @@ const commonStacks = [
       <h1>{category.name}</h1>
       <p>{category.description}</p>
       <p class="discovery-count">
-        {category.projectCount} public projects · {category.activityCount} active conversations
+        {visibleProjects.length} illustrative Projects · public submissions opening soon
       </p>
     </div>
     <span class="community-action">Follow category</span>
@@ -63,7 +64,7 @@ const commonStacks = [
       <section id="category-projects" class="board-list-section">
         <header class="board-list-heading">
           <h2>Conversations in {category.name}</h2>
-          <span>fixture examples for the local preview</span>
+          <span>illustrative Projects in the public design preview</span>
         </header>
         <div class="project-list">
           {visibleProjects.map((project) => <ProjectRow project={project} />)}

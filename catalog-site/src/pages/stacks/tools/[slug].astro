@@ -36,6 +36,7 @@ const pairings = stackCombinations.filter((combination) =>
   title={`${stack.name} — CURATIONS.DEV`}
   description={stack.description}
   communityPreview
+  noindex
 >
   <a class="community-page-back" href={withBase('/stacks/')}>← All Stacks</a>
 
@@ -44,7 +45,7 @@ const pairings = stackCombinations.filter((combination) =>
       <p class="discovery-eyebrow">{stack.role}</p>
       <h1>{stack.name}</h1>
       <p>{stack.description}</p>
-      <p class="discovery-count">{projects.length} fixture Projects include this tool.</p>
+      <p class="discovery-count">{projects.length} illustrative Projects include this tool.</p>
     </div>
     <a class="community-action" href={stack.officialUrl} rel="noopener">
       Official source

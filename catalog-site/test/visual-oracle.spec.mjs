@@ -175,7 +175,8 @@ test.describe('Board typography + surface invariants (ACCEPTANCE.md #1-#4)', () 
   test('headings and body resolve to Inter', async ({ page }) => {
     await page.goto('/');
     const family = await page
-      .locator('#featured-stacks .board-list-heading h1')
+      .locator('.board-list-heading h1, .board-list-heading h2')
+      .first()
       .evaluate((el) => getComputedStyle(el).fontFamily);
     expect(family).toMatch(/Inter/i);
   });
