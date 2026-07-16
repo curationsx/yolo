@@ -76,15 +76,7 @@ const currentPath = Astro.url.pathname;
             )
           }
         </nav>
-        {
-          communityPreview ? (
-            <div class="auth-control">
-              <button type="button" class="auth-sign-in">Sign in with GitHub</button>
-            </div>
-          ) : (
-            <AuthButton />
-          )
-        }
+        <AuthButton />
       </div>
     </header>
 
