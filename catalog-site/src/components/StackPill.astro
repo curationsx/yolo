@@ -12,6 +12,6 @@ const stack = stackFixtures[slug];
 const href = withBase(`/stacks/tools/${stack.slug}/`);
 ---
 
-<a class={className} href={href} title={`View ${stack.name}`}>
+<a class={className} href={href} title={`View ${stack.name}`} data-stack-slug={slug}>
   {stack.name}
 </a>

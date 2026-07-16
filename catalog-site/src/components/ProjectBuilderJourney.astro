@@ -1,0 +1,340 @@
+---
+import { builderJourneyProject } from '../data/community-preview';
+import { withBase } from '../lib/labels';
+import ProjectRow from './ProjectRow.astro';
+import StackPill from './StackPill.astro';
+---
+
+<div class="project-builder-shell" data-project-builder data-base-path={withBase('/')}>
+  <p class="community-preview-note">
+    Fixture-only builder journey · nothing is uploaded, published, or sent to an AI
+  </p>
+
+  <ol class="form-steps" aria-label="Project submission preview progress">
+    <li data-builder-step-indicator="0" aria-current="step"><span>01</span> Start</li>
+    <li data-builder-step-indicator="1"><span>02</span> Project</li>
+    <li data-builder-step-indicator="2"><span>03</span> Private review</li>
+    <li data-builder-step-indicator="3"><span>04</span> Public preview</li>
+  </ol>
+
+  <form class="submission-form project-builder-form" data-project-builder-form>
+    <fieldset data-builder-step="0">
+      <legend>How do you want to begin?</legend>
+      <p class="project-builder-step-copy">
+        Both paths stay private until you review the exact public page and explicitly
+        choose to submit it.
+      </p>
+      <div class="project-path-grid">
+        <label class="project-path-choice">
+          <input type="radio" name="plan_source" value="existing" checked />
+          <span>
+            <strong>I have a working plan</strong>
+            <small>
+              Select one Markdown plan from a public repository you own. This is the
+              first implementation path.
+            </small>
+          </span>
+        </label>
+        <label class="project-path-choice">
+          <input type="radio" name="plan_source" value="reverse" />
+          <span>
+            <strong>Help me create one from my Project</strong>
+            <small>
+              Choose the public files Curations may use to prepare a private draft
+              that you control.
+            </small>
+          </span>
+        </label>
+      </div>
+      <aside class="project-builder-trust">
+        <strong>Your permission boundary</strong>
+        <p>
+          This visual proof makes no GitHub request. The real pilot will read only
+          the repository and paths you select, request no write access, and publish
+          nothing from this step.
+        </p>
+      </aside>
+    </fieldset>
+
+    <fieldset data-builder-step="1" hidden>
+      <legend>Anchor the Project in public context.</legend>
+      <p class="project-builder-step-copy">
+        These fixture values remain in this browser tab and only drive the private
+        review and public preview below.
+      </p>
+      <div class="field-grid">
+        <label class="field-span">
+          Canonical public GitHub repository
+          <input
+            type="url"
+            name="repository_url"
+            required
+            value={builderJourneyProject.repositoryUrl}
+            placeholder="https://github.com/owner/repository"
+          />
+          <span class="field-help">Repository root only. Private repositories are outside the pilot.</span>
+        </label>
+        <label>
+          Project name
+          <input
+            name="project_name"
+            required
+            maxlength="80"
+            value={builderJourneyProject.project}
+          />
+        </label>
+        <label data-plan-path-label>
+          <span data-plan-path-copy>Existing Markdown working-plan path</span>
+          <input
+            name="plan_path"
+            required
+            maxlength="180"
+            value="docs/PRD-curations-community.md"
+          />
+          <span class="field-help">Relative path only; `.md` or `.mdx`.</span>
+        </label>
+        <label class="field-span">
+          Plain-English Project description
+          <textarea name="summary" required minlength="20" maxlength="220" rows="3">{builderJourneyProject.summary}</textarea>
+        </label>
+        <label class="field-span">
+          Human feedback question
+          <textarea name="feedback_question" required minlength="12" maxlength="180" rows="3">{builderJourneyProject.question}</textarea>
+          <span class="field-help">This question—not the Project score—is the community’s social front door.</span>
+        </label>
+        <label>
+          Project type
+          <select name="category" required>
+            <option value="developer-tools" selected>Developer tool</option>
+            <option value="crm-and-operations">CRM & Operations</option>
+            <option value="research-and-knowledge">Research & Knowledge</option>
+            <option value="creative-tools">Creative tool</option>
+            <option value="community-and-events">Community & Events</option>
+          </select>
+        </label>
+        <label>
+          Current stage
+          <select name="stage" required>
+            <option value="feedback" selected>Needs feedback</option>
+            <option value="building">Building</option>
+            <option value="idea">Idea</option>
+            <option value="improved">Recently improved</option>
+          </select>
+        </label>
+        <fieldset class="platform-field field-span">
+          <legend>Stack context</legend>
+          <div class="choice-grid">
+            <label class="check-row"><input type="checkbox" name="stack" value="astro" checked /> Astro</label>
+            <label class="check-row"><input type="checkbox" name="stack" value="typescript" checked /> TypeScript</label>
+            <label class="check-row"><input type="checkbox" name="stack" value="github" checked /> GitHub Actions</label>
+          </div>
+        </fieldset>
+        <fieldset
+          class="platform-field field-span project-builder-materials"
+          data-reverse-materials
+          hidden
+        >
+          <legend>Public material allowed for the private draft</legend>
+          <div class="choice-grid">
+            <label class="check-row"><input type="checkbox" name="reverse_material" value="README" checked /> README</label>
+            <label class="check-row"><input type="checkbox" name="reverse_material" value="selected documentation" checked /> Selected documentation</label>
+            <label class="check-row"><input type="checkbox" name="reverse_material" value="dependency manifests" checked /> Dependency manifests</label>
+            <label class="check-row"><input type="checkbox" name="reverse_material" value="framework configuration" /> Framework configuration</label>
+            <label class="check-row"><input type="checkbox" name="reverse_material" value="repository structure" /> Repository structure</label>
+            <label class="check-row"><input type="checkbox" name="reverse_material" value=".env.example" /> `.env.example`</label>
+          </div>
+          <p class="field-help">
+            Never `.env`, credentials, terminal history, private files, or unrelated paths.
+          </p>
+        </fieldset>
+      </div>
+    </fieldset>
+
+    <fieldset data-builder-step="2" hidden>
+      <legend>Your private Project Review</legend>
+      <p class="project-builder-step-copy">
+        The review separates builder declarations, literal observations, unknowns,
+        and suggestions before anything becomes public.
+      </p>
+      <div class="project-review-grid">
+        <article class="project-review-card project-review-declared">
+          <span>Declared by you</span>
+          <h2 data-review-project>{builderJourneyProject.project}</h2>
+          <p data-review-summary>{builderJourneyProject.summary}</p>
+          <strong data-review-question>{builderJourneyProject.question}</strong>
+        </article>
+        <article class="project-review-card project-review-observed">
+          <span>Fixture observation</span>
+          <h2>Selected public scope</h2>
+          <p data-review-observation>
+            Existing Markdown plan selected. No repository request occurred.
+          </p>
+          <code data-review-source>{builderJourneyProject.repositoryUrl}</code>
+        </article>
+        <article class="project-review-card project-review-unknown">
+          <span>Still unknown</span>
+          <h2>No claim is upgraded</h2>
+          <ul>
+            <li>Production use or active customers</li>
+            <li>Project quality or effectiveness</li>
+            <li>Whether a named tool is the right choice</li>
+          </ul>
+        </article>
+        <article class="project-review-card project-review-gap">
+          <span>Plan gap worth discussing</span>
+          <h2>Make the next decision testable</h2>
+          <p>
+            The current plan names the experience, but the first pilot still needs
+            one observable comprehension test before persistence.
+          </p>
+        </article>
+      </div>
+
+      <section class="project-review-sharing">
+        <h2>Choose the public scope</h2>
+        <p>The canonical repository is required. Everything else remains builder-controlled.</p>
+        <div class="choice-grid">
+          <label class="check-row"><input type="checkbox" checked disabled /> Canonical public repository</label>
+          <label class="check-row"><input type="checkbox" name="share_summary" checked /> Project description</label>
+          <label class="check-row"><input type="checkbox" name="share_plan" checked /> Working-plan path</label>
+          <label class="check-row"><input type="checkbox" name="share_stack" checked /> Stack context</label>
+        </div>
+        <label class="check-row project-builder-agent-choice">
+          <input type="checkbox" name="invite_agent" />
+          Invite a disclosed AI guide after publication
+        </label>
+        <p class="field-help">
+          Off by default. This fixture never invokes a model, even when selected.
+        </p>
+      </section>
+    </fieldset>
+
+    <fieldset data-builder-step="3" hidden>
+      <legend>Preview exactly what would become public.</legend>
+      <p class="project-builder-step-copy">
+        This is the Board row and Project hierarchy a signed-out visitor would see.
+        It is still a local fixture and cannot publish.
+      </p>
+
+      <section class="project-public-preview" aria-labelledby="project-row-preview-title">
+        <header class="project-preview-heading">
+          <span>Conversation row</span>
+          <strong id="project-row-preview-title">Human question first</strong>
+        </header>
+        <ProjectRow project={builderJourneyProject} />
+      </section>
+
+      <section class="project-public-preview" aria-labelledby="project-page-preview-title">
+        <header class="project-preview-heading">
+          <span>Project page</span>
+          <strong id="project-page-preview-title">Public context and working plan</strong>
+        </header>
+        <div class="project-detail-header project-builder-detail-preview">
+          <div class="project-score project-detail-score" aria-label="No public votes">
+            <span aria-hidden="true">▲</span>
+            <strong>0</strong>
+          </div>
+          <div>
+            <p class="discovery-eyebrow">Public Project plan</p>
+            <h2>
+              <a
+                class="project-repository-link"
+                data-project-name
+                data-project-repository
+                href={builderJourneyProject.repositoryUrl}
+                target="_blank"
+                rel="noopener"
+                aria-label={`${builderJourneyProject.project} public GitHub repository`}
+              >
+                {builderJourneyProject.project}<span aria-hidden="true"> ↗</span>
+              </a>
+            </h2>
+            <p class="project-detail-question" data-project-question>
+              “{builderJourneyProject.question}”
+            </p>
+            <div class="project-detail-meta">
+              <span
+                class={`project-stage project-stage-${builderJourneyProject.stageClass}`}
+                data-project-stage
+              >
+                {builderJourneyProject.stage}
+              </span>
+              <a
+                href={withBase('/projects/types/developer-tools/')}
+                data-project-category-link
+              >
+                <span data-project-category>{builderJourneyProject.category}</span>
+              </a>
+              <span>shared by <strong>{builderJourneyProject.author}</strong></span>
+              <span>pending review</span>
+            </div>
+          </div>
+        </div>
+        <div class="project-plan-grid project-builder-plan-preview">
+          <article data-public-summary>
+            <span>Project description</span>
+            <p data-project-summary>{builderJourneyProject.summary}</p>
+          </article>
+          <article data-public-plan>
+            <span>Working plan</span>
+            <p>
+              <a
+                class="project-plan-source"
+                data-project-plan-link
+                href={builderJourneyProject.planUrl}
+                target="_blank"
+                rel="noopener"
+              >
+                <span data-project-plan-path>docs/PRD-curations-community.md</span> ↗
+              </a>
+            </p>
+          </article>
+          <article data-public-stack>
+            <span>Stack context</span>
+            <div class="project-detail-stacks">
+              {builderJourneyProject.stackSlugs.map((slug) => <StackPill slug={slug} />)}
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="project-builder-consent">
+        <p class="discovery-eyebrow">Explicit publication boundary</p>
+        <label class="check-row">
+          <input type="checkbox" name="publication_consent" required />
+          I reviewed this exact preview and want to send it to maintainer review.
+        </label>
+        <button class="community-action community-action-primary" type="button" data-builder-confirm>
+          Send to maintainer review
+        </button>
+        <div class="project-builder-pending" data-builder-pending hidden aria-live="polite">
+          <strong>Pending review · fixture complete</strong>
+          <p>No Project was created, no repository was read, and nothing was published.</p>
+        </div>
+      </section>
+    </fieldset>
+
+    <div class="submission-nav">
+      <button
+        class="community-action"
+        type="button"
+        data-builder-back
+        hidden
+      >
+        ← Back
+      </button>
+      <button
+        class="community-action community-action-primary"
+        type="button"
+        data-builder-next
+      >
+        Continue →
+      </button>
+    </div>
+  </form>
+</div>
+
+<script>
+  import { initProjectBuilderJourneys } from './ProjectBuilderJourney';
+  initProjectBuilderJourneys();
+</script>

@@ -12,6 +12,8 @@ export interface ProjectFixture {
   score: number;
   question: string;
   project: string;
+  repositoryUrl?: string;
+  planUrl?: string;
   author: string;
   stage: string;
   stageClass: string;
@@ -255,11 +257,11 @@ export const activeProjects: ProjectFixture[] = [
   {
     slug: 'relay',
     score: 14,
-    question: 'I can ship the app, but my project plan doesn’t explain failure states.',
+    question: 'I added failure states—does the recovery path now make sense?',
     project: 'Relay',
     author: '@tomasz',
-    stage: 'Needs feedback',
-    stageClass: 'feedback',
+    stage: 'Recently improved',
+    stageClass: 'improved',
     category: 'Developer tool',
     categorySlug: 'developer-tools',
     attributes: ['observability', 'release-workflow'],
@@ -347,6 +349,46 @@ export const newProjects: ProjectFixture[] = [
 ];
 
 export const allProjects = [...activeProjects, ...newProjects];
+
+export const needsFeedbackProjects = allProjects.filter(
+  (project) => project.stageClass === 'feedback',
+);
+
+export const recentlyImprovedProjects = allProjects.filter(
+  (project) => project.stageClass === 'improved',
+);
+
+export const builderJourneyProject: ProjectFixture = {
+  slug: 'curations-dev',
+  score: 0,
+  question: 'Does this Project Review make the next decision obvious before we build the backend?',
+  project: 'CURATIONS.DEV',
+  repositoryUrl: 'https://github.com/curationsx/yolo',
+  planUrl:
+    'https://github.com/curationsx/yolo/blob/frank/project-evidence-registry/docs/PRD-curations-community.md',
+  author: '@curationsx',
+  stage: 'Needs feedback',
+  stageClass: 'feedback',
+  category: 'Developer tool',
+  categorySlug: 'developer-tools',
+  attributes: ['conversation-first', 'evidence-led'],
+  summary:
+    'A conversation-first community where builders improve public Vibe Coding Projects and working plans.',
+  stackSlugs: ['astro', 'typescript', 'github'],
+  comments: 0,
+  people: 1,
+  age: 'fixture preview',
+  plan: {
+    problem:
+      'Project context, community feedback, repository evidence, and useful implementation artifacts live in disconnected places.',
+    audience:
+      'Builders who want to improve a public software Project without giving a hosted agent control of their repository.',
+    nextDecision:
+      'Confirm that the private Project Review and public feedback request are understandable before adding persistence.',
+  },
+};
+
+export const projectDetailFixtures = [...allProjects, builderJourneyProject];
 
 export const projectCategories: ProjectCategoryFixture[] = [
   {

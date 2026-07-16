@@ -3,15 +3,64 @@ import { withBase } from '../lib/labels';
 import {
   activeProjects,
   libraryFixtures,
+  needsFeedbackProjects,
   newProjects,
   projectCategories,
+  recentlyImprovedProjects,
   stackCombinations,
 } from '../data/community-preview';
 import ProjectRow from './ProjectRow.astro';
 
+type CommunityView = 'active' | 'new' | 'needs-feedback' | 'recently-improved';
+
+interface Props {
+  selectedView?: CommunityView;
+}
+
+const { selectedView = 'active' } = Astro.props;
 const projectTypes = projectCategories.slice(0, 3);
 const stackPatterns = stackCombinations.slice(0, 3);
 const usefulThisWeek = libraryFixtures.slice(0, 3);
+const communityViews: Record<
+  CommunityView,
+  {
+    label: string;
+    href: string;
+    heading: string;
+    description: string;
+    projects: typeof activeProjects;
+  }
+> = {
+  active: {
+    label: 'Active',
+    href: withBase('/'),
+    heading: 'Active conversations',
+    description: 'where people are helping right now',
+    projects: activeProjects,
+  },
+  new: {
+    label: 'New',
+    href: withBase('/community/new/'),
+    heading: 'New this week',
+    description: 'fresh Projects looking for a second set of eyes',
+    projects: newProjects,
+  },
+  'needs-feedback': {
+    label: 'Needs feedback',
+    href: withBase('/community/needs-feedback/'),
+    heading: 'Needs feedback',
+    description: 'open human questions waiting for useful context',
+    projects: needsFeedbackProjects,
+  },
+  'recently-improved': {
+    label: 'Recently improved',
+    href: withBase('/community/recently-improved/'),
+    heading: 'Recently improved',
+    description: 'Projects that returned with a stronger working plan',
+    projects: recentlyImprovedProjects,
+  },
+};
+const currentView = communityViews[selectedView];
 ---
 
 <p class="community-preview-note">Public design preview · example Projects and activity</p>
@@ -33,7 +82,7 @@ const usefulThisWeek = libraryFixtures.slice(0, 3);
       It’s what you’re making, who it’s for, how it should work, and what you
       still need help deciding. Developers often call this a PRD.
     </span>
-    <a href="#share-project">Bring one—or create one from your project →</a>
+    <a href={withBase('/projects/new/')}>Bring one—or create one from your project →</a>
   </aside>
 </section>
 
@@ -56,10 +105,17 @@ const usefulThisWeek = libraryFixtures.slice(0, 3);
 
 <div class="community-view-bar" aria-label="Community views">
   <nav class="community-view-tabs">
-    <a class="is-active" href="#active">Active</a>
-    <a href="#new">New</a>
-    <a href="#active">Needs feedback</a>
-    <a href="#new">Recently improved</a>
+    {
+      Object.entries(communityViews).map(([view, config]) => (
+        <a
+          class:list={{ 'is-active': selectedView === view }}
+          href={config.href}
+          aria-current={selectedView === view ? 'page' : undefined}
+        >
+          {config.label}
+        </a>
+      ))
+    }
   </nav>
   <span>Illustrative content · submissions opening soon</span>
 </div>
@@ -76,23 +132,13 @@ const usefulThisWeek = libraryFixtures.slice(0, 3);
 
 <div class="board-home-layout community-home-layout">
   <div class="board-stack-column">
-    <section id="active" class="board-list-section">
+    <section id="community-conversations" class="board-list-section">
       <header class="board-list-heading">
-        <h2>Active conversations</h2>
-        <span>where people are helping right now</span>
+        <h2>{currentView.heading}</h2>
+        <span>{currentView.description}</span>
       </header>
       <div class="project-list">
-        {activeProjects.map((project) => <ProjectRow project={project} />)}
-      </div>
-    </section>
-
-    <section id="new" class="board-list-section board-list-section-all">
-      <header class="board-list-heading">
-        <h2>New this week</h2>
-        <span>fresh projects looking for a second set of eyes</span>
-      </header>
-      <div class="project-list">
-        {newProjects.map((project) => <ProjectRow project={project} />)}
+        {currentView.projects.map((project) => <ProjectRow project={project} />)}
       </div>
     </section>
 
@@ -101,7 +147,9 @@ const usefulThisWeek = libraryFixtures.slice(0, 3);
         <p>Have a public project?</p>
         <strong>Bring a working plan—or let Curations help you create one from the repo.</strong>
       </div>
-      <a class="community-action community-action-primary" href="#new-here">Share your project</a>
+      <a class="community-action community-action-primary" href={withBase('/projects/new/')}>
+        Share your project
+      </a>
     </section>
   </div>
 

@@ -10,36 +10,79 @@ interface Props {
 const { project } = Astro.props;
 ---
 
-<article class="project-row">
+<article class="project-row" data-project-row>
   <div class="project-score" aria-label={`${project.score} community votes`}>
     <span aria-hidden="true">▲</span>
     <strong>{project.score}</strong>
   </div>
   <div class="project-row-main">
     <header class="project-row-heading">
-      <a class="project-question" href={withBase(`/projects/${project.slug}/`)}>
+      <a
+        class="project-question"
+        data-project-question
+        href={withBase(`/projects/${project.slug}/`)}
+      >
         “{project.question}”
       </a>
-      <span class={`project-stage project-stage-${project.stageClass}`}>
+      <span
+        class={`project-stage project-stage-${project.stageClass}`}
+        data-project-stage
+      >
         {project.stage}
       </span>
       <a
         class="project-category"
         href={withBase(`/projects/types/${project.categorySlug}/`)}
       >
-        {project.category}
+        <span data-project-category>{project.category}</span>
       </a>
     </header>
     <p class="project-identity">
-      <strong>{project.project}</strong>
+      {
+        project.repositoryUrl ? (
+          <a
+            class="project-repository-link"
+            data-project-name
+            data-project-repository
+            href={project.repositoryUrl}
+            target="_blank"
+            rel="noopener"
+            aria-label={`${project.project} public GitHub repository`}
+          >
+            {project.project}<span aria-hidden="true"> ↗</span>
+          </a>
+        ) : (
+          <strong data-project-name>{project.project}</strong>
+        )
+      }
       <span aria-hidden="true">·</span>
       shared by <span class="project-author">{project.author}</span>
     </p>
-    <p class="project-summary">{project.summary}</p>
-    <div class="project-context">
-      <a class="project-plan-label" href={withBase(`/projects/${project.slug}/`)}>
-        Project plan + public GitHub repo
-      </a>
+    <p class="project-summary" data-project-summary data-public-summary>{project.summary}</p>
+    <div class="project-context" data-project-context>
+      {
+        project.planUrl ? (
+          <a
+            class="project-plan-label"
+            data-project-plan-link
+            data-public-plan
+            href={project.planUrl}
+            target="_blank"
+            rel="noopener"
+          >
+            Project plan ↗
+          </a>
+        ) : (
+          <a
+            class="project-plan-label"
+            data-project-plan-link
+            data-public-plan
+            href={withBase(`/projects/${project.slug}/`)}
+          >
+            Project plan
+          </a>
+        )
+      }
       {project.stackSlugs.map((stackSlug) => <StackPill slug={stackSlug} />)}
     </div>
     <footer class="project-meta">

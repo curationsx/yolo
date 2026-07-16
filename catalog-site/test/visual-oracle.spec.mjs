@@ -154,7 +154,14 @@ test.describe('Header alignment (ACCEPTANCE.md — 12px tolerance)', () => {
 
 test.describe('No horizontal scroll (responsive sweep)', () => {
   for (const width of RESPONSIVE_SWEEP_WIDTHS) {
-    for (const routePath of ['/', '/cookbooks/', '/software/ollama/', '/methodology/']) {
+    for (const routePath of [
+      '/',
+      '/community/new/',
+      '/projects/new/',
+      '/cookbooks/',
+      '/software/ollama/',
+      '/methodology/',
+    ]) {
       test(`${routePath} has no horizontal scroll at ${width}px`, async ({ page }) => {
         await page.setViewportSize({ width, height: 900 });
         await page.goto(routePath);
