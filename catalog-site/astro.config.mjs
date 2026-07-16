@@ -10,5 +10,8 @@ export default defineConfig({
   site: process.env.ASTRO_SITE ?? 'https://curations.dev',
   base: process.env.ASTRO_BASE ?? '/',
   trailingSlash: 'always',
+  devToolbar: {
+    enabled: process.env.PUBLIC_COMMUNITY_PREVIEW !== 'true',
+  },
   integrations: [sitemap()],
 });

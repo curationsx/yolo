@@ -1,0 +1,110 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import ProjectRow from '../../../components/ProjectRow.astro';
+import StackPill from '../../../components/StackPill.astro';
+import {
+  projectCategories,
+  projectsForCategory,
+  type ProjectCategoryFixture,
+  type ProjectFixture,
+} from '../../../data/community-preview';
+import { withBase } from '../../../lib/labels';
+
+export function getStaticPaths() {
+  return projectCategories.map((category) => ({
+    params: { slug: category.slug },
+    props: {
+      category,
+      projects: projectsForCategory(category.slug),
+    },
+  }));
+}
+
+interface Props {
+  category: ProjectCategoryFixture;
+  projects: ProjectFixture[];
+}
+
+const { category, projects } = Astro.props;
+const visibleProjects = projects.length ? projects : [];
+const commonStacks = [
+  ...new Set(visibleProjects.flatMap((project) => project.stackSlugs)),
+].slice(0, 6);
+---
+
+<BaseLayout
+  title={`${category.name} Projects — CURATIONS.DEV`}
+  description={category.description}
+  communityPreview
+>
+  <a class="community-page-back" href={withBase('/projects/')}>← All Project types</a>
+
+  <header class="discovery-header">
+    <div>
+      <p class="discovery-eyebrow">Project type</p>
+      <h1>{category.name}</h1>
+      <p>{category.description}</p>
+      <p class="discovery-count">
+        {category.projectCount} public projects · {category.activityCount} active conversations
+      </p>
+    </div>
+    <span class="community-action">Follow category</span>
+  </header>
+
+  <nav class="discovery-tabs" aria-label={`${category.name} views`}>
+    <a class="is-active" href="#category-projects">Active</a>
+    <a href="#category-projects">New</a>
+    <a href="#category-projects">Top this week</a>
+    <a href="#category-projects">Needs feedback</a>
+  </nav>
+
+  <div class="board-home-layout discovery-layout">
+    <main class="board-stack-column">
+      <section id="category-projects" class="board-list-section">
+        <header class="board-list-heading">
+          <h2>Conversations in {category.name}</h2>
+          <span>fixture examples for the local preview</span>
+        </header>
+        <div class="project-list">
+          {visibleProjects.map((project) => <ProjectRow project={project} />)}
+        </div>
+      </section>
+    </main>
+
+    <aside class="board-feed discovery-rail">
+      <h2>Category context</h2>
+      <section class="community-pulse-section">
+        <h3>Stacks appearing here</h3>
+        <div class="project-context discovery-pill-list">
+          {commonStacks.map((stackSlug) => <StackPill slug={stackSlug} />)}
+        </div>
+      </section>
+      <section class="community-pulse-section">
+        <h3>Useful starting points</h3>
+        <div class="discovery-rail-links">
+          <a href={withBase('/library/#project-plan-gap-review')}>
+            Project-plan gap review <span>Review</span>
+          </a>
+          <a href={withBase('/library/#security-pre-mortem')}>
+            Security pre-mortem <span>Cookbook</span>
+          </a>
+        </div>
+      </section>
+      <section class="community-pulse-section">
+        <h3>Related Project types</h3>
+        <div class="discovery-rail-links">
+          {
+            projectCategories
+              .filter((candidate) => candidate.slug !== category.slug)
+              .slice(0, 3)
+              .map((candidate) => (
+                <a href={withBase(`/projects/types/${candidate.slug}/`)}>
+                  {candidate.name} <span>{candidate.projectCount}</span>
+                </a>
+              ))
+          }
+        </div>
+      </section>
+    </aside>
+  </div>
+</BaseLayout>

@@ -1,0 +1,38 @@
+---
+interface IndexItem {
+  label: string;
+  href: string;
+  count?: number | string;
+}
+
+interface IndexSection {
+  title?: string;
+  items: IndexItem[];
+}
+
+interface Props {
+  title: string;
+  sections: IndexSection[];
+}
+
+const { title, sections } = Astro.props;
+---
+
+<aside class="board-feed master-index-rail">
+  <h2>{title}</h2>
+  {
+    sections.map((section) => (
+      <section class="master-index-section">
+        {section.title && <h3>{section.title}</h3>}
+        <nav class="master-index-list" aria-label={section.title ?? title}>
+          {section.items.map((item) => (
+            <a href={item.href}>
+              <span>{item.label}</span>
+              {item.count !== undefined && <strong>{item.count}</strong>}
+            </a>
+          ))}
+        </nav>
+      </section>
+    ))
+  }
+</aside>
