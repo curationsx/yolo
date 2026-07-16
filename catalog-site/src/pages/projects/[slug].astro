@@ -1,11 +1,11 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import StackPill from '../../components/StackPill.astro';
-import { allProjects, type ProjectFixture } from '../../data/community-preview';
+import { projectDetailFixtures, type ProjectFixture } from '../../data/community-preview';
 import { withBase } from '../../lib/labels';
 
 export function getStaticPaths() {
-  return allProjects.map((project) => ({
+  return projectDetailFixtures.map((project) => ({
     params: { slug: project.slug },
     props: { project },
   }));
@@ -33,7 +33,23 @@ const { project } = Astro.props;
     </div>
     <div>
       <p class="discovery-eyebrow">Public Project plan</p>
-      <h1>{project.project}</h1>
+      <h1>
+        {
+          project.repositoryUrl ? (
+            <a
+              class="project-repository-link"
+              href={project.repositoryUrl}
+              target="_blank"
+              rel="noopener"
+              aria-label={`${project.project} public GitHub repository`}
+            >
+              {project.project}<span aria-hidden="true"> ↗</span>
+            </a>
+          ) : (
+            project.project
+          )
+        }
+      </h1>
       <p class="project-detail-question">“{project.question}”</p>
       <div class="project-detail-meta">
         <span class={`project-stage project-stage-${project.stageClass}`}>{project.stage}</span>
@@ -53,6 +69,18 @@ const { project } = Astro.props;
           <p class="discovery-eyebrow">Working plan</p>
           <h2>{project.summary}</h2>
         </header>
+        {
+          project.planUrl && (
+            <a
+              class="project-plan-source"
+              href={project.planUrl}
+              target="_blank"
+              rel="noopener"
+            >
+              Read the exact public working plan ↗
+            </a>
+          )
+        }
         <div class="project-plan-grid">
           <article>
             <span>Problem</span>

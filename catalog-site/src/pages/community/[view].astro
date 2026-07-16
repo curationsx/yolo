@@ -1,0 +1,52 @@
+---
+import CommunityHomepage from '../../components/CommunityHomepage.astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+type CommunityView = 'new' | 'needs-feedback' | 'recently-improved';
+
+interface Props {
+  view: CommunityView;
+  label: string;
+  description: string;
+}
+
+export function getStaticPaths() {
+  return [
+    {
+      params: { view: 'new' },
+      props: {
+        view: 'new',
+        label: 'New Projects',
+        description: 'New Project conversations shared this week.',
+      },
+    },
+    {
+      params: { view: 'needs-feedback' },
+      props: {
+        view: 'needs-feedback',
+        label: 'Projects needing feedback',
+        description: 'Open human questions waiting for useful feedback.',
+      },
+    },
+    {
+      params: { view: 'recently-improved' },
+      props: {
+        view: 'recently-improved',
+        label: 'Recently improved Projects',
+        description: 'Projects that returned with a stronger working plan.',
+      },
+    },
+  ];
+}
+
+const { view, label, description } = Astro.props;
+---
+
+<BaseLayout
+  title={`${label} - CURATIONS.DEV`}
+  description={description}
+  communityPreview
+  noindex
+>
+  <CommunityHomepage selectedView={view} />
+</BaseLayout>

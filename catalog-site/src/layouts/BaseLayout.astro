@@ -60,7 +60,12 @@ const currentPath = Astro.url.pathname;
           {
             communityPreview ? (
               <>
-                <a class:list={{ active: currentPath === '/' }} href={withBase('/#active')}>Active</a>
+                <a
+                  class:list={{ active: currentPath === '/' || currentPath.startsWith('/community') }}
+                  href={withBase('/')}
+                >
+                  Active
+                </a>
                 <a class:list={{ active: currentPath.startsWith('/projects') }} href={withBase('/projects/')}>Projects</a>
                 <a class:list={{ active: currentPath.startsWith('/stacks') }} href={withBase('/stacks/')}>Stacks</a>
                 <a class:list={{ active: currentPath.startsWith('/library') }} href={withBase('/library/')}>Library</a>
@@ -97,6 +102,7 @@ const currentPath = Astro.url.pathname;
           {communityPreview ? 'Community Library' : 'Cookbooks'}
         </a>
         <a href={ENTRIES_URL}>View source data</a>
+        {communityPreview && <a href={withBase('/projects/new/')}>Submit your Project</a>}
         <a href={withBase('/submit/')}>Propose a tool or company</a>
         <a href={`${REPO_URL}/issues/new`}>Suggest a correction</a>
         <a href={REPO_URL}>GitHub</a>
