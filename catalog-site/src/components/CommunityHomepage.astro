@@ -1,0 +1,174 @@
+---
+import { withBase } from '../lib/labels';
+import {
+  activeProjects,
+  libraryFixtures,
+  newProjects,
+  projectCategories,
+  stackCombinations,
+} from '../data/community-preview';
+import ProjectRow from './ProjectRow.astro';
+
+const projectTypes = projectCategories.slice(0, 3);
+const stackPatterns = stackCombinations.slice(0, 3);
+const usefulThisWeek = libraryFixtures.slice(0, 3);
+---
+
+<p class="community-preview-note">Public design preview · example Projects and activity</p>
+
+<section class="community-intro" aria-labelledby="community-intro-title">
+  <div class="community-intro-copy">
+    <p class="community-kicker">A community for people building software with AI</p>
+    <h1 id="community-intro-title">
+      Share what you’re building. <span>Get feedback.</span> Make the next version better.
+    </h1>
+    <p>
+      Connect a public GitHub project and its working plan. People and optional AI
+      guides help you spot gaps, find useful skills, and decide what to do next.
+    </p>
+  </div>
+  <aside class="community-plan-note" id="new-here">
+    <strong>New to project plans?</strong>
+    <span>
+      It’s what you’re making, who it’s for, how it should work, and what you
+      still need help deciding. Developers often call this a PRD.
+    </span>
+    <a href="#share-project">Bring one—or create one from your project →</a>
+  </aside>
+</section>
+
+<section class="board-search-shell community-search" aria-labelledby="community-search-label">
+  <form class="board-search" role="search">
+    <label class="visually-hidden" id="community-search-label" for="community-search">
+      Search community projects
+    </label>
+    <span class="board-search-icon" aria-hidden="true">⌕</span>
+    <input
+      type="search"
+      id="community-search"
+      placeholder="Search projects, questions, tools, or people"
+      autocomplete="off"
+    />
+    <button type="button">Search</button>
+  </form>
+  <p>Public projects · useful feedback · no paid placement</p>
+</section>
+
+<div class="community-view-bar" aria-label="Community views">
+  <nav class="community-view-tabs">
+    <a class="is-active" href="#active">Active</a>
+    <a href="#new">New</a>
+    <a href="#active">Needs feedback</a>
+    <a href="#new">Recently improved</a>
+  </nav>
+  <span>Illustrative content · submissions opening soon</span>
+</div>
+
+<div class="community-tag-bar" aria-label="Project filters">
+  <span class="is-active">All</span>
+  <span>CRM</span>
+  <span>AI assistant</span>
+  <span>Automation</span>
+  <span>Local-first</span>
+  <span>Building</span>
+  <span>Needs feedback</span>
+</div>
+
+<div class="board-home-layout community-home-layout">
+  <div class="board-stack-column">
+    <section id="active" class="board-list-section">
+      <header class="board-list-heading">
+        <h2>Active conversations</h2>
+        <span>where people are helping right now</span>
+      </header>
+      <div class="project-list">
+        {activeProjects.map((project) => <ProjectRow project={project} />)}
+      </div>
+    </section>
+
+    <section id="new" class="board-list-section board-list-section-all">
+      <header class="board-list-heading">
+        <h2>New this week</h2>
+        <span>fresh projects looking for a second set of eyes</span>
+      </header>
+      <div class="project-list">
+        {newProjects.map((project) => <ProjectRow project={project} />)}
+      </div>
+    </section>
+
+    <section id="share-project" class="community-share">
+      <div>
+        <p>Have a public project?</p>
+        <strong>Bring a working plan—or let Curations help you create one from the repo.</strong>
+      </div>
+      <a class="community-action community-action-primary" href="#new-here">Share your project</a>
+    </section>
+  </div>
+
+  <aside id="universal-feed" class="board-feed community-pulse">
+    <h2>Community pulse</h2>
+    <p class="community-pulse-intro">A compact view of what’s moving across shared projects.</p>
+
+    <section class="community-pulse-section">
+      <h3>What people are building</h3>
+      <div class="community-pulse-list">
+        {
+          projectTypes.map((category) => (
+            <p>
+              <a href={withBase(`/projects/types/${category.slug}/`)}>{category.name}</a>
+              <strong>{category.projectCount}</strong>
+            </p>
+          ))
+        }
+      </div>
+      <a class="community-pulse-view-all" href={withBase('/projects/')}>View all projects →</a>
+    </section>
+
+    <section class="community-pulse-section">
+      <h3>Stacks showing up</h3>
+      <div class="community-pulse-list">
+        {
+          stackPatterns.map((combination) => (
+            <p>
+              <a href={withBase(`/stacks/${combination.slug}/`)}>{combination.name}</a>
+              <strong>{combination.projectCount}</strong>
+            </p>
+          ))
+        }
+      </div>
+      <a class="community-pulse-view-all" href={withBase('/stacks/')}>View all stacks →</a>
+    </section>
+
+    <section class="community-pulse-section">
+      <h3>Useful this week</h3>
+      <div class="community-useful-list">
+        {
+          usefulThisWeek.map((resource) => (
+            <p>
+              <a href={withBase(`/library/#${resource.slug}`)}>{resource.title}</a>
+              <small>{resource.type}</small>
+            </p>
+          ))
+        }
+      </div>
+      <a class="community-pulse-view-all" href={withBase('/library/')}>
+        View all useful resources →
+      </a>
+    </section>
+
+    <section class="community-pulse-section community-people">
+      <h3>New contributors</h3>
+      <div>
+        <span class="community-person">MA</span>
+        <span class="community-person">DE</span>
+        <span class="community-person">AN</span>
+        <span class="community-person">RI</span>
+        <p>Builders sharing projects and giving useful feedback.</p>
+      </div>
+    </section>
+
+    <p class="community-pulse-note">
+      AI replies carry an <strong>AI</strong> tag. Nothing runs without you.
+    </p>
+  </aside>
+</div>

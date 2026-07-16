@@ -6,9 +6,11 @@ import AuthButton from '../components/AuthButton.astro';
 interface Props {
   title: string;
   description: string;
+  communityPreview?: boolean;
+  noindex?: boolean;
 }
 
-const { title, description } = Astro.props;
+const { title, description, communityPreview = false, noindex = false } = Astro.props;
 const apiBase = import.meta.env.PUBLIC_AGENT_API ?? '';
 const boardFixtures =
   import.meta.env.DEV && import.meta.env.PUBLIC_BOARD_FIXTURES === 'true';
@@ -22,6 +24,7 @@ const currentPath = Astro.url.pathname;
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
+    {noindex && <meta name="robots" content="noindex,follow" />}
     <meta name="generator" content={Astro.generator} />
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     <link rel="canonical" href={canonicalUrl} />
@@ -54,12 +57,34 @@ const currentPath = Astro.url.pathname;
       <div class="wrap">
         <a class="brand" href={withBase('/')}>CURATIONS<span>X</span></a>
         <nav class="site-nav" aria-label="Site">
-          <a class:list={{ active: currentPath === '/' }} href={withBase('/')}>Stacks</a>
-          <a class:list={{ active: currentPath.startsWith('/cookbooks') }} href={withBase('/cookbooks/')}>Cookbooks</a>
-          <a href={withBase('/#universal-feed')}>Feed</a>
-          <a class:list={{ active: currentPath.startsWith('/methodology') }} href={withBase('/methodology/')}>Method</a>
+          {
+            communityPreview ? (
+              <>
+                <a class:list={{ active: currentPath === '/' }} href={withBase('/#active')}>Active</a>
+                <a class:list={{ active: currentPath.startsWith('/projects') }} href={withBase('/projects/')}>Projects</a>
+                <a class:list={{ active: currentPath.startsWith('/stacks') }} href={withBase('/stacks/')}>Stacks</a>
+                <a class:list={{ active: currentPath.startsWith('/library') }} href={withBase('/library/')}>Library</a>
+                <a href={withBase('/#universal-feed')}>People</a>
+              </>
+            ) : (
+              <>
+                <a class:list={{ active: currentPath === '/' }} href={withBase('/')}>Stacks</a>
+                <a class:list={{ active: currentPath.startsWith('/cookbooks') }} href={withBase('/cookbooks/')}>Cookbooks</a>
+                <a href={withBase('/#universal-feed')}>Feed</a>
+                <a class:list={{ active: currentPath.startsWith('/methodology') }} href={withBase('/methodology/')}>Method</a>
+              </>
+            )
+          }
         </nav>
-        <AuthButton />
+        {
+          communityPreview ? (
+            <div class="auth-control">
+              <button type="button" class="auth-sign-in">Sign in with GitHub</button>
+            </div>
+          ) : (
+            <AuthButton />
+          )
+        }
       </div>
     </header>
 
@@ -69,8 +94,16 @@ const currentPath = Astro.url.pathname;
 
     <footer class="site-footer">
       <div class="wrap">
-        <span>Human × AI software intelligence. No paid placement.</span>
-        <a href={withBase('/cookbooks/')}>Cookbooks</a>
+        <span>
+          {
+            communityPreview
+              ? 'A community for people building software with AI.'
+              : 'Human × AI software intelligence. No paid placement.'
+          }
+        </span>
+        <a href={communityPreview ? withBase('/library/') : withBase('/cookbooks/')}>
+          {communityPreview ? 'Community Library' : 'Cookbooks'}
+        </a>
         <a href={ENTRIES_URL}>View source data</a>
         <a href={withBase('/submit/')}>Propose a tool or company</a>
         <a href={`${REPO_URL}/issues/new`}>Suggest a correction</a>

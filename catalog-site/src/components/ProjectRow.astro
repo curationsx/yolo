@@ -1,0 +1,60 @@
+---
+import { withBase } from '../lib/labels';
+import type { ProjectFixture } from '../data/community-preview';
+import StackPill from './StackPill.astro';
+
+interface Props {
+  project: ProjectFixture;
+}
+
+const { project } = Astro.props;
+---
+
+<article class="project-row">
+  <div class="project-score" aria-label={`${project.score} community votes`}>
+    <span aria-hidden="true">▲</span>
+    <strong>{project.score}</strong>
+  </div>
+  <div class="project-row-main">
+    <header class="project-row-heading">
+      <a class="project-question" href={withBase(`/projects/${project.slug}/`)}>
+        “{project.question}”
+      </a>
+      <span class={`project-stage project-stage-${project.stageClass}`}>
+        {project.stage}
+      </span>
+      <a
+        class="project-category"
+        href={withBase(`/projects/types/${project.categorySlug}/`)}
+      >
+        {project.category}
+      </a>
+    </header>
+    <p class="project-identity">
+      <strong>{project.project}</strong>
+      <span aria-hidden="true">·</span>
+      shared by <span class="project-author">{project.author}</span>
+    </p>
+    <p class="project-summary">{project.summary}</p>
+    <div class="project-context">
+      <a class="project-plan-label" href={withBase(`/projects/${project.slug}/`)}>
+        Project plan + public GitHub repo
+      </a>
+      {project.stackSlugs.map((stackSlug) => <StackPill slug={stackSlug} />)}
+    </div>
+    <footer class="project-meta">
+      <span>{project.comments} replies</span>
+      <span aria-hidden="true">·</span>
+      <span>{project.people} people</span>
+      {project.agent && (
+        <>
+          <span aria-hidden="true">·</span>
+          <span class="project-agent">AI</span>
+          <span>{project.agent.replace(/^AI (Guide|Curator) /, '')}</span>
+        </>
+      )}
+      <span aria-hidden="true">·</span>
+      <time>{project.age}</time>
+    </footer>
+  </div>
+</article>

@@ -1,0 +1,17 @@
+---
+import { withBase } from '../lib/labels';
+import { stackFixtures } from '../data/community-preview';
+
+interface Props {
+  slug: string;
+  class?: string;
+}
+
+const { slug, class: className = 'project-stack' } = Astro.props;
+const stack = stackFixtures[slug];
+const href = withBase(`/stacks/tools/${stack.slug}/`);
+---
+
+<a class={className} href={href} title={`View ${stack.name}`}>
+  {stack.name}
+</a>

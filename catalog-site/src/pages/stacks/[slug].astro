@@ -1,0 +1,96 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import ProjectRow from '../../components/ProjectRow.astro';
+import StackPill from '../../components/StackPill.astro';
+import {
+  projectsForCombination,
+  stackCombinations,
+  type ProjectFixture,
+  type StackCombinationFixture,
+} from '../../data/community-preview';
+import { withBase } from '../../lib/labels';
+
+export function getStaticPaths() {
+  return stackCombinations.map((combination) => ({
+    params: { slug: combination.slug },
+    props: {
+      combination,
+      projects: projectsForCombination(combination),
+    },
+  }));
+}
+
+interface Props {
+  combination: StackCombinationFixture;
+  projects: ProjectFixture[];
+}
+
+const { combination, projects } = Astro.props;
+---
+
+<BaseLayout
+  title={`${combination.name} — CURATIONS.DEV`}
+  description={combination.description}
+  communityPreview
+  noindex
+>
+  <a class="community-page-back" href={withBase('/stacks/')}>← All Stacks</a>
+
+  <header class="discovery-header">
+    <div>
+      <p class="discovery-eyebrow">Stack combination</p>
+      <h1>{combination.name}</h1>
+      <p>{combination.description}</p>
+      <div class="project-detail-stacks discovery-header-pills">
+        {combination.stackSlugs.map((stackSlug) => <StackPill slug={stackSlug} />)}
+      </div>
+      <p class="discovery-count">
+        {projects.length} illustrative Projects · public submissions opening soon
+      </p>
+    </div>
+    <span class="community-action">Follow combination</span>
+  </header>
+
+  <nav class="discovery-tabs" aria-label={`${combination.name} views`}>
+    <a class="is-active" href="#combination-projects">Active</a>
+    <a href="#combination-projects">New</a>
+    <a href="#combination-projects">Top</a>
+    <a href="#combination-projects">Recently improved</a>
+  </nav>
+
+  <div class="board-home-layout discovery-layout">
+    <main class="board-stack-column">
+      <section id="combination-projects" class="board-list-section">
+        <header class="board-list-heading">
+          <h2>Projects using this combination</h2>
+          <span>conversation-first examples</span>
+        </header>
+        <div class="project-list">
+          {projects.map((project) => <ProjectRow project={project} />)}
+        </div>
+      </section>
+    </main>
+
+    <aside class="board-feed discovery-rail">
+      <h2>Combination context</h2>
+      <section class="community-pulse-section">
+        <h3>Useful this week</h3>
+        <div class="discovery-rail-links">
+          <a href={withBase('/library/#schema-first-planning')}>
+            Schema-first planning <span>Skill</span>
+          </a>
+          <a href={withBase('/library/#security-pre-mortem')}>
+            Security pre-mortem <span>Cookbook</span>
+          </a>
+        </div>
+      </section>
+      <section class="community-pulse-section">
+        <h3>Interpret carefully</h3>
+        <p>
+          Appearing together does not mean this is the best Stack. It means
+          builders voluntarily shared Projects containing both tools.
+        </p>
+      </section>
+    </aside>
+  </div>
+</BaseLayout>

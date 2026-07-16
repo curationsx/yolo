@@ -1,0 +1,108 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import ProjectRow from '../../../components/ProjectRow.astro';
+import StackPill from '../../../components/StackPill.astro';
+import {
+  projectsForStack,
+  stackCombinations,
+  stackFixtures,
+  type ProjectFixture,
+  type StackFixture,
+} from '../../../data/community-preview';
+import { withBase } from '../../../lib/labels';
+
+export function getStaticPaths() {
+  return Object.values(stackFixtures).map((stack) => ({
+    params: { slug: stack.slug },
+    props: {
+      stack,
+      projects: projectsForStack(stack.slug),
+    },
+  }));
+}
+
+interface Props {
+  stack: StackFixture;
+  projects: ProjectFixture[];
+}
+
+const { stack, projects } = Astro.props;
+const pairings = stackCombinations.filter((combination) =>
+  combination.stackSlugs.includes(stack.slug),
+);
+---
+
+<BaseLayout
+  title={`${stack.name} — CURATIONS.DEV`}
+  description={stack.description}
+  communityPreview
+  noindex
+>
+  <a class="community-page-back" href={withBase('/stacks/')}>← All Stacks</a>
+
+  <header class="discovery-header">
+    <div>
+      <p class="discovery-eyebrow">{stack.role}</p>
+      <h1>{stack.name}</h1>
+      <p>{stack.description}</p>
+      <p class="discovery-count">{projects.length} illustrative Projects include this tool.</p>
+    </div>
+    <a class="community-action" href={stack.officialUrl} rel="noopener">
+      Official source
+    </a>
+  </header>
+
+  <div class="board-home-layout discovery-layout">
+    <main class="board-stack-column">
+      <section class="board-list-section">
+        <header class="board-list-heading">
+          <h2>Project conversations</h2>
+          <span>where {stack.name} appears</span>
+        </header>
+        <div class="project-list">
+          {projects.map((project) => <ProjectRow project={project} />)}
+        </div>
+      </section>
+    </main>
+
+    <aside class="board-feed discovery-rail">
+      <h2>Tool context</h2>
+      <section class="community-pulse-section">
+        <h3>Role</h3>
+        <p>{stack.role}</p>
+      </section>
+      <section class="community-pulse-section">
+        <h3>Common pairings</h3>
+        {
+          pairings.length ? (
+            <div class="discovery-rail-links">
+              {pairings.map((pairing) => (
+                <a href={withBase(`/stacks/${pairing.slug}/`)}>
+                  {pairing.name} <span>{pairing.projectCount}</span>
+                </a>
+              ))}
+            </div>
+          ) : (
+            <p>No preview pairing is defined yet.</p>
+          )
+        }
+      </section>
+      <section class="community-pulse-section">
+        <h3>Tool link</h3>
+        <div class="project-detail-stacks">
+          <StackPill slug={stack.slug} />
+        </div>
+        {
+          stack.directoryId && (
+            <a
+              class="discovery-feature-link"
+              href={withBase(`/software/${stack.directoryId}/`)}
+            >
+              View curated directory record →
+            </a>
+          )
+        }
+      </section>
+    </aside>
+  </div>
+</BaseLayout>
