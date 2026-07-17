@@ -1,0 +1,21 @@
+---
+type StatusKind = 'showcase' | 'open-roast' | 'roasted';
+
+interface Props {
+  kind: StatusKind;
+}
+
+const { kind } = Astro.props;
+const labels: Record<StatusKind, string> = {
+  showcase: 'PRD SHOWCASE',
+  'open-roast': 'OPEN FOR ROAST',
+  roasted: '🔥 ROASTED',
+};
+---
+
+<span
+  class={`showcase-status showcase-status-${kind}`}
+  data-showcase-status={kind}
+>
+  {labels[kind]}
+</span>

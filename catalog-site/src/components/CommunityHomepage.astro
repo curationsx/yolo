@@ -9,7 +9,9 @@ import {
   recentlyImprovedProjects,
   stackCombinations,
 } from '../data/community-preview';
+import { showcaseFixture } from '../data/member-showcase-preview';
 import ProjectRow from './ProjectRow.astro';
+import ShowcaseRow from './ShowcaseRow.astro';
 
 type CommunityView = 'active' | 'new' | 'needs-feedback' | 'recently-improved';
 
@@ -89,18 +91,18 @@ const currentView = communityViews[selectedView];
 <section class="board-search-shell community-search" aria-labelledby="community-search-label">
   <form class="board-search" role="search">
     <label class="visually-hidden" id="community-search-label" for="community-search">
-      Search community projects
+      Search community Projects and PRD Showcases
     </label>
     <span class="board-search-icon" aria-hidden="true">⌕</span>
     <input
       type="search"
       id="community-search"
-      placeholder="Search projects, questions, tools, or people"
+      placeholder="Search Projects, PRDs, questions, tools, or people"
       autocomplete="off"
     />
     <button type="button">Search</button>
   </form>
-  <p>Public projects · useful feedback · no paid placement</p>
+  <p>Public Projects and PRDs · useful feedback · no paid placement</p>
 </section>
 
 <div class="community-view-bar" aria-label="Community views">
@@ -138,18 +140,22 @@ const currentView = communityViews[selectedView];
         <span>{currentView.description}</span>
       </header>
       <div class="project-list">
+        {selectedView === 'active' && <ShowcaseRow showcase={showcaseFixture} />}
         {currentView.projects.map((project) => <ProjectRow project={project} />)}
       </div>
     </section>
 
     <section id="share-project" class="community-share">
       <div>
-        <p>Have a public project?</p>
-        <strong>Bring a working plan—or let Curations help you create one from the repo.</strong>
+        <p>Have public work to share?</p>
+        <strong>Bring a full Project—or showcase one public PRD first.</strong>
       </div>
-      <a class="community-action community-action-primary" href={withBase('/projects/new/')}>
-        Share your project
-      </a>
+      <div class="community-share-actions">
+        <a class="community-action" href={withBase('/showcase/new/')}>Share a PRD</a>
+        <a class="community-action community-action-primary" href={withBase('/projects/new/')}>
+          Share a Project
+        </a>
+      </div>
     </section>
   </div>
 

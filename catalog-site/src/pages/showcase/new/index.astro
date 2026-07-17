@@ -1,0 +1,28 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import ShowcaseBuilderJourney from '../../../components/ShowcaseBuilderJourney.astro';
+import { withBase } from '../../../lib/labels';
+---
+
+<BaseLayout
+  title="Share your PRD - CURATIONS.DEV"
+  description="Preview the fixture-only journey from public PRD and local Copilot CLI purpose breakdown to an accountable Showcase conversation."
+  communityPreview
+  noindex
+>
+  <a class="community-page-back" href={withBase('/showcase/')}>← PRD Showcase</a>
+
+  <header class="discovery-header project-builder-header">
+    <div>
+      <p class="discovery-eyebrow">Structured self-promotion</p>
+      <h1>Share your PRD</h1>
+      <p>
+        Anchor one public plan, approve its purpose breakdown, and ask the
+        community one useful human question.
+      </p>
+    </div>
+    <span class="project-builder-status">No fetch · no hosted AI · no publication</span>
+  </header>
+
+  <ShowcaseBuilderJourney />
+</BaseLayout>

@@ -1,0 +1,79 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import MemberPrivateGate from '../../components/MemberPrivateGate.astro';
+import MemberPrivateNav from '../../components/MemberPrivateNav.astro';
+import { memberNotifications } from '../../data/member-showcase-preview';
+import { withBase } from '../../lib/labels';
+
+const fixtureEnabled =
+  import.meta.env.DEV && import.meta.env.PUBLIC_MEMBER_FIXTURES === 'true';
+---
+
+<BaseLayout
+  title="Inbox - My CURATIONS"
+  description="Private replies, mentions, and review decisions."
+  communityPreview
+  noindex
+>
+  <MemberPrivateGate fixtureEnabled={fixtureEnabled}>
+    <MemberPrivateNav current="inbox" fixtureEnabled={fixtureEnabled} />
+    {
+      fixtureEnabled ? (
+        <>
+          <header class="discovery-header member-private-page-header">
+            <div>
+              <p class="discovery-eyebrow">Private member workspace · fixture</p>
+              <h1>Inbox</h1>
+              <p>
+                Replies, mentions, review decisions, and subscribed-thread updates.
+                No unrestricted private DMs.
+              </p>
+            </div>
+            <span class="project-builder-status">
+              {memberNotifications.filter((item) => item.unread).length} unread
+            </span>
+          </header>
+
+          <nav class="discovery-tabs" aria-label="Inbox filters">
+            <a class="is-active" href="#inbox-items">All</a>
+            <a href="#inbox-items">Replies</a>
+            <a href="#inbox-items">Reviews</a>
+            <a href="#inbox-items">Mentions</a>
+            <a href="#inbox-items">Revisions</a>
+          </nav>
+
+          <section id="inbox-items" class="board-list-section member-inbox-section">
+            <header class="board-list-heading">
+              <h2>Recent activity</h2>
+              <span>Project + Showcase scoped</span>
+            </header>
+            <div class="member-inbox-list">
+              {memberNotifications.map((item) => (
+                <a
+                  class:list={['member-inbox-row', item.unread && 'is-unread']}
+                  href={withBase(item.href)}
+                >
+                  <span class={`member-notification-type member-notification-${item.type}`}>
+                    {item.type}
+                  </span>
+                  <span>
+                    {item.unread && <span class="visually-hidden">Unread: </span>}
+                    <strong>{item.title}</strong>
+                    <small>{item.detail}</small>
+                  </span>
+                  <time>{item.age}</time>
+                </a>
+              ))}
+            </div>
+          </section>
+        </>
+      ) : (
+        <section class="member-workspace-unavailable">
+          <p class="discovery-eyebrow">Authenticated shell only</p>
+          <h1>Inbox persistence is not enabled.</h1>
+          <p>No private notifications or messages are embedded in production HTML.</p>
+        </section>
+      )
+    }
+  </MemberPrivateGate>
+</BaseLayout>
