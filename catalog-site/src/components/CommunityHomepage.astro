@@ -80,11 +80,19 @@ const currentView = communityViews[selectedView];
   </div>
   <aside class="community-plan-note" id="new-here">
     <strong>New to project plans?</strong>
-    <span>
-      It’s what you’re making, who it’s for, how it should work, and what you
-      still need help deciding. Developers often call this a PRD.
-    </span>
-    <a href={withBase('/projects/new/')}>Bring one—or create one from your project →</a>
+    <p>
+      Start the discussion by submitting your project. Share what you are building,
+      what you want feedback on, and what decision you need help with next.
+    </p>
+    <div class="community-plan-actions">
+      <a class="community-action community-action-primary" href={withBase('/projects/new/')}>
+        Start a Project Discussion
+      </a>
+      <a class="community-action" href={withBase('/projects/')}>
+        Browse Project Examples
+      </a>
+      <a class="community-action" href={withBase('/showcase/new/')}>Share a PRD First</a>
+    </div>
   </aside>
 </section>
 
