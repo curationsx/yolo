@@ -28,30 +28,31 @@ import StackPill from './StackPill.astro';
         <label class="project-path-choice">
           <input type="radio" name="plan_source" value="existing" checked />
           <span>
-            <strong>I have a working plan</strong>
+            <strong>I already have a working plan</strong>
             <small>
-              Select one Markdown plan from a public repository you own. This is the
-              first implementation path.
+              Use one Markdown plan from your public repository and submit it for
+              private review before anything is public.
             </small>
           </span>
         </label>
         <label class="project-path-choice">
           <input type="radio" name="plan_source" value="reverse" />
           <span>
-            <strong>Help me create one from my Project</strong>
+            <strong>Inspire new ideas for my project</strong>
             <small>
-              Choose the public files Curations may use to prepare a private draft
-              that you control.
+              Connect your public GitHub repository, choose the files you want to
+              share, and get a private draft with curated inspiration that you
+              control.
             </small>
           </span>
         </label>
       </div>
       <aside class="project-builder-trust">
-        <strong>Your permission boundary</strong>
+        <strong>You stay in control</strong>
         <p>
-          This visual proof makes no GitHub request. The real pilot will read only
-          the repository and paths you select, request no write access, and publish
-          nothing from this step.
+          This visual proof makes no GitHub request. In the live flow, CURATIONS
+          reads only the public repository and paths you choose. Nothing is
+          published until you review and approve the final preview.
         </p>
       </aside>
     </fieldset>
