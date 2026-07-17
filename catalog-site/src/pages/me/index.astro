@@ -53,8 +53,8 @@ const fixtureEnabled =
             <a class="is-active" href="#overview">Overview</a>
             <a href="#drafts">Drafts</a>
             <a href="#pending">Pending review</a>
-            <a href="#saved">Saved</a>
-            <a href="#following">Following</a>
+            <a href={withBase('/me/matches/?fixture_auth=1')}>Matches</a>
+            <a href={withBase('/me/watched/?fixture_auth=1')}>Watched</a>
           </nav>
 
           <div class="board-home-layout discovery-layout member-private-layout">
@@ -126,13 +126,18 @@ const fixtureEnabled =
                 </a>
               </section>
               <section id="saved" class="community-pulse-section">
-                <h3>Saved Library</h3>
-                <p>3 reviewed resources</p>
+                <h3>Capability graph</h3>
+                <a class="discovery-feature-link" href={withBase('/me/matches/?fixture_auth=1')}>
+                  2 reviewed matches →
+                </a>
+                <a class="discovery-feature-link" href={withBase('/me/saved/?fixture_auth=1')}>
+                  2 saved items →
+                </a>
               </section>
               <section id="following" class="community-pulse-section">
-                <h3>Following</h3>
-                <p>2 categories · 3 tools · 1 Stack combination</p>
-                <p>Conversation subscriptions remain separate from Follow.</p>
+                <h3>Watched + Following</h3>
+                <p>3 concrete objects · 2 categories · 3 tools</p>
+                <p>Watch remains separate from Follow and Save.</p>
               </section>
               <p class="community-pulse-note">
                 Fixture mode is compile-time local/CI only. Production HTML contains

@@ -24,7 +24,10 @@ const recentlyUpdated = [...libraryFixtures]
   .slice(0, 4)
   .map((resource) => ({
     label: resource.title,
-    href: withBase(`/library/#${resource.slug}`),
+    href:
+      resource.type === 'Skill'
+        ? withBase(`/skills/${resource.slug}/`)
+        : withBase(`/library/#${resource.slug}`),
     count: resource.updated,
   }));
 const libraryIndex = [
@@ -75,7 +78,15 @@ const libraryIndex = [
                 </div>
                 <div>
                   <header>
-                    <a href={`#${resource.slug}`}>{resource.title}</a>
+                    <a
+                      href={
+                        resource.type === 'Skill'
+                          ? withBase(`/skills/${resource.slug}/`)
+                          : `#${resource.slug}`
+                      }
+                    >
+                      {resource.title}
+                    </a>
                     <span class={`library-type library-type-${resource.type.toLowerCase()}`}>
                       {resource.type}
                     </span>

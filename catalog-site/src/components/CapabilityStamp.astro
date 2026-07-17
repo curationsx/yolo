@@ -1,0 +1,58 @@
+---
+export type CapabilityStampKind =
+  | 'reviewed'
+  | 'update-available'
+  | 'stale'
+  | 'retired'
+  | 'community-submitted'
+  | 'owner-claimed'
+  | 'publicly-sourced'
+  | 'ai-curated'
+  | 'strong-fit'
+  | 'possible-fit'
+  | 'no-match'
+  | 'program';
+
+interface Props {
+  kind: CapabilityStampKind;
+}
+
+const { kind } = Astro.props;
+const labels: Record<CapabilityStampKind, string> = {
+  reviewed: 'REVIEWED',
+  'update-available': 'UPDATE AVAILABLE',
+  stale: 'STALE',
+  retired: 'RETIRED',
+  'community-submitted': '✓ COMMUNITY SUBMITTED',
+  'owner-claimed': '✓ OWNER CLAIMED',
+  'publicly-sourced': 'PUBLICLY SOURCED',
+  'ai-curated': 'AI-CURATED',
+  'strong-fit': 'STRONG FIT',
+  'possible-fit': 'POSSIBLE FIT',
+  'no-match': 'NO REVIEWED MATCH',
+  program: 'STARTUP PROGRAM',
+};
+const descriptions: Record<CapabilityStampKind, string> = {
+  reviewed: 'REVIEWED: this exact fixture revision completed the illustrated audit contract; not a quality guarantee.',
+  'update-available': 'UPDATE AVAILABLE: the reviewed pin remains unchanged while a newer revision waits for review.',
+  stale: 'STALE: the review window or compatibility is no longer current.',
+  retired: 'RETIRED: historical references remain, but this fixture is not recommendable.',
+  'community-submitted': 'COMMUNITY SUBMITTED: authenticated owner identity and exact publication consent only; not a quality claim.',
+  'owner-claimed': 'OWNER CLAIMED: authenticated owner identity and exact publication consent only; not a quality claim.',
+  'publicly-sourced': 'PUBLICLY SOURCED: discovered from public material and not submitted by the source owner.',
+  'ai-curated': 'AI-CURATED: a model helped select or summarize the cited public source; human review remains required.',
+  'strong-fit': 'STRONG FIT: transparent fixture rules match this approved PRD context.',
+  'possible-fit': 'POSSIBLE FIT: review the named constraints before choosing this exact fixture revision.',
+  'no-match': 'NO REVIEWED MATCH: no eligible reviewed fixture was substituted.',
+  program: 'STARTUP PROGRAM: public official-source listing, not a Skill or acceptance promise.',
+};
+---
+
+<span
+  class={`capability-stamp capability-stamp-${kind}`}
+  data-capability-stamp={kind}
+  aria-label={descriptions[kind]}
+  title={descriptions[kind]}
+>
+  {labels[kind]}
+</span>

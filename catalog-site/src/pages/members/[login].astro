@@ -1,5 +1,6 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
+import CapabilityStamp from '../../components/CapabilityStamp.astro';
 import ShowcaseRow from '../../components/ShowcaseRow.astro';
 import StackPill from '../../components/StackPill.astro';
 import {
@@ -8,11 +9,14 @@ import {
   memberLibraryFixture,
   showcaseFixture,
 } from '../../data/member-showcase-preview';
+import { skillFixtureBySlug } from '../../data/capability-preview';
 import { withBase } from '../../lib/labels';
 
 export function getStaticPaths() {
   return [{ params: { login: memberFixture.login.toLowerCase() } }];
 }
+
+const contributedSkill = skillFixtureBySlug['schema-first-planning'];
 ---
 
 <BaseLayout
@@ -110,14 +114,27 @@ export function getStaticPaths() {
           <h2>Community Library</h2>
           <span>public contributions + explicit outcomes</span>
         </header>
-        <article class="member-activity-row">
-          <span class="library-type library-type-review">{memberLibraryFixture.type}</span>
-          <div>
-            <strong>{memberLibraryFixture.title}</strong>
-            <p>{memberLibraryFixture.outcome}</p>
-            <small>{memberLibraryFixture.version}</small>
-          </div>
-        </article>
+        <div class="member-contribution-list">
+          <a
+            class="member-activity-row member-activity-link"
+            href={withBase(`/skills/${contributedSkill.slug}/`)}
+          >
+            <CapabilityStamp kind="community-submitted" />
+            <div>
+              <strong>{contributedSkill.title}</strong>
+              <p>Intentional public Skill fixture contribution</p>
+              <small>{contributedSkill.version} · {contributedSkill.lifecycle}</small>
+            </div>
+          </a>
+          <article class="member-activity-row">
+            <span class="library-type library-type-review">{memberLibraryFixture.type}</span>
+            <div>
+              <strong>{memberLibraryFixture.title}</strong>
+              <p>{memberLibraryFixture.outcome}</p>
+              <small>{memberLibraryFixture.version}</small>
+            </div>
+          </article>
+        </div>
       </section>
     </main>
 
@@ -132,12 +149,13 @@ export function getStaticPaths() {
         </p>
       </section>
       <section id="stack" class="community-pulse-section">
-        <h3>Explicit Stack follows</h3>
+        <h3>Stack in public work</h3>
         <div class="project-detail-stacks">
           <StackPill slug="astro" />
           <StackPill slug="typescript" />
           <StackPill slug="github" />
         </div>
+        <p>Declared by the public Showcase fixture. Private Follows are not shown.</p>
       </section>
       <section class="community-pulse-section">
         <h3>Private workspace</h3>
