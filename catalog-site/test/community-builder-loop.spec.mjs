@@ -47,7 +47,7 @@ test('builder journey keeps both onboarding paths explicit and private', async (
   await expect(page.locator('[data-reverse-materials]')).toBeHidden();
   await expect(page.getByRole('button', { name: '← Back' })).toBeHidden();
 
-  await page.getByLabel('Help me create one from my Project').check();
+  await page.getByLabel('Inspire new ideas for my project').check();
   await page.getByRole('button', { name: 'Continue →' }).click();
   await expect(page.locator('[data-reverse-materials]')).toBeVisible();
   await expect(page.locator('[data-reverse-materials]')).toContainText(
