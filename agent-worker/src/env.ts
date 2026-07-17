@@ -49,6 +49,7 @@ export interface Env extends AuthEnv {
   COPILOT_RUNS_PER_IP_DAILY: string;
   COPILOT_RUNS_GLOBAL_DAILY: string;
   SOFTWARE_TARGETS: string;
+  PROJECT_MAINTAINER_GITHUB_IDS: string;
   VOTE_BACKEND: "kv" | "durable";
 }
 

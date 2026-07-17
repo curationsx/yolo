@@ -71,6 +71,26 @@ export function createAzureCommunityStore(containerFor: (name: string) => Cosmos
     async upsertDocument<T extends object>(containerName: string, doc: T, _partitionKey: string): Promise<void> {
       await containerFor(containerName).items.upsert(doc as ItemDefinition);
     },
+    async replaceDocument<T extends object>(
+      containerName: string,
+      id: string,
+      doc: T,
+      partitionKey: string,
+      etag: string,
+    ): Promise<boolean> {
+      try {
+        await containerFor(containerName)
+          .item(id, partitionKey)
+          .replace(doc as ItemDefinition, {
+            accessCondition: { type: "IfMatch", condition: etag },
+          });
+        return true;
+      } catch (error) {
+        const status = cosmosStatus(error);
+        if (status === 409 || status === 412) return false;
+        throw error;
+      }
+    },
     async deleteDocument(containerName: string, id: string, partitionKey: string): Promise<void> {
       try {
         await containerFor(containerName).item(id, partitionKey).delete();
@@ -86,6 +106,19 @@ export function createAzureCommunityStore(containerFor: (name: string) => Cosmos
     ): Promise<T[]> {
       const result = await containerFor(containerName)
         .items.query<T>({ query, parameters: toCosmosParameters(parameters) }, { partitionKey })
+        .fetchAll();
+      return result.resources;
+    },
+    async queryDocumentsCrossPartition<T>(
+      containerName: string,
+      query: string,
+      parameters: CosmosQueryParameter[],
+    ): Promise<T[]> {
+      const result = await containerFor(containerName)
+        .items.query<T>({
+          query,
+          parameters: toCosmosParameters(parameters),
+        })
         .fetchAll();
       return result.resources;
     },
@@ -387,4 +420,3 @@ export async function reconcileLegacyScoresContainer(
   }
   return results;
 }
-

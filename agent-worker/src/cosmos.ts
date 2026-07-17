@@ -64,7 +64,7 @@ async function authHeader(
 
 async function cosmosFetch(
   cfg: CosmosConfig,
-  verb: "GET" | "POST" | "DELETE",
+  verb: "GET" | "POST" | "PUT" | "DELETE",
   resourceType: string,
   resourceLink: string,
   path: string,
@@ -134,6 +134,35 @@ export async function upsertDocument(
   if (!res.ok) {
     throw new Error(`cosmos upsert failed: ${res.status} ${await res.text()}`);
   }
+}
+
+export async function replaceDocument(
+  cfg: CosmosConfig,
+  id: string,
+  doc: object,
+  partitionKey: string,
+  etag: string,
+): Promise<boolean> {
+  const resourceLink = `dbs/${cfg.database}/colls/${cfg.container}/docs/${id}`;
+  const requestPath =
+    `/dbs/${cfg.database}/colls/${cfg.container}/docs/${encodeURIComponent(id)}`;
+  const res = await cosmosFetch(
+    cfg,
+    "PUT",
+    "docs",
+    resourceLink,
+    requestPath,
+    doc,
+    {
+      "x-ms-documentdb-partitionkey": JSON.stringify([partitionKey]),
+      "if-match": etag,
+    },
+  );
+  if (res.status === 409 || res.status === 412) return false;
+  if (!res.ok) {
+    throw new Error(`cosmos replace failed: ${res.status} ${await res.text()}`);
+  }
+  return true;
 }
 
 /** Read one document by id within its logical partition. */

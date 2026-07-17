@@ -66,6 +66,7 @@ export interface CloudflareBindings {
   COPILOT_RUNS_PER_IP_DAILY: string;
   COPILOT_RUNS_GLOBAL_DAILY: string;
   SOFTWARE_TARGETS: string;
+  PROJECT_MAINTAINER_GITHUB_IDS: string;
   VOTE_BACKEND: "kv" | "durable";
 }
 
@@ -121,6 +122,7 @@ function buildGatewayEnv(bindings: CloudflareBindings): Env {
     COPILOT_RUNS_PER_IP_DAILY: bindings.COPILOT_RUNS_PER_IP_DAILY,
     COPILOT_RUNS_GLOBAL_DAILY: bindings.COPILOT_RUNS_GLOBAL_DAILY,
     SOFTWARE_TARGETS: bindings.SOFTWARE_TARGETS,
+    PROJECT_MAINTAINER_GITHUB_IDS: bindings.PROJECT_MAINTAINER_GITHUB_IDS,
     VOTE_BACKEND: bindings.VOTE_BACKEND,
   };
   // Cloudflare readiness is a bounded, non-billable configuration check — no

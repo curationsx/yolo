@@ -87,6 +87,9 @@ param foundryDeploymentName string = 'gpt-5.4-mini'
 @description('Comma-separated software cookbook targets. Matches wrangler.toml\'s SOFTWARE_TARGETS exactly (order and values), required by agent-worker/src/platform/azure/config.ts.')
 param softwareTargets string = 'zotero,ollama,hugging-face,n8n,langfuse,obsidian,sqlite,git,vs-code,pandoc,github,discourse,cloudflare,supabase'
 
+@description('Comma-separated GitHub numeric user IDs allowed to perform Project maintainer review actions.')
+param projectMaintainerGithubIds string = '219447171'
+
 @description('Vote storage backend. Always "durable" in every environment -- azure-staging runs against its own fully isolated *-staging Cosmos containers (see cosmosContainerName and friends), never the shared production containers, so there is no live-data risk in exercising the real production durable transaction/CAS path in staging too. Matches wrangler.toml\'s VOTE_BACKEND; config.ts only accepts "kv" or "durable".')
 param voteBackend string = 'durable'
 
@@ -287,6 +290,7 @@ resource gatewayApp 'Microsoft.App/containerApps@2025-01-01' = {
             { name: 'AZURE_OPENAI_ENDPOINT', value: foundryEndpoint }
             { name: 'AZURE_OPENAI_DEPLOYMENT', value: foundryDeploymentName }
             { name: 'SOFTWARE_TARGETS', value: softwareTargets }
+            { name: 'PROJECT_MAINTAINER_GITHUB_IDS', value: projectMaintainerGithubIds }
             { name: 'VOTE_BACKEND', value: voteBackend }
             { name: 'COPILOT_CONNECTION_TTL_SECONDS', value: copilotConnectionTtlSeconds }
             { name: 'COPILOT_RUNTIME_URL', value: 'https://${copilotApp.properties.configuration.ingress.fqdn}' }
