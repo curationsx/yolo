@@ -265,7 +265,7 @@ jobs:
         # reliable installs.
 
       - name: Log in to Azure (OIDC)
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ vars.AZURE_GITHUB_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
@@ -542,7 +542,7 @@ jobs:
         # >=22.12.0) plus `node scripts/azure/verify.mjs`.
 
       - name: Log in to Azure (OIDC, production environment)
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ vars.AZURE_GITHUB_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
