@@ -2,7 +2,7 @@
 import CommunityHomepage from '../../components/CommunityHomepage.astro';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 
-type CommunityView = 'new' | 'needs-feedback' | 'recently-improved';
+type CommunityView = 'active' | 'new' | 'needs-feedback' | 'recently-improved';
 
 interface Props {
   view: CommunityView;
@@ -12,6 +12,14 @@ interface Props {
 
 export function getStaticPaths() {
   return [
+    {
+      params: { view: 'active' },
+      props: {
+        view: 'active',
+        label: 'Active conversations',
+        description: 'Project and PRD Showcase conversations active now.',
+      },
+    },
     {
       params: { view: 'new' },
       props: {

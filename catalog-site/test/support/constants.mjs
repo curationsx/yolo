@@ -43,9 +43,8 @@ export const HEADER_ALIGNMENT_TOLERANCE_PX = 12;
 export const FIXTURE_AGENT_API = 'https://agent-api.fixture.invalid';
 
 /**
- * Installs deterministic, offline route handling for the one live network
- * call the Board oracle surface makes on first paint with fixtures enabled:
- * `AuthButton`'s `${api}/api/auth/config` check. Every other fixture-mode
+ * Installs deterministic, offline route handling for identity configuration and
+ * the optional signed-in member fixture. Every other fixture-mode
  * code path (`BoardActivityFeed`, `SoftwareVotes`) short-circuits on the
  * checked-in `board-fixtures.ts` data before any fetch happens.
  *
@@ -65,6 +64,23 @@ export async function installDeterministicNetwork(page) {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({ github: true }),
+      });
+      return;
+    }
+    if (url.endsWith('/api/auth/me')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          user: {
+            provider: 'github',
+            id: '219447171',
+            login: 'CurationsLA',
+            name: 'CurationsLA',
+            avatar_url: 'https://avatars.githubusercontent.com/u/219447171?v=4',
+            html_url: 'https://github.com/CurationsLA',
+          },
+        }),
       });
       return;
     }

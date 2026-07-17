@@ -127,6 +127,7 @@ export default defineConfig({
         stderr: 'pipe',
         env: {
           PUBLIC_BOARD_FIXTURES: 'true',
+          PUBLIC_MEMBER_FIXTURES: 'true',
           PUBLIC_AGENT_API: FIXTURE_AGENT_API,
         },
       },

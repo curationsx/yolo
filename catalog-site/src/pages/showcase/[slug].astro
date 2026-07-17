@@ -1,0 +1,171 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import ShowcaseStatusPill from '../../components/ShowcaseStatusPill.astro';
+import StackPill from '../../components/StackPill.astro';
+import {
+  showcaseFixtures,
+  type ShowcaseFixture,
+} from '../../data/member-showcase-preview';
+import { withBase } from '../../lib/labels';
+
+export function getStaticPaths() {
+  return showcaseFixtures.map((showcase) => ({
+    params: { slug: showcase.slug },
+    props: { showcase },
+  }));
+}
+
+interface Props {
+  showcase: ShowcaseFixture;
+}
+
+const { showcase } = Astro.props;
+---
+
+<BaseLayout
+  title={`${showcase.title} - PRD Showcase`}
+  description={showcase.purpose}
+  communityPreview
+  noindex
+>
+  <a class="community-page-back" href={withBase('/showcase/')}>← All PRD Showcases</a>
+
+  <header class="project-detail-header showcase-detail-header">
+    <div class="project-score project-detail-score" aria-label={`${showcase.score} conversation votes`}>
+      <span aria-hidden="true">▲</span>
+      <strong>{showcase.score}</strong>
+    </div>
+    <div>
+      <p class="discovery-eyebrow">Public PRD Showcase</p>
+      <h1>
+        <a
+          class="project-repository-link"
+          href={showcase.prdUrl}
+          target="_blank"
+          rel="noopener"
+          aria-label={`${showcase.title} public PRD`}
+        >
+          {showcase.title}<span aria-hidden="true"> ↗</span>
+        </a>
+      </h1>
+      <p class="project-detail-question">“{showcase.question}”</p>
+      <div class="project-detail-meta">
+        <ShowcaseStatusPill kind="showcase" />
+        {showcase.roastOpen && <ShowcaseStatusPill kind="open-roast" />}
+        {showcase.roastCount > 0 && <ShowcaseStatusPill kind="roasted" />}
+        <span>
+          shared by
+          <a href={withBase(`/members/${showcase.author.login.toLowerCase()}/`)}>
+            @{showcase.author.login}
+          </a>
+        </span>
+        <span>{showcase.comments} replies</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="board-home-layout discovery-layout">
+    <main class="board-stack-column">
+      <section id="breakdown" class="project-detail-section">
+        <header>
+          <p class="discovery-eyebrow">AI-assisted purpose breakdown</p>
+          <h2>{showcase.breakdown.purpose}</h2>
+        </header>
+        <p class="showcase-disclosure">
+          Generated in the author’s GitHub Copilot CLI · reviewed and approved by
+          the author · not independent verification
+        </p>
+        <div class="showcase-breakdown-grid">
+          <article>
+            <span>Problem</span>
+            <p>{showcase.breakdown.problem}</p>
+          </article>
+          <article>
+            <span>Who it is for</span>
+            <p>{showcase.breakdown.audience}</p>
+          </article>
+          <article>
+            <span>What it proposes</span>
+            <p>{showcase.breakdown.product}</p>
+          </article>
+          <article>
+            <span>Decisions made</span>
+            <ul>{showcase.breakdown.decisions.map((decision) => <li>{decision}</li>)}</ul>
+          </article>
+          <article>
+            <span>Non-goals</span>
+            <ul>{showcase.breakdown.nonGoals.map((nonGoal) => <li>{nonGoal}</li>)}</ul>
+          </article>
+          <article>
+            <span>Open decisions</span>
+            <ul>{showcase.breakdown.openDecisions.map((decision) => <li>{decision}</li>)}</ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="project-detail-section">
+        <header>
+          <p class="discovery-eyebrow">Stack context</p>
+          <h2>Tools named by the author</h2>
+        </header>
+        <div class="project-detail-stacks">
+          {showcase.stackSlugs.map((stackSlug) => <StackPill slug={stackSlug} />)}
+        </div>
+      </section>
+
+      <section id="roast" class="project-detail-section">
+        <header>
+          <p class="discovery-eyebrow">Rubber Duck Roast</p>
+          <h2>Structured critique of the artifact—not the author</h2>
+        </header>
+        <article class="showcase-roast">
+          <header>
+            <strong>{showcase.roast.author}</strong>
+            <ShowcaseStatusPill kind="roasted" />
+          </header>
+          <dl>
+            <div><dt>What holds up</dt><dd>{showcase.roast.whatHoldsUp}</dd></div>
+            <div><dt>What quacks</dt><dd>{showcase.roast.whatQuacks}</dd></div>
+            <div><dt>Biggest hidden assumption</dt><dd>{showcase.roast.hiddenAssumption}</dd></div>
+            <div><dt>Most expensive ambiguity</dt><dd>{showcase.roast.expensiveAmbiguity}</dd></div>
+            <div><dt>One falsification test</dt><dd>{showcase.roast.falsificationTest}</dd></div>
+            <div><dt>Question to answer next</dt><dd>{showcase.roast.nextQuestion}</dd></div>
+          </dl>
+        </article>
+        <article class="project-comment project-comment-human">
+          <strong>@{showcase.author.login}</strong>
+          <p>
+            Outcome: deferred until the profile fixture proves how much identity
+            context is actually needed. The critique remains public and the
+            Showcase remains open for Roast.
+          </p>
+        </article>
+      </section>
+    </main>
+
+    <aside class="board-feed discovery-rail">
+      <h2>Showcase source</h2>
+      <section class="community-pulse-section">
+        <h3>Exact public PRD</h3>
+        <a class="discovery-feature-link" href={showcase.prdUrl} target="_blank" rel="noopener">
+          Read source revision ↗
+        </a>
+        <p>{showcase.sourceRevision}</p>
+      </section>
+      <section class="community-pulse-section">
+        <h3>Review mode</h3>
+        <p>{showcase.reviewMode}</p>
+        <p>{showcase.roastOpen ? 'Still open for structured Roast' : 'Roast participation closed'}</p>
+      </section>
+      <section class="community-pulse-section">
+        <h3>Purpose provenance</h3>
+        <p>{showcase.breakdown.promptVersion}</p>
+        <p>Builder approved · {showcase.breakdown.approvedAt.slice(0, 10)}</p>
+      </section>
+      <p class="community-pulse-note">
+        Illustrative fixture. No repository read, message send, or model call occurs
+        on this page.
+      </p>
+    </aside>
+  </div>
+</BaseLayout>
