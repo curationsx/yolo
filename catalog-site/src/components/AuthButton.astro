@@ -1,12 +1,26 @@
 ---
+import { withBase } from '../lib/labels';
+
 const apiBase = import.meta.env.PUBLIC_AGENT_API ?? '';
+const memberHome = withBase('/me/');
 ---
 
-<div class="auth-control" data-auth-control data-api={apiBase}>
+<div
+  class="auth-control"
+  data-auth-control
+  data-api={apiBase}
+  data-member-home={memberHome}
+>
   <button type="button" class="auth-sign-in" data-auth-sign-in disabled>
     Sign in with GitHub
   </button>
-  <a class="auth-profile" data-auth-profile href="#" rel="noopener" hidden>
+  <a
+    class="auth-profile"
+    data-auth-profile
+    href={memberHome}
+    title="Open your CURATIONS member workspace"
+    hidden
+  >
     <img data-auth-avatar alt="" width="24" height="24" />
     <span data-auth-name></span>
   </a>
@@ -27,6 +41,7 @@ const apiBase = import.meta.env.PUBLIC_AGENT_API ?? '';
 
   for (const root of document.querySelectorAll<HTMLElement>('[data-auth-control]')) {
     const api = root.dataset.api ?? '';
+    const memberHome = root.dataset.memberHome ?? '/me/';
     const signIn = root.querySelector<HTMLButtonElement>('[data-auth-sign-in]')!;
     const signOut = root.querySelector<HTMLButtonElement>('[data-auth-sign-out]')!;
     const profile = root.querySelector<HTMLAnchorElement>('[data-auth-profile]')!;
@@ -95,9 +110,9 @@ const apiBase = import.meta.env.PUBLIC_AGENT_API ?? '';
       signIn.hidden = true;
       signOut.hidden = false;
       profile.hidden = false;
-      profile.href = user.html_url;
+      profile.href = memberHome;
       avatar.src = user.avatar_url;
-      avatar.alt = `${user.login} on GitHub`;
+      avatar.alt = `${user.login} CURATIONS profile`;
       name.textContent = user.login;
       status.textContent = '';
       broadcastAuth(user);

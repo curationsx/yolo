@@ -67,6 +67,7 @@ const currentPath = Astro.url.pathname;
                   Active
                 </a>
                 <a class:list={{ active: currentPath.startsWith('/projects') }} href={withBase('/projects/')}>Projects</a>
+                <a class:list={{ active: currentPath.startsWith('/showcase') }} href={withBase('/showcase/')}>Showcase</a>
                 <a class:list={{ active: currentPath.startsWith('/stacks') }} href={withBase('/stacks/')}>Stacks</a>
                 <a class:list={{ active: currentPath.startsWith('/library') }} href={withBase('/library/')}>Library</a>
                 <a href={withBase('/#universal-feed')}>People</a>
@@ -103,6 +104,7 @@ const currentPath = Astro.url.pathname;
         </a>
         <a href={ENTRIES_URL}>View source data</a>
         {communityPreview && <a href={withBase('/projects/new/')}>Submit your Project</a>}
+        {communityPreview && <a href={withBase('/showcase/new/')}>Share your PRD</a>}
         <a href={withBase('/submit/')}>Propose a tool or company</a>
         <a href={`${REPO_URL}/issues/new`}>Suggest a correction</a>
         <a href={REPO_URL}>GitHub</a>
