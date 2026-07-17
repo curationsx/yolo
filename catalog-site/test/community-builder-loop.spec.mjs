@@ -51,10 +51,12 @@ test('builder journey keeps both onboarding paths explicit and private', async (
   await page.getByRole('button', { name: 'Continue →' }).click();
   await expect(page.locator('[data-reverse-materials]')).toBeVisible();
   await expect(page.locator('[data-reverse-materials]')).toContainText(
-    'Never `.env`, credentials, terminal history, private files, or unrelated paths.',
+    'File picker appears after repository sync.',
   );
 
-  await expect(page.getByText('Private draft destination')).toBeVisible();
+  await expect(
+    page.getByText('Preferred destination for generated working plan (optional)'),
+  ).toBeVisible();
 });
 
 test('existing-plan fixture reaches an exact pending public preview without API calls', async ({
@@ -71,12 +73,18 @@ test('existing-plan fixture reaches an exact pending public preview without API 
   await page.goto('/projects/new/');
   await page.getByRole('button', { name: 'Continue →' }).click();
 
+  await page
+    .getByLabel(/Link to GitHub project/i)
+    .fill('https://github.com/curationsx/yolo');
   await page.getByLabel('Project name').fill('Signal Garden');
   await page
-    .getByLabel('Plain-English Project description')
+    .getByLabel('Working plan file path (optional)')
+    .fill('docs/PRD-curations-community.md');
+  await page
+    .getByLabel('Details of project')
     .fill('A public workspace that helps small teams turn open questions into testable plan revisions.');
   await page
-    .getByLabel('Human feedback question')
+    .getByLabel('I would like feedback and new ideas on...')
     .fill('Does this review make the next decision clear enough to test with one builder?');
   await page.getByLabel('TypeScript').uncheck();
   await page.getByRole('button', { name: 'Continue →' }).click();
@@ -86,7 +94,7 @@ test('existing-plan fixture reaches an exact pending public preview without API 
   ).toBeVisible();
   await expect(page.locator('[data-review-project]')).toHaveText('Signal Garden');
   await expect(page.locator('[data-review-observation]')).toContainText(
-    'No repository request occurred.',
+    'No repository request occurred in this preview.',
   );
   await expect(page.getByLabel(/Invite a disclosed AI guide/)).not.toBeChecked();
   await page
@@ -145,7 +153,7 @@ test('existing-plan fixture reaches an exact pending public preview without API 
     .click();
   await expect(page.locator('[data-builder-pending]')).toBeVisible();
   await expect(page.locator('[data-builder-pending]')).toContainText(
-    'No Project was created, no repository was read, and nothing was published.',
+    'This preview does not submit data yet.',
   );
   expect(productApiRequests).toEqual([]);
 });

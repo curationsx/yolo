@@ -2263,6 +2263,11 @@ code {
   font-weight: 400;
 }
 
+.field-required {
+  color: var(--coral-red);
+  font-weight: 800;
+}
+
 .platform-field {
   border: 2px solid var(--border-color);
   padding: 0.8rem;
@@ -4287,6 +4292,25 @@ code {
 
 .project-builder-materials {
   background: #fff;
+}
+
+.project-builder-file-picker {
+  border: 2px dashed var(--border-color);
+  background: var(--warm-paper);
+  padding: 0.75rem 0.85rem;
+}
+
+.project-builder-file-picker strong {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  text-transform: uppercase;
+}
+
+.project-builder-file-picker p {
+  margin: 0.35rem 0 0;
+  color: var(--editorial-ink-soft);
+  font-size: 0.75rem;
 }
 
 .project-review-grid {
