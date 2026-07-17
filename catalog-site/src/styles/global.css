@@ -3092,14 +3092,23 @@ code {
   margin-bottom: 0.15rem;
 }
 
-.community-plan-note a {
-  display: block;
-  margin-top: 0.35rem;
-  color: var(--dark-coral);
-  font-family: var(--font-mono);
+.community-plan-note p {
+  margin: 0.2rem 0 0;
+  color: var(--editorial-ink-soft);
+  font-size: 0.72rem;
+}
+
+.community-plan-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.4rem;
+  margin-top: 0.55rem;
+}
+
+.community-plan-actions .community-action {
+  width: 100%;
+  padding: 0.45rem 0.55rem;
   font-size: 0.62rem;
-  font-weight: 700;
-  text-decoration: none;
 }
 
 .community-search {
@@ -3512,8 +3521,8 @@ code {
     font-size: 0.72rem;
   }
 
-  .community-plan-note a {
-    margin-top: 0.35rem;
+  .community-plan-actions {
+    margin-top: 0.45rem;
   }
 
   .community-view-bar {
