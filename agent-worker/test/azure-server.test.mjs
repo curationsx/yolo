@@ -52,6 +52,7 @@ test("buildAzureEnv wires every Azure adapter into one project-owned Env", () =>
   const config = loadAzureConfig(validEnv());
   const env = buildAzureEnv(config, fakeCosmosClient(), fakeCredential());
   assert.equal(typeof env.quota.reserve, "function");
+  assert.equal(typeof env.projectPreviews.get, "function");
   assert.equal(typeof env.copilotGrants.consume, "function");
   assert.equal(typeof env.votes.setVote, "function");
   assert.equal(typeof env.community.readDocument, "function");

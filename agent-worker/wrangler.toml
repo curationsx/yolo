@@ -55,6 +55,10 @@ name = "QUOTA"
 class_name = "QuotaGuard"
 
 [[durable_objects.bindings]]
+name = "PROJECT_PREVIEW"
+class_name = "ProjectPreviewGuard"
+
+[[durable_objects.bindings]]
 name = "VOTE_GUARD"
 class_name = "VoteGuard"
 
@@ -83,6 +87,10 @@ new_sqlite_classes = ["VoteGuard"]
 [[migrations]]
 tag = "v3"
 new_sqlite_classes = ["CopilotGrantGuard", "CopilotRuntime"]
+
+[[migrations]]
+tag = "v4"
+new_sqlite_classes = ["ProjectPreviewGuard"]
 
 [observability]
 enabled = true

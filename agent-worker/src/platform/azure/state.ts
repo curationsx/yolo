@@ -21,6 +21,7 @@ import type {
   QuotaResult,
   QuotaRule,
   QuotaStore,
+  ProjectPreviewStore,
 } from "../contracts.ts";
 import type { CosmosContainerLike, CosmosResource } from "./cosmos-types.ts";
 import { GatewayErrors } from "./errors.ts";
@@ -87,6 +88,41 @@ export function createAzureKeyValueStore(container: CosmosContainerLike): KeyVal
       } catch (error) {
         if (cosmosStatus(error) !== 404) throw error;
       }
+
+    },
+  };
+}
+
+export function createAzureProjectPreviewStore(
+  container: CosmosContainerLike,
+): ProjectPreviewStore {
+  const item = (previewVersion: string) => {
+    const id = sha256Hex(`${KV_SCOPE}:project-preview:${previewVersion}`);
+    return container.item(id, KV_SCOPE);
+  };
+  return {
+    async put(previewVersion, value, ttlSeconds) {
+      const id = sha256Hex(`${KV_SCOPE}:project-preview:${previewVersion}`);
+      const response = await container.items.upsert({
+        id,
+        scope: KV_SCOPE,
+        value,
+        ttl: ttlSeconds,
+      });
+      const sessionToken = response.headers?.["x-ms-session-token"];
+      if (typeof sessionToken !== "string" || !sessionToken) {
+        throw new Error("Cosmos Project preview write returned no session token");
+      }
+      return sessionToken;
+    },
+    async get(previewVersion, consistencyToken) {
+      const response = await item(previewVersion).read({
+        sessionToken: consistencyToken,
+      });
+      if (response.statusCode === 404 || !response.resource) return null;
+      return typeof response.resource.value === "string"
+        ? response.resource.value
+        : null;
     },
   };
 }
