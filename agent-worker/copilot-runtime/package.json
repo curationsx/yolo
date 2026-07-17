@@ -12,6 +12,6 @@
   },
   "private": true,
   "dependencies": {
-    "@github/copilot-sdk": "1.0.6"
+    "@github/copilot-sdk": "1.0.7"
   }
 }
