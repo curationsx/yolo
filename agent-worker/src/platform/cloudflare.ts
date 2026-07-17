@@ -22,6 +22,7 @@ import {
   type CosmosConfig,
 } from "../cosmos.ts";
 import { releaseDailyQuota, reserveDailyQuota } from "../quota.ts";
+import { createCloudflareProjectPreviewStore as projectPreviewStore } from "../project-preview.ts";
 import { getViewerVotes, setVote, type VoteGuardEnv } from "../vote-guard.ts";
 import type {
   AgentModelClient,
@@ -31,6 +32,7 @@ import type {
   CopilotRunResult,
   CopilotRuntimeClient,
   QuotaStore,
+  ProjectPreviewStore,
   ReadinessProbe,
   RequestMetadata,
   VoteStore,
@@ -42,6 +44,12 @@ export function createCloudflareQuotaStore(namespace: DurableObjectNamespace): Q
     reserve: (rules) => reserveDailyQuota(env, rules),
     release: (rules) => releaseDailyQuota(env, rules),
   };
+}
+
+export function createCloudflareProjectPreviewStore(
+  namespace: DurableObjectNamespace,
+): ProjectPreviewStore {
+  return projectPreviewStore(namespace);
 }
 
 export function createCloudflareCopilotGrantStore(

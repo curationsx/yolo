@@ -36,6 +36,10 @@ import {
   json,
 } from "./community.ts";
 import type { Env } from "./env.ts";
+import {
+  handleCreateProject,
+  handleProjectPreview,
+} from "./projects.ts";
 
 export async function handleRequest(req: Request, env: Env): Promise<Response> {
   const url = new URL(req.url);
@@ -122,6 +126,12 @@ export async function handleRequest(req: Request, env: Env): Promise<Response> {
   }
   if (url.pathname === "/api/discussions/comment" && req.method === "POST") {
     return handleCreateComment(req, env, cors);
+  }
+  if (url.pathname === "/api/projects/preview" && req.method === "POST") {
+    return handleProjectPreview(req, env, cors);
+  }
+  if (url.pathname === "/api/projects" && req.method === "POST") {
+    return handleCreateProject(req, env, cors);
   }
   if (url.pathname === "/api/health") {
     return json(

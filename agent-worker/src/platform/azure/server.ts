@@ -22,7 +22,12 @@ import { copilotAuthConfigured, githubAuthConfigured } from "../../auth.ts";
 import { createAzureAgentModelClient } from "./foundry.ts";
 import { createAzureCommunityStore, createAzureVoteStore } from "./community.ts";
 import { createAzureCopilotRuntimeClient } from "./runtime.ts";
-import { createAzureCopilotGrantStore, createAzureKeyValueStore, createAzureQuotaStore } from "./state.ts";
+import {
+  createAzureCopilotGrantStore,
+  createAzureKeyValueStore,
+  createAzureProjectPreviewStore,
+  createAzureQuotaStore,
+} from "./state.ts";
 import { createAzureReadinessProbe } from "./readiness.ts";
 import { getSharedAzureCredential, loadAzureConfig, type AzureGatewayConfig } from "./config.ts";
 import { nodeRequestToFetchRequest, RequestBodyTooLargeError, requestTooLargeResponse, sendFetchResponse } from "./http-adapter.ts";
@@ -51,6 +56,7 @@ export function buildAzureEnv(
 
   const gatewayStateContainer = containerFor(config.cosmosGatewayStateContainer);
   const votesContainer = containerFor(config.cosmosVotesContainer);
+  const gatewayState = createAzureKeyValueStore(gatewayStateContainer);
 
   const env: Env = {
     ALLOWED_ORIGINS: config.allowedOrigins,
@@ -59,8 +65,9 @@ export function buildAzureEnv(
     GITHUB_REPOSITORY_TOKEN: config.githubRepositoryToken,
     COPILOT_TOKEN_ENCRYPTION_KEY: config.copilotTokenEncryptionKey,
     COPILOT_CONNECTION_TTL_SECONDS: config.copilotConnectionTtlSeconds,
-    RATE: createAzureKeyValueStore(gatewayStateContainer),
+    RATE: gatewayState,
     quota: createAzureQuotaStore(gatewayStateContainer),
+    projectPreviews: createAzureProjectPreviewStore(gatewayStateContainer),
     copilotGrants: createAzureCopilotGrantStore(gatewayStateContainer),
     votes: createAzureVoteStore(votesContainer),
     community: createAzureCommunityStore(containerFor),

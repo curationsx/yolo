@@ -143,8 +143,10 @@ export async function readDocumentWithSession<T>(
   partitionKey: string,
   sessionToken?: string,
 ): Promise<CosmosSessionResult<T | null>> {
-  const link = `dbs/${cfg.database}/colls/${cfg.container}/docs/${encodeURIComponent(id)}`;
-  const res = await cosmosFetch(cfg, "GET", "docs", link, `/${link}`, undefined, {
+  const resourceLink = `dbs/${cfg.database}/colls/${cfg.container}/docs/${id}`;
+  const requestPath =
+    `/dbs/${cfg.database}/colls/${cfg.container}/docs/${encodeURIComponent(id)}`;
+  const res = await cosmosFetch(cfg, "GET", "docs", resourceLink, requestPath, undefined, {
     "x-ms-documentdb-partitionkey": JSON.stringify([partitionKey]),
     ...sessionHeaders(sessionToken),
   });
@@ -171,8 +173,10 @@ export async function deleteDocumentWithSession(
   partitionKey: string,
   sessionToken?: string,
 ): Promise<string | null> {
-  const link = `dbs/${cfg.database}/colls/${cfg.container}/docs/${encodeURIComponent(id)}`;
-  const res = await cosmosFetch(cfg, "DELETE", "docs", link, `/${link}`, undefined, {
+  const resourceLink = `dbs/${cfg.database}/colls/${cfg.container}/docs/${id}`;
+  const requestPath =
+    `/dbs/${cfg.database}/colls/${cfg.container}/docs/${encodeURIComponent(id)}`;
+  const res = await cosmosFetch(cfg, "DELETE", "docs", resourceLink, requestPath, undefined, {
     "x-ms-documentdb-partitionkey": JSON.stringify([partitionKey]),
     ...sessionHeaders(sessionToken),
   });

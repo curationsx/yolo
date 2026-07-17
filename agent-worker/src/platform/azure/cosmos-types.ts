@@ -31,6 +31,7 @@ export interface CosmosItemResponse<T> {
   resource?: T;
   etag: string;
   statusCode: number;
+  headers?: Record<string, string | number | boolean>;
 }
 
 export type CosmosQueryParameterValue = string | number | boolean | null | string[] | number[];
@@ -59,7 +60,7 @@ export type CosmosBatchOperation =
   | { operationType: "Read"; id: string };
 
 export interface CosmosItemLike {
-  read(): Promise<CosmosItemResponse<ItemDefinition>>;
+  read(options?: { sessionToken?: string }): Promise<CosmosItemResponse<ItemDefinition>>;
   replace(
     body: ItemDefinition,
     options?: { accessCondition?: CosmosAccessCondition },

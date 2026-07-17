@@ -17,6 +17,7 @@ import {
   createCloudflareCopilotGrantStore,
   createCloudflareCopilotRuntimeClient,
   createCloudflareQuotaStore,
+  createCloudflareProjectPreviewStore,
   createCloudflareReadinessProbe,
   createCloudflareRequestMetadata,
   createCloudflareVoteStore,
@@ -27,11 +28,13 @@ export { QuotaGuard } from "./quota.ts";
 export { VoteGuard } from "./vote-guard.ts";
 export { CopilotGrantGuard } from "./copilot-grant.ts";
 export { CopilotRuntime } from "./copilot-runtime.ts";
+export { ProjectPreviewGuard } from "./project-preview.ts";
 
 /** The real Cloudflare binding surface configured in `wrangler.toml`. */
 export interface CloudflareBindings {
   RATE: KVNamespace;
   QUOTA: DurableObjectNamespace;
+  PROJECT_PREVIEW: DurableObjectNamespace;
   VOTE_GUARD: DurableObjectNamespace;
   COPILOT_GRANT: DurableObjectNamespace;
   COPILOT_RUNTIME: DurableObjectNamespace<CopilotRuntime>;
@@ -76,6 +79,7 @@ function buildGatewayEnv(bindings: CloudflareBindings): Env {
     COPILOT_CONNECTION_TTL_SECONDS: bindings.COPILOT_CONNECTION_TTL_SECONDS,
     RATE: bindings.RATE,
     quota: createCloudflareQuotaStore(bindings.QUOTA),
+    projectPreviews: createCloudflareProjectPreviewStore(bindings.PROJECT_PREVIEW),
     copilotGrants: createCloudflareCopilotGrantStore(bindings.COPILOT_GRANT),
     votes: createCloudflareVoteStore({
       RATE: bindings.RATE,

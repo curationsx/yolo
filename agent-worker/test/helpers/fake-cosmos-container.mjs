@@ -51,7 +51,7 @@ export class FakeCosmosContainer {
   item(id, partitionKey) {
     const key = this._key(partitionKey, id);
     return {
-      read: async () => {
+      read: async (_options) => {
         const failure = this._consumeFailure("read");
         if (failure) throw cosmosError(failure.code, failure.retryAfterInMs);
         const entry = this.documents.get(key);
@@ -71,7 +71,12 @@ export class FakeCosmosContainer {
         }
         const etag = this._nextEtag();
         this.documents.set(key, { doc: { ...body }, etag });
-        return { resource: { ...body }, etag, statusCode: 200 };
+        return {
+          resource: { ...body },
+          etag,
+          statusCode: 200,
+          headers: { "x-ms-session-token": "fake-session-token" },
+        };
       },
       delete: async (options) => {
         const failure = this._consumeFailure("delete");
@@ -100,7 +105,12 @@ export class FakeCosmosContainer {
         if (this.documents.has(key)) throw cosmosError(409);
         const etag = this._nextEtag();
         this.documents.set(key, { doc: { ...body }, etag });
-        return { resource: { ...body }, etag, statusCode: 201 };
+        return {
+          resource: { ...body },
+          etag,
+          statusCode: 201,
+          headers: { "x-ms-session-token": "fake-session-token" },
+        };
       },
       upsert: async (body) => {
         const failure = this._consumeFailure("upsert");
@@ -109,7 +119,12 @@ export class FakeCosmosContainer {
         const key = this._key(partitionKey, body.id);
         const etag = this._nextEtag();
         this.documents.set(key, { doc: { ...body }, etag });
-        return { resource: { ...body }, etag, statusCode: 200 };
+        return {
+          resource: { ...body },
+          etag,
+          statusCode: 200,
+          headers: { "x-ms-session-token": "fake-session-token" },
+        };
       },
       query: (querySpec, options) => {
         const partitionKey = options?.partitionKey;

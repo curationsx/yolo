@@ -21,6 +21,11 @@ export interface KeyValueStore {
   delete(key: string): Promise<void>;
 }
 
+export interface ProjectPreviewStore {
+  put(previewVersion: string, value: string, ttlSeconds: number): Promise<string>;
+  get(previewVersion: string, consistencyToken: string): Promise<string | null>;
+}
+
 export interface QuotaRule {
   key: string;
   limit: number;

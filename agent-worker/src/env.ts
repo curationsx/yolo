@@ -5,6 +5,7 @@ import type {
   CopilotGrantStore,
   CopilotRuntimeClient,
   QuotaStore,
+  ProjectPreviewStore,
   ReadinessProbe,
   RequestMetadata,
   VoteStore,
@@ -19,6 +20,7 @@ import type {
  */
 export interface Env extends AuthEnv {
   quota: QuotaStore;
+  projectPreviews: ProjectPreviewStore;
   copilotGrants: CopilotGrantStore;
   votes: VoteStore;
   community: CommunityStore;
