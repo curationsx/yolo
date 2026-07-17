@@ -10,10 +10,17 @@ illustrative fixture preview. Gate 1 is drafted in PR #12; the remaining Gate 2
 proof is the builder onboarding, private Project Review, public preview, and
 minimal profile journey.
 
-**Related expansion plan:** See
-[`member-profiles-and-prd-showcase.md`](member-profiles-and-prd-showcase.md) for
-Curations-native profiles, settings, Inbox, standalone public PRD Showcases,
-Copilot CLI purpose breakdowns, and opt-in Rubber Duck Roast.
+**Related expansion plans:**
+
+- [`member-profiles-and-prd-showcase.md`](member-profiles-and-prd-showcase.md)
+  defines Curations-native profiles, settings, Inbox, standalone public PRD
+  Showcases, Copilot CLI purpose breakdowns, and opt-in Rubber Duck Roast.
+- [`skills-and-prd-capability-graph.md`](skills-and-prd-capability-graph.md)
+  defines the reviewed Skills master, explicit PRD matching, member actions,
+  public sourcing and claim, anchored threads, and Startup Toolkit.
+- [`autopilot-execution-contract.md`](autopilot-execution-contract.md) defines
+  bounded autonomous implementation, review, CI remediation, and the
+  non-bypassable GitHub, cloud, secret, legal, and irreversible-action controls.
 
 ## Product direction
 
