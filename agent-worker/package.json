@@ -11,7 +11,7 @@
     "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=\"src/platform/**/*.ts\" --test-coverage-exclude=\"src/platform/azure/cosmos-types.ts\" --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 test/*.test.mjs"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260712.1",
+    "@cloudflare/workers-types": "^5.20260717.1",
     "@types/node": "^26.1.1",
     "typescript": "^5.9.0",
     "wrangler": "^4.110.0"
