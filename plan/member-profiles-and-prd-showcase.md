@@ -266,7 +266,7 @@ The dashboard includes:
 - open feedback requests;
 - saved Library artifacts;
 - followed categories, tools, and Stack combinations;
-- subscribed Project and Showcase conversations;
+- watched Project and Showcase conversations;
 - recent revisions;
 - explicit recommendation outcomes waiting for the member's decision; and
 - inbox summaries.
@@ -339,7 +339,7 @@ Inbox items include:
 - maintainer review decisions;
 - Project and Showcase revision updates;
 - accepted or adapted outcome notices; and
-- subscribed-thread updates.
+- watched-thread updates.
 
 Every reply remains anchored to a public Project or Showcase conversation. A
 member can respond from the thread context rather than creating an unscoped
@@ -711,7 +711,7 @@ moderation state. It does not copy the full PRD body by default.
 ### Gate 4 - Member persistence and Inbox
 
 Expand the minimum pilot safety records with only the profile, preferences,
-drafts, reviews, notifications, subscriptions, moderation history, and Inbox
+drafts, reviews, notifications, Watches, moderation history, and Inbox
 state needed by the proven flow.
 
 ### Gate 5 - Optional AI Roast
