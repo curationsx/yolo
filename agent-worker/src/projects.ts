@@ -607,6 +607,7 @@ export async function handleCreateProject(
     }
     if (existing?.status === "draft") {
       if (!existing._etag) {
+        await releaseQuota(env, createQuotaRules);
         return json({ error: "Project changed; refresh before resubmitting" }, 409, cors);
       }
       const replaced = await env.community.replaceDocument(
@@ -617,6 +618,7 @@ export async function handleCreateProject(
         existing._etag,
       );
       if (!replaced) {
+        await releaseQuota(env, createQuotaRules);
         return json({ error: "Project changed; refresh before resubmitting" }, 409, cors);
       }
     } else {
