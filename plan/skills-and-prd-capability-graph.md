@@ -12,6 +12,8 @@ boundaries remain subordinate to
 **Related plans:**
 [`community-discovery-architecture.md`](community-discovery-architecture.md) and
 [`member-profiles-and-prd-showcase.md`](member-profiles-and-prd-showcase.md)
+**Execution contract:**
+[`autopilot-execution-contract.md`](autopilot-execution-contract.md)
 **Visual contract:** Reuse the dense Lobsters Board, brutalist letter stamps,
 score rails, mono metadata, zero radius, opaque surfaces, and contextual right
 rails. Do not replace it with a card marketplace.

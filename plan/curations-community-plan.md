@@ -18,6 +18,9 @@ minimal profile journey.
 - [`skills-and-prd-capability-graph.md`](skills-and-prd-capability-graph.md)
   defines the reviewed Skills master, explicit PRD matching, member actions,
   public sourcing and claim, anchored threads, and Startup Toolkit.
+- [`autopilot-execution-contract.md`](autopilot-execution-contract.md) defines
+  bounded autonomous implementation, review, CI remediation, and the
+  non-bypassable GitHub, cloud, secret, legal, and irreversible-action controls.
 
 ## Product direction
 
