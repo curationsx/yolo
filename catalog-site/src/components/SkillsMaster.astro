@@ -1,0 +1,129 @@
+---
+import {
+  capabilityJobs,
+  skillFixtures,
+  type CapabilityJobSlug,
+} from '../data/capability-preview';
+import { withBase } from '../lib/labels';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import MasterIndexRail from './MasterIndexRail.astro';
+import SkillRow from './SkillRow.astro';
+
+interface Props {
+  selectedJob?: CapabilityJobSlug;
+}
+
+const { selectedJob } = Astro.props;
+const selectedJobFixture = capabilityJobs.find((job) => job.slug === selectedJob);
+const visibleSkills = selectedJob
+  ? skillFixtures.filter((skill) => skill.jobs.includes(selectedJob))
+  : skillFixtures;
+const skillIndex = [
+  {
+    title: 'Jobs to be done',
+    items: capabilityJobs.map((job) => ({
+      label: job.label,
+      href: withBase(`/skills/jobs/${job.slug}/`),
+      count: skillFixtures.filter((skill) => skill.jobs.includes(job.slug)).length,
+    })),
+  },
+  {
+    title: 'Trust states',
+    items: [
+      {
+        label: 'Reviewed',
+        href: withBase('/skills/#skill-results'),
+        count: skillFixtures.filter((skill) => skill.lifecycle === 'reviewed').length,
+      },
+      {
+        label: 'Update available',
+        href: withBase('/skills/#skill-results'),
+        count: skillFixtures.filter((skill) => skill.lifecycle === 'update-available').length,
+      },
+      {
+        label: 'Stale',
+        href: withBase('/skills/#skill-results'),
+        count: skillFixtures.filter((skill) => skill.lifecycle === 'stale').length,
+      },
+      {
+        label: 'Retired',
+        href: withBase('/skills/#skill-results'),
+        count: skillFixtures.filter((skill) => skill.lifecycle === 'retired').length,
+      },
+    ],
+  },
+  {
+    title: 'Contribute',
+    items: [
+      { label: 'Start Skill Request', href: withBase('/skills/request/'), count: 'NO MATCH' },
+      { label: 'Startup Toolkit', href: withBase('/toolkit/'), count: 'GROW' },
+    ],
+  },
+];
+---
+
+<BaseLayout
+  title={`${selectedJobFixture?.label ?? 'Find Skills'} - CURATIONS.DEV`}
+  description="Reviewed, version-pinned capability fixtures organized by the job a builder needs done."
+  communityPreview
+  noindex
+>
+  <a class="community-page-back" href={withBase('/')}>← Community Board</a>
+  <p class="community-preview-note">
+    Fixture-only capability graph · no catalog fetch, audit, match, save, Watch, install, or model call
+  </p>
+
+  <header class="discovery-header capability-header">
+    <div>
+      <p class="discovery-eyebrow">Reviewed capability catalog</p>
+      <h1>{selectedJobFixture ? `${selectedJobFixture.label} Skills` : 'Find Skills'}</h1>
+      <p>
+        {
+          selectedJobFixture?.description ??
+            'Start with the job you need done, then inspect exact source, compatibility, permissions, risks, and outcomes.'
+        }
+      </p>
+      <p class="discovery-count">
+        {visibleSkills.length} illustrative records · one Artifact catalog with the Community Library
+      </p>
+    </div>
+    <a class="community-action community-action-primary" href={withBase('/me/matches/?fixture_auth=1')}>
+      View PRD matches
+    </a>
+  </header>
+
+  <nav class="discovery-tabs capability-job-tabs" aria-label="Skill jobs">
+    <a
+      class:list={{ 'is-active': !selectedJob }}
+      href={withBase('/skills/')}
+      aria-current={!selectedJob ? 'page' : undefined}
+    >
+      All
+    </a>
+    {capabilityJobs.map((job) => (
+      <a
+        class:list={{ 'is-active': selectedJob === job.slug }}
+        href={withBase(`/skills/jobs/${job.slug}/`)}
+        aria-current={selectedJob === job.slug ? 'page' : undefined}
+      >
+        {job.label}
+      </a>
+    ))}
+  </nav>
+
+  <div class="board-home-layout discovery-layout">
+    <main class="board-stack-column">
+      <section id="skill-results" class="board-list-section">
+        <header class="board-list-heading">
+          <h2>{selectedJobFixture ? `${selectedJobFixture.label} capability fixtures` : 'Reviewed Skill fixtures'}</h2>
+          <span>popularity is not quality · exact state first</span>
+        </header>
+        <div class="library-list">
+          {visibleSkills.map((skill) => <SkillRow skill={skill} />)}
+        </div>
+      </section>
+    </main>
+
+    <MasterIndexRail title="Skills index" sections={skillIndex} />
+  </div>
+</BaseLayout>

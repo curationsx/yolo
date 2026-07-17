@@ -1,0 +1,181 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import CapabilityActionBar from '../../components/CapabilityActionBar.astro';
+import CapabilityStamp from '../../components/CapabilityStamp.astro';
+import StackPill from '../../components/StackPill.astro';
+import {
+  skillFixtures,
+  type SkillFixture,
+} from '../../data/capability-preview';
+import { withBase } from '../../lib/labels';
+
+export function getStaticPaths() {
+  return skillFixtures.map((skill) => ({
+    params: { slug: skill.slug },
+    props: { skill },
+  }));
+}
+
+interface Props {
+  skill: SkillFixture;
+}
+
+const { skill } = Astro.props;
+---
+
+<BaseLayout
+  title={`${skill.title} - Skills`}
+  description={skill.purpose}
+  communityPreview
+  noindex
+>
+  <a class="community-page-back" href={withBase('/skills/')}>← Find Skills</a>
+  <p class="community-preview-note">
+    Illustrative Skill record · no external Skill imported, installed, matched, or executed
+  </p>
+
+  <header class="project-detail-header capability-detail-header">
+    <div class="project-score project-detail-score" aria-label={`${skill.score} useful-artifact upvotes`}>
+      <span aria-hidden="true">▲</span>
+      <strong>{skill.score}</strong>
+    </div>
+    <div>
+      <p class="discovery-eyebrow">{skill.jobs.map((job) => job.toUpperCase()).join(' + ')}</p>
+      <h1>{skill.title}</h1>
+      <p class="project-detail-question">{skill.purpose}</p>
+      <div class="project-detail-meta">
+        <CapabilityStamp kind={skill.lifecycle} />
+        {skill.provenance.map((kind) => <CapabilityStamp kind={kind} />)}
+        <span>{skill.version}</span>
+        <span>{skill.lastReviewed}</span>
+      </div>
+    </div>
+  </header>
+
+  <CapabilityActionBar label={skill.title} upvotes={skill.score} />
+
+  <div class="board-home-layout discovery-layout">
+    <main class="board-stack-column">
+      <section class="project-detail-section">
+        <header>
+          <p class="discovery-eyebrow">Why it may fit</p>
+          <h2>Explain the match before asking the builder to act</h2>
+        </header>
+        <p class="project-detail-copy">{skill.fitReason}</p>
+        <div class="capability-contract-grid">
+          <article>
+            <span>Supported hosts</span>
+            <ul>{skill.supportedHosts.map((host) => <li>{host}</li>)}</ul>
+          </article>
+          <article>
+            <span>Permissions</span>
+            <ul>{skill.permissions.map((permission) => <li>{permission}</li>)}</ul>
+          </article>
+          <article>
+            <span>Constraints</span>
+            <ul>{skill.fitConstraints.map((constraint) => <li>{constraint}</li>)}</ul>
+          </article>
+          <article>
+            <span>Risk</span>
+            <p>{skill.risk}</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="project-detail-section">
+        <header>
+          <p class="discovery-eyebrow">Stack context</p>
+          <h2>Explicit compatibility context</h2>
+        </header>
+        <div class="project-detail-stacks">
+          {skill.stackSlugs.length > 0
+            ? skill.stackSlugs.map((stackSlug) => <StackPill slug={stackSlug} />)
+            : <span class="field-help">No Stack-specific fixture requirement.</span>}
+        </div>
+      </section>
+
+      <section class="project-detail-section">
+        <header>
+          <p class="discovery-eyebrow">Community SkillUseOutcome</p>
+          <h2>Explicit member reports</h2>
+        </header>
+        <div class="capability-evidence-list">
+          {skill.communityOutcomes.length > 0
+            ? skill.communityOutcomes.map((outcome) => (
+                <article>
+                  <span class="skill-outcome-marker">SKILL OUTCOME</span>
+                  <strong>{outcome.title}</strong>
+                  <p>{outcome.detail}</p>
+                  <small>{outcome.sourceLabel}</small>
+                </article>
+              ))
+            : (
+                <article class="capability-empty-inline">
+                  <strong>No community outcome yet.</strong>
+                  <p>Zero activity is shown plainly; nothing is inferred from views or clicks.</p>
+                </article>
+              )}
+        </div>
+      </section>
+
+      <section class="project-detail-section">
+        <header>
+          <p class="discovery-eyebrow">Public Examples</p>
+          <h2>Cited examples remain separate from community outcomes</h2>
+        </header>
+        <div class="capability-evidence-list">
+          {skill.publicExamples.length > 0
+            ? skill.publicExamples.map((example) => (
+                <article>
+                  <CapabilityStamp kind="publicly-sourced" />
+                  {skill.provenance.includes('ai-curated') && <CapabilityStamp kind="ai-curated" />}
+                  <strong>{example.title}</strong>
+                  <p>{example.detail}</p>
+                  <small>{example.sourceLabel}</small>
+                </article>
+              ))
+            : (
+                <article class="capability-empty-inline">
+                  <strong>No public example attached.</strong>
+                  <p>The fixture does not substitute popularity or an uncited repository.</p>
+                </article>
+              )}
+        </div>
+      </section>
+
+      <section class="project-detail-section">
+        <header>
+          <p class="discovery-eyebrow">Discussion</p>
+          <h2>Anchored human question</h2>
+        </header>
+        <article class="project-comment project-comment-human">
+          <strong>@CurationsLA</strong>
+          <p>Which constraint should a builder confirm before saving this exact Skill revision?</p>
+        </article>
+      </section>
+    </main>
+
+    <aside class="board-feed discovery-rail">
+      <h2>Skill source</h2>
+      <section class="community-pulse-section">
+        <h3>Exact fixture contract</h3>
+        <a class="discovery-feature-link" href={skill.sourceUrl} target="_blank" rel="noopener">
+          Read source revision ↗
+        </a>
+        <p>{skill.sourceRevision}</p>
+      </section>
+      <section class="community-pulse-section">
+        <h3>License</h3>
+        <p>{skill.license}</p>
+      </section>
+      <section class="community-pulse-section">
+        <h3>Project types</h3>
+        <p>{skill.projectTypes.join(' · ')}</p>
+      </section>
+      <p class="community-pulse-note">
+        Fixture state only. REVIEWED here demonstrates the UI contract and is not
+        a real external audit or recommendation.
+      </p>
+    </aside>
+  </div>
+</BaseLayout>

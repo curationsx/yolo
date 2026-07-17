@@ -1,0 +1,52 @@
+---
+import type { SkillFixture } from '../data/capability-preview';
+import { withBase } from '../lib/labels';
+import CapabilityStamp from './CapabilityStamp.astro';
+import StackPill from './StackPill.astro';
+
+interface Props {
+  skill: SkillFixture;
+}
+
+const { skill } = Astro.props;
+---
+
+<article class="library-row skill-row" data-skill-row={skill.slug}>
+  <div class="project-score" aria-label={`${skill.score} useful-artifact upvotes`}>
+    <span aria-hidden="true">▲</span>
+    <strong>{skill.score}</strong>
+  </div>
+  <div>
+    <header>
+      <a href={withBase(`/skills/${skill.slug}/`)}>{skill.title}</a>
+      <CapabilityStamp kind={skill.lifecycle} />
+      {skill.provenance.map((kind) => <CapabilityStamp kind={kind} />)}
+    </header>
+    <p>{skill.purpose}</p>
+    <div class="library-meta skill-row-meta">
+      <span>{skill.version}</span>
+      <span aria-hidden="true">·</span>
+      <span>{skill.jobs.map((job) => job.toUpperCase()).join(' + ')}</span>
+      <span aria-hidden="true">·</span>
+      <span>{skill.sourceLabel}</span>
+      <span aria-hidden="true">·</span>
+      <span>{skill.lastReviewed}</span>
+    </div>
+    {skill.stackSlugs.length > 0 && (
+      <div class="project-context">
+        {skill.stackSlugs.map((stackSlug) => <StackPill slug={stackSlug} />)}
+      </div>
+    )}
+    <footer class="skill-row-outcomes">
+      <span>{skill.outcomeCounts.worked} worked</span>
+      <span aria-hidden="true">·</span>
+      <span>{skill.outcomeCounts.adapted} adapted</span>
+      <span aria-hidden="true">·</span>
+      <span>{skill.outcomeCounts.didNotFit} did not fit</span>
+      <span aria-hidden="true">·</span>
+      <span>{skill.outcomeCounts.deferred} deferred</span>
+      <span aria-hidden="true">·</span>
+      <span>{skill.discussions} discussions</span>
+    </footer>
+  </div>
+</article>

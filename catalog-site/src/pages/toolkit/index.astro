@@ -1,0 +1,66 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import MasterIndexRail from '../../components/MasterIndexRail.astro';
+import ProgramRow from '../../components/ProgramRow.astro';
+import { programFixtures } from '../../data/capability-preview';
+import { withBase } from '../../lib/labels';
+
+const programIndex = [
+  {
+    title: 'Program types',
+    items: programFixtures.map((program) => ({
+      label: program.type,
+      href: withBase(`/toolkit/${program.slug}/`),
+      count: program.name,
+    })),
+  },
+  {
+    title: 'Member value',
+    items: [
+      { label: 'Save programs', href: withBase('/me/saved/?fixture_auth=1'), count: 'PRIVATE' },
+      { label: 'Watch updates', href: withBase('/me/watched/?fixture_auth=1'), count: 'OPT-IN' },
+      { label: 'Grow Skills', href: withBase('/skills/jobs/grow/'), count: 'CROSS-LINK' },
+    ],
+  },
+];
+---
+
+<BaseLayout
+  title="Startup Toolkit - CURATIONS.DEV"
+  description="A public fixture catalog of official startup programs with transparent source and eligibility boundaries."
+  communityPreview
+  noindex
+>
+  <a class="community-page-back" href={withBase('/')}>← Community Board</a>
+  <p class="community-preview-note">
+    Fixture-only Startup Toolkit · verify every official source, eligibility rule, term, and review date
+  </p>
+
+  <header class="discovery-header">
+    <div>
+      <p class="discovery-eyebrow">Go further from a public PRD</p>
+      <h1>Startup Toolkit</h1>
+      <p>
+        Public program sources remain readable. GitHub sign-in later unlocks
+        private Saves, Watches, checklists, eligibility notes, and Project-aware pathways.
+      </p>
+    </div>
+    <a class="community-action" href={withBase('/skills/jobs/grow/')}>Browse Grow Skills</a>
+  </header>
+
+  <div class="board-home-layout discovery-layout">
+    <main class="board-stack-column">
+      <section class="board-list-section">
+        <header class="board-list-heading">
+          <h2>Illustrative public Programs</h2>
+          <span>official links · no paid placement · no acceptance promise</span>
+        </header>
+        <div class="program-list">
+          {programFixtures.map((program) => <ProgramRow program={program} />)}
+        </div>
+      </section>
+    </main>
+    <MasterIndexRail title="Toolkit index" sections={programIndex} />
+  </div>
+</BaseLayout>
+

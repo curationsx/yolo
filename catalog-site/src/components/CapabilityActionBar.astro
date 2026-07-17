@@ -1,0 +1,47 @@
+---
+interface Props {
+  label: string;
+  upvotes?: number;
+  showUpvote?: boolean;
+  showWatch?: boolean;
+  showSave?: boolean;
+}
+
+const {
+  label,
+  upvotes = 0,
+  showUpvote = true,
+  showWatch = true,
+  showSave = true,
+} = Astro.props;
+---
+
+<div class="capability-action-shell" data-capability-actions data-label={label}>
+  <div class="capability-actions" aria-label={`Fixture actions for ${label}`}>
+    {showUpvote && (
+      <button type="button" data-capability-action="upvote" aria-pressed="false">
+        <span>▲ Upvote</span>
+        <strong data-capability-upvotes>{upvotes}</strong>
+      </button>
+    )}
+    {showWatch && (
+      <button type="button" data-capability-action="watch" aria-pressed="false">
+        <span data-capability-action-label>◉ Watch</span>
+      </button>
+    )}
+    {showSave && (
+      <button type="button" data-capability-action="save" aria-pressed="false">
+        <span data-capability-action-label>＋ Save</span>
+      </button>
+    )}
+  </div>
+  <p data-capability-action-status aria-live="polite">
+    Authenticated action preview · no request or persistence
+  </p>
+</div>
+
+<script>
+  import { initCapabilityActionBars } from './CapabilityActionBar';
+  initCapabilityActionBars();
+</script>
+

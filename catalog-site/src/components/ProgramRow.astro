@@ -1,0 +1,30 @@
+---
+import type { ProgramFixture } from '../data/capability-preview';
+import { withBase } from '../lib/labels';
+import CapabilityStamp from './CapabilityStamp.astro';
+
+interface Props {
+  program: ProgramFixture;
+}
+
+const { program } = Astro.props;
+---
+
+<article class="program-row" data-program-row={program.slug}>
+  <div class="program-row-type" aria-hidden="true">{program.type.slice(0, 2).toUpperCase()}</div>
+  <div>
+    <header>
+      <a href={withBase(`/toolkit/${program.slug}/`)}>{program.name}</a>
+      <CapabilityStamp kind="program" />
+    </header>
+    <p>{program.purpose}</p>
+    <div class="library-meta">
+      <span>{program.type}</span>
+      <span aria-hidden="true">·</span>
+      <span>{program.geography}</span>
+      <span aria-hidden="true">·</span>
+      <span>{program.lastReviewed}</span>
+    </div>
+  </div>
+</article>
+

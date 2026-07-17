@@ -57,7 +57,7 @@ export interface ShowcaseFixture {
 
 export interface MemberNotificationFixture {
   id: string;
-  type: 'reply' | 'review' | 'mention' | 'revision';
+  type: 'reply' | 'review' | 'mention' | 'revision' | 'match';
   title: string;
   detail: string;
   href: string;
@@ -67,6 +67,7 @@ export interface MemberNotificationFixture {
 
 export type MemberSettingsSection =
   | 'profile'
+  | 'contact'
   | 'account'
   | 'notifications'
   | 'privacy'
@@ -178,6 +179,15 @@ export const memberLibraryFixture = {
 
 export const memberNotifications: MemberNotificationFixture[] = [
   {
+    id: 'new-reviewed-match',
+    type: 'match',
+    title: 'New reviewed Skill match available',
+    detail: 'Schema-first planning now matches your approved PRD context.',
+    href: '/me/matches/',
+    age: '4m',
+    unread: true,
+  },
+  {
     id: 'roast-reply',
     type: 'reply',
     title: 'New Rubber Duck Roast on your PRD Showcase',
@@ -211,6 +221,11 @@ export const memberSettingsSections: MemberSettingsSectionFixture[] = [
     section: 'profile',
     label: 'Profile',
     description: 'Member-controlled public CURATIONS identity.',
+  },
+  {
+    section: 'contact',
+    label: 'Contact',
+    description: 'Separately verified, default-private contact visibility.',
   },
   {
     section: 'account',

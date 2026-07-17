@@ -1,0 +1,23 @@
+---
+import SkillsMaster from '../../../components/SkillsMaster.astro';
+import {
+  capabilityJobs,
+  type CapabilityJobSlug,
+} from '../../../data/capability-preview';
+
+export function getStaticPaths() {
+  return capabilityJobs.map((job) => ({
+    params: { job: job.slug },
+    props: { job: job.slug },
+  }));
+}
+
+interface Props {
+  job: CapabilityJobSlug;
+}
+
+const { job } = Astro.props;
+---
+
+<SkillsMaster selectedJob={job} />
+

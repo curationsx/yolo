@@ -1,0 +1,100 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import CapabilityActionBar from '../../components/CapabilityActionBar.astro';
+import CapabilityStamp from '../../components/CapabilityStamp.astro';
+import {
+  programFixtures,
+  type ProgramFixture,
+} from '../../data/capability-preview';
+import { withBase } from '../../lib/labels';
+
+export function getStaticPaths() {
+  return programFixtures.map((program) => ({
+    params: { slug: program.slug },
+    props: { program },
+  }));
+}
+
+interface Props {
+  program: ProgramFixture;
+}
+
+const { program } = Astro.props;
+---
+
+<BaseLayout
+  title={`${program.name} - Startup Toolkit`}
+  description={program.purpose}
+  communityPreview
+  noindex
+>
+  <a class="community-page-back" href={withBase('/toolkit/')}>← Startup Toolkit</a>
+  <p class="community-preview-note">
+    Illustrative Program listing · verify current terms at the official source
+  </p>
+
+  <header class="project-detail-header toolkit-detail-header">
+    <div class="program-row-type" aria-hidden="true">{program.type.slice(0, 2).toUpperCase()}</div>
+    <div>
+      <p class="discovery-eyebrow">{program.type}</p>
+      <h1>{program.name}</h1>
+      <p class="project-detail-question">{program.purpose}</p>
+      <div class="project-detail-meta">
+        <CapabilityStamp kind="program" />
+        <span>{program.lastReviewed}</span>
+      </div>
+    </div>
+  </header>
+
+  <CapabilityActionBar
+    label={program.name}
+    showUpvote={false}
+    showWatch
+    showSave
+  />
+
+  <div class="board-home-layout discovery-layout">
+    <main class="board-stack-column">
+      <section class="project-detail-section">
+        <header>
+          <p class="discovery-eyebrow">Eligibility boundary</p>
+          <h2>Start with the official source</h2>
+        </header>
+        <div class="capability-contract-grid">
+          <article><span>Geography</span><p>{program.geography}</p></article>
+          <article><span>Eligibility</span><p>{program.eligibility}</p></article>
+          <article><span>Terms</span><p>{program.terms}</p></article>
+          <article><span>Commercial disclosure</span><p>{program.disclosure}</p></article>
+        </div>
+      </section>
+
+      <section class="project-detail-section">
+        <header>
+          <p class="discovery-eyebrow">Program experience</p>
+          <h2>Anchored discussion, not a success promise</h2>
+        </header>
+        <article class="project-comment project-comment-human">
+          <strong>@CurationsLA</strong>
+          <p>Which eligibility or timing detail should a builder verify before saving this Program?</p>
+        </article>
+      </section>
+    </main>
+
+    <aside class="board-feed discovery-rail">
+      <h2>Official source</h2>
+      <a
+        class="discovery-feature-link"
+        href={program.officialUrl}
+        target="_blank"
+        rel="noopener"
+      >
+        Visit {program.name} ↗
+      </a>
+      <p class="community-pulse-note">
+        CURATIONS provides no acceptance, legal, investment, fundraising, or
+        eligibility advice. Save does not enable notifications; Watch is explicit.
+      </p>
+    </aside>
+  </div>
+</BaseLayout>
+
