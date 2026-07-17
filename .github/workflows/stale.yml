@@ -1,0 +1,33 @@
+name: Stale Triage
+
+on:
+  schedule:
+    - cron: "0 10 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: stale-triage-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark and close stale issues/PRs
+        uses: actions/stale@v10
+        with:
+          days-before-stale: 45
+          days-before-close: 14
+          stale-issue-label: stale
+          stale-pr-label: stale
+          exempt-issue-labels: pinned,security,never-stale
+          exempt-pr-labels: pinned,security,never-stale
+          stale-issue-message: "This issue has been marked as stale due to inactivity. Comment or update it to keep it open."
+          stale-pr-message: "This pull request has been marked as stale due to inactivity. Comment or push changes to keep it open."
+          close-issue-message: "Closing this issue after prolonged inactivity. Reopen with fresh context if still relevant."
+          close-pr-message: "Closing this pull request after prolonged inactivity. Reopen or open a fresh PR when ready."
+
