@@ -255,6 +255,18 @@ function reviewRequest(token, action, requestId, reason = "Reviewed exact public
   });
 }
 
+function revokeRequest(token, requestId, reason = "Builder withdrew publication consent.") {
+  return new Request("https://api.curations.dev/api/projects/revoke", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      project_id: "github-repository:987654",
+      reason,
+      request_id: requestId,
+    }),
+  });
+}
+
 test("Project review queue requires configured maintainer identity", async () => {
   const env = reviewEnv();
   seedProject(env);
@@ -419,6 +431,50 @@ test("builder can revoke and remove a published Project from public reads", asyn
   assert.equal(revoked.project.status, "revoked");
   assert.equal(revoked.project.visibility, "hidden");
   assert.equal(revoked.project.revocation_history.length, 1);
+
+  const publicRead = await handleRequest(
+    new Request(
+      "https://api.curations.dev/api/projects/builder/public-project",
+    ),
+    env,
+  );
+  assert.equal(publicRead.status, 404);
+});
+
+test("concurrent approve and revoke resolve to revoked visibility", async () => {
+  const env = reviewEnv();
+  seedProject(env);
+  const maintainer = addSession(env, "999", "maintainer");
+  const builder = addSession(env, "123", "builder");
+
+  const [approve, revoke] = await Promise.all([
+    handleRequest(
+      reviewRequest(
+        maintainer,
+        "approve",
+        "99999999-9999-4999-8999-999999999999",
+      ),
+      env,
+    ),
+    handleRequest(
+      revokeRequest(
+        builder,
+        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      ),
+      env,
+    ),
+  ]);
+
+  assert.equal(revoke.status, 200);
+  assert.equal(approve.status === 200 || approve.status === 409, true);
+
+  const project = await env.community.readDocument(
+    "engagements",
+    "github-repository:987654",
+    "github-repository:987654",
+  );
+  assert.equal(project.status, "revoked");
+  assert.equal(project.visibility, "hidden");
 
   const publicRead = await handleRequest(
     new Request(
