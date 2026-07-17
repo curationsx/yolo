@@ -81,11 +81,42 @@ interface CreateProjectInput {
   consent?: unknown;
 }
 
-interface ProjectDocument {
+export type ProjectStatus =
+  | "draft"
+  | "pending"
+  | "published"
+  | "stale"
+  | "revoked"
+  | "rejected";
+
+export interface ProjectReviewEvent {
+  request_id: string;
+  action: "approve" | "return" | "reject" | "hide" | "restore";
+  reason: string;
+  actor: {
+    github_user_id: string;
+    login: string;
+  };
+  created_at: string;
+}
+
+export interface ProjectRevocationEvent {
+  request_id: string;
+  reason: string;
+  actor: {
+    github_user_id: string;
+    login: string;
+  };
+  created_at: string;
+}
+
+export interface ProjectDocument {
+  _etag?: string;
   id: string;
   project_id: string;
   tool_id: string;
   kind: "project";
+  route_key: string;
   repository: ProjectPreview["repository"];
   submitted_by: ProjectPreview["submitted_by"];
   consent: {
@@ -96,14 +127,17 @@ interface ProjectDocument {
   summary: string;
   question: string;
   project_type: string;
-  status: "pending";
+  status: ProjectStatus;
+  visibility: "public" | "hidden";
   current_snapshot_id: string;
   request_id: string;
+  review_history: ProjectReviewEvent[];
+  revocation_history: ProjectRevocationEvent[];
   created_at: string;
   updated_at: string;
 }
 
-interface SnapshotDocument {
+export interface SnapshotDocument {
   id: string;
   project_id: string;
   tool_id: string;
@@ -117,7 +151,7 @@ interface SnapshotDocument {
   limitations: string[];
 }
 
-interface ToolClaimDocument {
+export interface ToolClaimDocument {
   id: string;
   project_id: string;
   tool_id: string;
@@ -126,15 +160,15 @@ interface ToolClaimDocument {
   claim: ProjectToolClaim;
 }
 
-function cleanText(raw: unknown, maxLength: number): string {
+export function cleanProjectText(raw: unknown, maxLength: number): string {
   return typeof raw === "string" ? raw.trim().slice(0, maxLength) : "";
 }
 
-function isOversized(raw: unknown, maxLength: number): boolean {
+export function isProjectOversized(raw: unknown, maxLength: number): boolean {
   return typeof raw === "string" && raw.trim().length > maxLength;
 }
 
-async function parseBody<T>(
+export async function parseProjectBody<T>(
   req: Request,
 ): Promise<{ value: T | null; tooLarge: boolean }> {
   const declared = Number.parseInt(req.headers.get("content-length") ?? "0", 10);
@@ -173,7 +207,7 @@ async function parseBody<T>(
   }
 }
 
-async function requireSession(
+export async function requireProjectSession(
   req: Request,
   env: Env,
   cors: Record<string, string>,
@@ -221,10 +255,10 @@ function parseTools(raw: unknown, allowedTools: Set<string>): ProjectToolInput[]
   for (const candidate of raw) {
     if (typeof candidate !== "object" || candidate === null) return null;
     const value = candidate as Record<string, unknown>;
-    const toolId = cleanText(value.tool_id, 64).toLowerCase();
-    const declaredUse = cleanText(value.declared_use, 300);
+    const toolId = cleanProjectText(value.tool_id, 64).toLowerCase();
+    const declaredUse = cleanProjectText(value.declared_use, 300);
     const declaredInPrd = value.declared_in_prd;
-    const stackPath = cleanText(value.stack_path, 160);
+    const stackPath = cleanProjectText(value.stack_path, 160);
     if (!allowedTools.has(toolId) || typeof declaredInPrd !== "boolean") return null;
     tools.push({
       tool_id: toolId,
@@ -259,6 +293,7 @@ function publicPendingProject(project: ProjectDocument) {
     question: project.question,
     project_type: project.project_type,
     status: project.status,
+    visibility: project.visibility,
     current_snapshot_id: project.current_snapshot_id,
     created_at: project.created_at,
     updated_at: project.updated_at,
@@ -270,29 +305,29 @@ export async function handleProjectPreview(
   env: Env,
   cors: Record<string, string>,
 ): Promise<Response> {
-  const auth = await requireSession(req, env, cors);
+  const auth = await requireProjectSession(req, env, cors);
   if (auth instanceof Response) return auth;
-  const parsed = await parseBody<ProjectPreviewInput>(req);
+  const parsed = await parseProjectBody<ProjectPreviewInput>(req);
   if (parsed.tooLarge) {
     return json({ error: "request body exceeds the allowed size" }, 413, cors);
   }
   const body = parsed.value;
   if (
-    isOversized(body?.repository_url, 300) ||
-    isOversized(body?.prd_path, 240) ||
-    isOversized(body?.summary, 500) ||
-    isOversized(body?.question, 240) ||
-    isOversized(body?.project_type, 64) ||
-    isOversized(body?.approved_excerpt, 500)
+    isProjectOversized(body?.repository_url, 300) ||
+    isProjectOversized(body?.prd_path, 240) ||
+    isProjectOversized(body?.summary, 500) ||
+    isProjectOversized(body?.question, 240) ||
+    isProjectOversized(body?.project_type, 64) ||
+    isProjectOversized(body?.approved_excerpt, 500)
   ) {
     return json({ error: "Project preview input exceeds the allowed length" }, 400, cors);
   }
-  const repositoryUrl = cleanText(body?.repository_url, 300);
-  const prdPath = cleanText(body?.prd_path, 240);
-  const summary = cleanText(body?.summary, 500);
-  const question = cleanText(body?.question, 240);
-  const projectType = cleanText(body?.project_type, 64).toLowerCase();
-  const approvedExcerpt = cleanText(body?.approved_excerpt, 500);
+  const repositoryUrl = cleanProjectText(body?.repository_url, 300);
+  const prdPath = cleanProjectText(body?.prd_path, 240);
+  const summary = cleanProjectText(body?.summary, 500);
+  const question = cleanProjectText(body?.question, 240);
+  const projectType = cleanProjectText(body?.project_type, 64).toLowerCase();
+  const approvedExcerpt = cleanProjectText(body?.approved_excerpt, 500);
   const tools = parseTools(body?.tools, PROJECT_PILOT_TOOLS);
 
   if (!repositoryUrl || !prdPath || !tools) {
@@ -410,19 +445,19 @@ export async function handleCreateProject(
   env: Env,
   cors: Record<string, string>,
 ): Promise<Response> {
-  const auth = await requireSession(req, env, cors);
+  const auth = await requireProjectSession(req, env, cors);
   if (auth instanceof Response) return auth;
-  const parsed = await parseBody<CreateProjectInput>(req);
+  const parsed = await parseProjectBody<CreateProjectInput>(req);
   if (parsed.tooLarge) {
     return json({ error: "request body exceeds the allowed size" }, 413, cors);
   }
   const body = parsed.value;
-  const requestedProjectId = cleanText(body?.project_id, 80).toLowerCase();
-  const previewVersion = cleanText(body?.preview_version, 80).toLowerCase();
+  const requestedProjectId = cleanProjectText(body?.project_id, 80).toLowerCase();
+  const previewVersion = cleanProjectText(body?.preview_version, 80).toLowerCase();
   const previewConsistencyToken = cleanConsistencyToken(
     body?.preview_consistency_token,
   );
-  const requestId = cleanText(body?.request_id, 64).toLowerCase();
+  const requestId = cleanProjectText(body?.request_id, 64).toLowerCase();
   if (
     body?.consent !== true ||
     !PROJECT_ID_PATTERN.test(requestedProjectId) ||
@@ -450,10 +485,15 @@ export async function handleCreateProject(
       existing.submitted_by.github_user_id === auth.user.id &&
       existing.consent.preview_version === previewVersion &&
       existing.request_id === requestId;
-    if (!sameRequest) {
+    if (sameRequest) {
+      return json({ project: publicPendingProject(existing) }, 200, cors);
+    }
+    const returnedDraftOwner =
+      existing.status === "draft" &&
+      existing.submitted_by.github_user_id === auth.user.id;
+    if (!returnedDraftOwner) {
       return json({ error: "Project already exists for this repository" }, 409, cors);
     }
-    return json({ project: publicPendingProject(existing) }, 200, cors);
   }
 
   let storedRaw: string | null;
@@ -483,6 +523,19 @@ export async function handleCreateProject(
 
   const preview = stored.preview;
   const partition = requestedProjectId;
+  const latestReturn = existing?.review_history
+    .filter((event) => event.action === "return")
+    .at(-1);
+  if (
+    latestReturn &&
+    Date.parse(preview.snapshot.checked_at) <= Date.parse(latestReturn.created_at)
+  ) {
+    return json(
+      { error: "returned Project requires a new preview after the maintainer decision" },
+      409,
+      cors,
+    );
+  }
 
   const createQuotaRules = [
     { key: `project:create:user:${auth.user.id}`, limit: CREATES_PER_USER_DAILY },
@@ -521,6 +574,8 @@ export async function handleCreateProject(
     project_id: partition,
     tool_id: partition,
     kind: "project",
+    route_key:
+      `${preview.repository.owner}/${preview.repository.name}`.toLowerCase(),
     repository: preview.repository,
     submitted_by: preview.submitted_by,
     consent: {
@@ -532,9 +587,12 @@ export async function handleCreateProject(
     question: preview.question,
     project_type: preview.project_type,
     status: "pending",
+    visibility: "hidden",
     current_snapshot_id: preview.snapshot.id,
     request_id: requestId,
-    created_at: now,
+    review_history: existing?.review_history ?? [],
+    revocation_history: existing?.revocation_history ?? [],
+    created_at: existing?.created_at ?? now,
     updated_at: now,
   };
 
@@ -547,11 +605,27 @@ export async function handleCreateProject(
     for (const claim of claimDocs) {
       await env.community.upsertDocument(env.COSMOS_CONTAINER, claim, partition);
     }
-    await env.community.createDocument(
-      env.COSMOS_CONTAINER,
-      pendingProject,
-      partition,
-    );
+    if (existing?.status === "draft") {
+      if (!existing._etag) {
+        return json({ error: "Project changed; refresh before resubmitting" }, 409, cors);
+      }
+      const replaced = await env.community.replaceDocument(
+        env.COSMOS_CONTAINER,
+        partition,
+        pendingProject,
+        partition,
+        existing._etag,
+      );
+      if (!replaced) {
+        return json({ error: "Project changed; refresh before resubmitting" }, 409, cors);
+      }
+    } else {
+      await env.community.createDocument(
+        env.COSMOS_CONTAINER,
+        pendingProject,
+        partition,
+      );
+    }
     return json({ project: publicPendingProject(pendingProject) }, 201, cors);
   } catch (error) {
     await releaseQuota(env, createQuotaRules);

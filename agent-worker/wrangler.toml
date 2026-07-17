@@ -44,6 +44,7 @@ COPILOT_RUNS_PER_USER_DAILY = "5"
 COPILOT_RUNS_PER_IP_DAILY = "10"
 COPILOT_RUNS_GLOBAL_DAILY = "100"
 SOFTWARE_TARGETS = "zotero,ollama,hugging-face,n8n,langfuse,obsidian,sqlite,git,vs-code,pandoc,github,discourse,cloudflare,supabase"
+PROJECT_MAINTAINER_GITHUB_IDS = "219447171"
 VOTE_BACKEND = "durable"
 
 [[kv_namespaces]]

@@ -40,6 +40,12 @@ import {
   handleCreateProject,
   handleProjectPreview,
 } from "./projects.ts";
+import {
+  handleProjectReviewAction,
+  handleProjectReviewQueue,
+  handlePublicProject,
+  handleRevokeProject,
+} from "./project-review.ts";
 
 export async function handleRequest(req: Request, env: Env): Promise<Response> {
   const url = new URL(req.url);
@@ -132,6 +138,21 @@ export async function handleRequest(req: Request, env: Env): Promise<Response> {
   }
   if (url.pathname === "/api/projects" && req.method === "POST") {
     return handleCreateProject(req, env, cors);
+  }
+  if (url.pathname === "/api/projects/review" && req.method === "GET") {
+    return handleProjectReviewQueue(req, url, env, cors);
+  }
+  if (url.pathname === "/api/projects/review" && req.method === "POST") {
+    return handleProjectReviewAction(req, env, cors);
+  }
+  if (url.pathname === "/api/projects/revoke" && req.method === "POST") {
+    return handleRevokeProject(req, env, cors);
+  }
+  const projectRoute = url.pathname.match(
+    /^\/api\/projects\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)$/,
+  );
+  if (projectRoute && req.method === "GET") {
+    return handlePublicProject(projectRoute[1], projectRoute[2], env, cors);
   }
   if (url.pathname === "/api/health") {
     return json(
