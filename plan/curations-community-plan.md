@@ -10,6 +10,11 @@ illustrative fixture preview. Gate 1 is drafted in PR #12; the remaining Gate 2
 proof is the builder onboarding, private Project Review, public preview, and
 minimal profile journey.
 
+**Related expansion plan:** See
+[`member-profiles-and-prd-showcase.md`](member-profiles-and-prd-showcase.md) for
+Curations-native profiles, settings, Inbox, standalone public PRD Showcases,
+Copilot CLI purpose breakdowns, and opt-in Rubber Duck Roast.
+
 ## Product direction
 
 CURATIONS.DEV should connect four surfaces:
