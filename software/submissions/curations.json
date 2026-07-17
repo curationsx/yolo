@@ -1,0 +1,28 @@
+{
+  "id": "curations",
+  "name": "CURATIONS",
+  "entity_type": "company",
+  "category": "design-content",
+  "primary_use": "This site.",
+  "deployment": "hybrid",
+  "notable_strength": "Community, Human x AI Workflow",
+  "verify_before_use": "A real trade-off",
+  "reference": "https://curations.org",
+  "license": "open-source",
+  "source_repository": "https://github.com/curationsx/",
+  "platforms": [
+    "Linux",
+    "macOS",
+    "Windows",
+    "Web",
+    "iOS",
+    "Android"
+  ],
+  "tags": [
+    "community",
+    "workflows",
+    "aot"
+  ],
+  "last_reviewed": "2026-07-17",
+  "review_status": "needs-review"
+}
