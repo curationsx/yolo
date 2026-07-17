@@ -99,7 +99,7 @@ jobs:
 
       - name: Publish Linux Visual Oracle candidates
         if: github.event_name == 'workflow_dispatch' && inputs.generate_oracle_baseline
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: visual-oracle-linux-candidates
           path: catalog-site/test/visual-oracle.spec.mjs-snapshots/*-linux.png
