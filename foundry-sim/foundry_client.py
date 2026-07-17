@@ -148,6 +148,7 @@ class FoundryClient:
         *,
         fixture_id: str | None = None,
         record_to_ledger: bool = True,
+        max_output_tokens: int | None = None,
     ) -> dict[str, Any]:
         """Send a chat completion request (sim: returns a fixture response).
 
@@ -157,13 +158,20 @@ class FoundryClient:
             fixture_id: Pin a specific fixture by its 'id' field. If None,
                         a fixture is selected by keyword matching or randomly.
             record_to_ledger: Whether to append this run to ledger.json.
+            max_output_tokens: Optional per-request output-token cap (azure
+                        mode). Clamped to MAX_OUTPUT_TOKENS_PER_REQUEST; used
+                        by the AoT agent protocol depth tiers (agent.py).
 
         Returns:
             A dict matching the Azure OpenAI ChatCompletion response shape.
             Sim responses include a 'sim_note' field; azure responses are real.
         """
         if self.mode == "azure":
-            return self._azure_chat(messages, record_to_ledger=record_to_ledger)
+            return self._azure_chat(
+                messages,
+                record_to_ledger=record_to_ledger,
+                max_output_tokens=max_output_tokens,
+            )
         fixture = self._select_fixture(messages, fixture_id)
         response = dict(fixture["response"])
         response["sim_note"] = "SIMULATED — no network call, no cost"
@@ -179,6 +187,7 @@ class FoundryClient:
         messages: list[dict[str, str]],
         *,
         record_to_ledger: bool = True,
+        max_output_tokens: int | None = None,
     ) -> dict[str, Any]:
         """Real Azure OpenAI chat completion via the v1 REST API (stdlib urllib).
 
@@ -198,10 +207,13 @@ class FoundryClient:
             )
 
         url = f"{self._endpoint}/openai/v1/chat/completions"
+        token_cap = MAX_OUTPUT_TOKENS_PER_REQUEST
+        if max_output_tokens is not None:
+            token_cap = max(1, min(int(max_output_tokens), token_cap))
         body = {
             "model": self._deployment,
             "messages": messages,
-            "max_completion_tokens": MAX_OUTPUT_TOKENS_PER_REQUEST,
+            "max_completion_tokens": token_cap,
         }
         headers = {"Content-Type": "application/json"}
         if self._api_key:
