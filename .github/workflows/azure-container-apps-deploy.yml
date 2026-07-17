@@ -1,0 +1,72 @@
+name: Azure Container App Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_environment:
+        description: "GitHub environment gate to use"
+        required: true
+        default: "azure-staging"
+        type: choice
+        options:
+          - azure-staging
+          - production
+      container_app_name:
+        description: "Container App name in rg-yolo-prod"
+        required: true
+        default: "ca-yolo-gateway"
+        type: choice
+        options:
+          - ca-yolo-gateway
+          - ca-yolo-copilot
+      image_to_deploy:
+        description: "Immutable image ref, e.g. yolocurationsprod.azurecr.io/yolo/gateway:<git-sha>"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: azure-container-apps-deploy-${{ github.workflow }}-${{ inputs.target_environment }}-${{ inputs.container_app_name }}
+  cancel-in-progress: false
+
+env:
+  AZURE_RESOURCE_GROUP: rg-yolo-prod
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.container_app_name }} (${{ inputs.target_environment }})
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.target_environment }}
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Log in to Azure (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_GITHUB_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Preflight Azure check
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            az account show --query id -o tsv
+            az containerapp show \
+              --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+              --name "${{ inputs.container_app_name }}" \
+              --query name -o tsv
+
+      - name: Deploy image to Azure Container App
+        uses: azure/container-apps-deploy-action@v2
+        with:
+          resourceGroup: ${{ env.AZURE_RESOURCE_GROUP }}
+          containerAppName: ${{ inputs.container_app_name }}
+          imageToDeploy: ${{ inputs.image_to_deploy }}
+
