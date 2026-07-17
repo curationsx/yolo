@@ -128,14 +128,6 @@ export function initProjectBuilderJourneys(): void {
     const stackInputs = Array.from(
       form.querySelectorAll<HTMLInputElement>('input[name="stack"]'),
     );
-    const materialInputs = Array.from(
-      form.querySelectorAll<HTMLInputElement>('input[name="reverse_material"]'),
-    );
-    const firstStack = stackInputs[0];
-    const firstMaterial = materialInputs[0];
-    if (!firstStack || !firstMaterial) {
-      throw new Error('Project builder requires Stack and reverse-material choices.');
-    }
     const basePath = shell.dataset.basePath ?? '/';
     let currentStep = 0;
 
@@ -151,24 +143,38 @@ export function initProjectBuilderJourneys(): void {
         normalizedRepositoryUrl(repositoryField.value) ??
         'https://github.com/curationsx/yolo';
       const projectName = projectNameField.value.trim() || 'Untitled Project';
-      const planPath = planPathField.value.trim() || 'docs/PRD.md';
+      const planPath = planPathField.value.trim();
       const summary = summaryField.value.trim();
       const question = questionField.value.trim();
       const category = selectedOptionText(categoryField);
       const stage = selectedOptionText(stageField);
-      const planUrl = githubPlanUrl(repositoryUrl, planPath);
+      const hasPlanPath = validPlanPath(planPath);
+      const planUrl = hasPlanPath
+        ? githubPlanUrl(repositoryUrl, planPath)
+        : repositoryUrl;
       const selectedStacks = new Set(checkedValues(form, 'stack'));
+      const hasStackSelection = selectedStacks.size > 0;
+      const showPlan = sharePlanField.checked && hasPlanPath;
 
       text(shell, '[data-project-name]', `${projectName} ↗`);
       text(shell, '[data-project-question]', `“${question}”`);
       text(shell, '[data-project-summary]', summary);
       text(shell, '[data-project-category]', category);
-      text(shell, '[data-project-plan-path]', planPath);
+      text(shell, '[data-project-plan-path]', hasPlanPath ? planPath : 'Not provided yet');
       text(shell, '[data-review-project]', projectName);
       text(shell, '[data-review-summary]', summary);
       text(shell, '[data-review-question]', question);
-      text(shell, '[data-review-source]', `${repositoryUrl} · ${planPath}`);
+      text(
+        shell,
+        '[data-review-source]',
+        hasPlanPath ? `${repositoryUrl} · ${planPath}` : repositoryUrl,
+      );
       setProjectStage(shell, stageField.value, stage);
+
+      sharePlanField.disabled = !hasPlanPath;
+      if (!hasPlanPath) {
+        sharePlanField.checked = false;
+      }
 
       for (const link of shell.querySelectorAll<HTMLAnchorElement>(
         '[data-project-repository]',
@@ -198,23 +204,24 @@ export function initProjectBuilderJourneys(): void {
         element.hidden = !shareSummaryField.checked;
       }
       for (const element of shell.querySelectorAll<HTMLElement>('[data-public-plan]')) {
-        element.hidden = !sharePlanField.checked;
+        element.hidden = !showPlan;
       }
       for (const element of shell.querySelectorAll<HTMLElement>('[data-public-stack]')) {
-        element.hidden = !shareStackField.checked;
+        element.hidden = !shareStackField.checked || !hasStackSelection;
       }
       for (const context of shell.querySelectorAll<HTMLElement>('[data-project-context]')) {
-        context.hidden = !sharePlanField.checked && !shareStackField.checked;
+        context.hidden = !showPlan && (!shareStackField.checked || !hasStackSelection);
       }
 
       const planSource = selectedPlanSource(form);
-      const materials = checkedValues(form, 'reverse_material');
       text(
         shell,
         '[data-review-observation]',
         planSource === 'existing'
-          ? `Existing Markdown plan selected at ${planPath}. No repository request occurred.`
-          : `Private draft would use only: ${materials.join(', ')}. No repository request or AI call occurred.`,
+          ? hasPlanPath
+            ? `Existing plan path selected at ${planPath}. No repository request occurred in this preview.`
+            : 'No working plan path has been added yet. No repository request occurred in this preview.'
+          : 'A live file picker would let you choose exact repository files for inspiration. No repository request occurred in this preview.',
       );
     };
 
@@ -222,8 +229,8 @@ export function initProjectBuilderJourneys(): void {
       const reverse = selectedPlanSource(form) === 'reverse';
       reverseMaterials.hidden = !reverse;
       planPathCopy.textContent = reverse
-        ? 'Private draft destination'
-        : 'Existing Markdown working-plan path';
+        ? 'Preferred destination for generated working plan (optional)'
+        : 'Working plan file path (optional)';
     };
 
     const validateCurrentStep = (): boolean => {
@@ -247,27 +254,11 @@ export function initProjectBuilderJourneys(): void {
       repositoryField.value = repositoryUrl;
 
       planPathField.setCustomValidity(
-        validPlanPath(planPathField.value)
+        planPathField.value.trim().length === 0 || validPlanPath(planPathField.value)
           ? ''
           : 'Use a relative Markdown path ending in .md or .mdx.',
       );
       if (!planPathField.reportValidity()) return false;
-
-      firstStack.setCustomValidity(
-        stackInputs.some((input) => input.checked)
-          ? ''
-          : 'Choose at least one Stack tool for this fixture.',
-      );
-      if (!firstStack.reportValidity()) return false;
-
-      if (selectedPlanSource(form) === 'reverse') {
-        firstMaterial.setCustomValidity(
-          materialInputs.some((input) => input.checked)
-            ? ''
-            : 'Choose at least one public material type for the private draft.',
-        );
-        if (!firstMaterial.reportValidity()) return false;
-      }
 
       return true;
     };
@@ -295,8 +286,6 @@ export function initProjectBuilderJourneys(): void {
     form.addEventListener('input', (event) => {
       repositoryField.setCustomValidity('');
       planPathField.setCustomValidity('');
-      firstStack.setCustomValidity('');
-      firstMaterial.setCustomValidity('');
       if (event.target !== consentField) {
         invalidateConsent();
       }
@@ -323,7 +312,7 @@ export function initProjectBuilderJourneys(): void {
       render();
       pending.hidden = false;
       confirm.disabled = true;
-      confirm.textContent = 'Sent to review (fixture)';
+      confirm.textContent = 'Sent to review (preview)';
     });
 
     updatePathChoice();

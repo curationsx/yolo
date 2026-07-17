@@ -7,7 +7,7 @@ import StackPill from './StackPill.astro';
 
 <div class="project-builder-shell" data-project-builder data-base-path={withBase('/')}>
   <p class="community-preview-note">
-    Fixture-only builder journey · nothing is uploaded, published, or sent to an AI
+    Preview the submission flow before you send anything for review.
   </p>
 
   <ol class="form-steps" aria-label="Project submission preview progress">
@@ -58,63 +58,75 @@ import StackPill from './StackPill.astro';
     </fieldset>
 
     <fieldset data-builder-step="1" hidden>
-      <legend>Anchor the Project in public context.</legend>
+      <legend>Tell us about your project.</legend>
       <p class="project-builder-step-copy">
-        These fixture values remain in this browser tab and only drive the private
-        review and public preview below.
+        Share your public project details so we can prepare a private review before
+        any submission.
       </p>
       <div class="field-grid">
         <label class="field-span">
-          Canonical public GitHub repository
+          Link to GitHub project <span class="field-required" aria-hidden="true">*</span>
+          <span class="field-help">Public projects only.</span>
           <input
             type="url"
             name="repository_url"
             required
-            value={builderJourneyProject.repositoryUrl}
-            placeholder="https://github.com/owner/repository"
           />
-          <span class="field-help">Repository root only. Private repositories are outside the pilot.</span>
+          <span class="field-help">Example: https://github.com/curationsx/yolo</span>
         </label>
         <label>
           Project name
+          <span class="field-help">The current title, or title you want to use for this project.</span>
           <input
             name="project_name"
             required
             maxlength="80"
-            value={builderJourneyProject.project}
           />
         </label>
         <label data-plan-path-label>
-          <span data-plan-path-copy>Existing Markdown working-plan path</span>
+          <span data-plan-path-copy>Working plan file path (optional)</span>
+          <span class="field-help">
+            If you have a Markdown plan, add the relative path. Live import will suggest
+            Markdown files from the repository you link.
+          </span>
           <input
             name="plan_path"
-            required
             maxlength="180"
-            value="docs/PRD-curations-community.md"
           />
-          <span class="field-help">Relative path only; `.md` or `.mdx`.</span>
+          <span class="field-help">Use a relative path such as docs/PRD.md</span>
         </label>
         <label class="field-span">
-          Plain-English Project description
-          <textarea name="summary" required minlength="20" maxlength="220" rows="3">{builderJourneyProject.summary}</textarea>
+          Details of project
+          <span class="field-help">
+            Describe your current project, or what you want your project to accomplish.
+          </span>
+          <textarea name="summary" required minlength="20" maxlength="220" rows="3"></textarea>
         </label>
         <label class="field-span">
-          Human feedback question
-          <textarea name="feedback_question" required minlength="12" maxlength="180" rows="3">{builderJourneyProject.question}</textarea>
-          <span class="field-help">This question—not the Project score—is the community’s social front door.</span>
+          I would like feedback and new ideas on...
+          <span class="field-help">
+            What kind of feedback do you want right now, such as current challenges,
+            alternative tech stacks, or next-step options?
+          </span>
+          <textarea name="feedback_question" required minlength="12" maxlength="180" rows="3"></textarea>
         </label>
         <label>
           Project type
+          <span class="field-help">Choose the closest fit for your project right now.</span>
           <select name="category" required>
             <option value="developer-tools" selected>Developer tool</option>
             <option value="crm-and-operations">CRM & Operations</option>
             <option value="research-and-knowledge">Research & Knowledge</option>
             <option value="creative-tools">Creative tool</option>
+            <option value="commerce-and-finance">Commerce & Finance</option>
             <option value="community-and-events">Community & Events</option>
           </select>
         </label>
         <label>
-          Current stage
+          Where are you in the project?
+          <span class="field-help">
+            Pick what best matches your current progress so feedback is more relevant.
+          </span>
           <select name="stage" required>
             <option value="feedback" selected>Needs feedback</option>
             <option value="building">Building</option>
@@ -123,11 +135,12 @@ import StackPill from './StackPill.astro';
           </select>
         </label>
         <fieldset class="platform-field field-span">
-          <legend>Stack context</legend>
+          <legend>Tech stack (optional)</legend>
+          <p class="field-help">Only add tools you want shown in the public preview.</p>
           <div class="choice-grid">
-            <label class="check-row"><input type="checkbox" name="stack" value="astro" checked /> Astro</label>
-            <label class="check-row"><input type="checkbox" name="stack" value="typescript" checked /> TypeScript</label>
-            <label class="check-row"><input type="checkbox" name="stack" value="github" checked /> GitHub Actions</label>
+            <label class="check-row"><input type="checkbox" name="stack" value="astro" /> Astro</label>
+            <label class="check-row"><input type="checkbox" name="stack" value="typescript" /> TypeScript</label>
+            <label class="check-row"><input type="checkbox" name="stack" value="github" /> GitHub Actions</label>
           </div>
         </fieldset>
         <fieldset
@@ -135,18 +148,18 @@ import StackPill from './StackPill.astro';
           data-reverse-materials
           hidden
         >
-          <legend>Public material allowed for the private draft</legend>
-          <div class="choice-grid">
-            <label class="check-row"><input type="checkbox" name="reverse_material" value="README" checked /> README</label>
-            <label class="check-row"><input type="checkbox" name="reverse_material" value="selected documentation" checked /> Selected documentation</label>
-            <label class="check-row"><input type="checkbox" name="reverse_material" value="dependency manifests" checked /> Dependency manifests</label>
-            <label class="check-row"><input type="checkbox" name="reverse_material" value="framework configuration" /> Framework configuration</label>
-            <label class="check-row"><input type="checkbox" name="reverse_material" value="repository structure" /> Repository structure</label>
-            <label class="check-row"><input type="checkbox" name="reverse_material" value=".env.example" /> `.env.example`</label>
-          </div>
+          <legend>Choose files for inspiration</legend>
           <p class="field-help">
-            Never `.env`, credentials, terminal history, private files, or unrelated paths.
+            After you connect your repository in the live flow, CURATIONS opens a file
+            picker so you can review and choose exact files before draft generation.
           </p>
+          <div class="project-builder-file-picker" role="status" aria-live="polite">
+            <strong>File picker appears after repository sync.</strong>
+            <p>
+              Typical suggestions include README files, selected docs, and relevant
+              project configuration files.
+            </p>
+          </div>
         </fieldset>
       </div>
     </fieldset>
@@ -165,10 +178,10 @@ import StackPill from './StackPill.astro';
           <strong data-review-question>{builderJourneyProject.question}</strong>
         </article>
         <article class="project-review-card project-review-observed">
-          <span>Fixture observation</span>
+          <span>Review observation</span>
           <h2>Selected public scope</h2>
           <p data-review-observation>
-            Existing Markdown plan selected. No repository request occurred.
+            Existing plan path selected. No repository request occurred in this preview.
           </p>
           <code data-review-source>{builderJourneyProject.repositoryUrl}</code>
         </article>
@@ -205,7 +218,7 @@ import StackPill from './StackPill.astro';
           Invite a disclosed AI guide after publication
         </label>
         <p class="field-help">
-          Off by default. This fixture never invokes a model, even when selected.
+          Off by default. Enable only if you want a disclosed guide after publication.
         </p>
       </section>
     </fieldset>
@@ -213,8 +226,8 @@ import StackPill from './StackPill.astro';
     <fieldset data-builder-step="3" hidden>
       <legend>Preview exactly what would become public.</legend>
       <p class="project-builder-step-copy">
-        This is the Board row and Project hierarchy a signed-out visitor would see.
-        It is still a local fixture and cannot publish.
+        This is the Board row and Project page draft a signed-out visitor would see
+        after maintainer review.
       </p>
 
       <section class="project-public-preview" aria-labelledby="project-row-preview-title">
@@ -309,8 +322,8 @@ import StackPill from './StackPill.astro';
           Send to maintainer review
         </button>
         <div class="project-builder-pending" data-builder-pending hidden aria-live="polite">
-          <strong>Pending review · fixture complete</strong>
-          <p>No Project was created, no repository was read, and nothing was published.</p>
+          <strong>Pending review preview complete</strong>
+          <p>This preview does not submit data yet.</p>
         </div>
       </section>
     </fieldset>
