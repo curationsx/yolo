@@ -191,7 +191,7 @@ function installGithubFixture({
       if (markerResponse) return markerResponse();
       return new Response('name = "public-project"\nmain = "src/index.ts"\n');
     }
-    if (value.includes("raw.githubusercontent.com")) {
+    if (new URL(value).hostname === "raw.githubusercontent.com") {
       return new Response("not found", { status: 404 });
     }
     throw new Error(`Unexpected GitHub fixture request: ${value}`);
