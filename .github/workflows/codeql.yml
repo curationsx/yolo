@@ -18,6 +18,12 @@ concurrency:
 
 jobs:
   analyze:
+    # Guardrail: this advanced CodeQL workflow must run only after
+    # repository default setup is disabled. Otherwise SARIF upload fails
+    # with "advanced configurations cannot be processed when default setup
+    # is enabled". Flip repo/org variable CODEQL_ADVANCED_ENABLED=true only
+    # after switching code scanning to advanced setup.
+    if: ${{ vars.CODEQL_ADVANCED_ENABLED == 'true' }}
     name: Analyze (${{ matrix.language }})
     runs-on: ubuntu-latest
     strategy:
@@ -39,4 +45,3 @@ jobs:
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@v3
-
