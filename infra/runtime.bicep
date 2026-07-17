@@ -118,6 +118,9 @@ param cosmosGatewayStateContainerName string = environmentName == 'production' ?
 @description('Comma-separated software cookbook targets. Matches wrangler.toml\'s SOFTWARE_TARGETS exactly.')
 param softwareTargets string = 'zotero,ollama,hugging-face,n8n,langfuse,obsidian,sqlite,git,vs-code,pandoc,github,discourse,cloudflare,supabase'
 
+@description('Comma-separated GitHub numeric user IDs allowed to perform Project maintainer review actions.')
+param projectMaintainerGithubIds string = '219447171'
+
 @description('Vote storage backend. Always "durable" in every environment, including azure-staging: azure-staging now runs against its own fully isolated engagements-staging/votes-staging/scores-staging/discussions-staging/gateway-state-staging Cosmos containers (infra/modules/foundry-integration.bicep), never the shared production containers, so there is no live-data risk in exercising the real production durable transaction/CAS code path in staging too. (An earlier revision of this param temporarily gated staging to the legacy "kv" backend against the SHARED containers pending a Cloudflare Worker vote-count fix; that approach was superseded by container isolation, which is strictly safer and needs no such gate.) Matches wrangler.toml\'s VOTE_BACKEND; config.ts only accepts "kv" or "durable".')
 param voteBackend string = 'durable'
 
@@ -188,6 +191,7 @@ module apps 'modules/apps.bicep' = {
     cosmosDiscussionsContainerName: cosmosDiscussionsContainerName
     cosmosGatewayStateContainerName: cosmosGatewayStateContainerName
     softwareTargets: softwareTargets
+    projectMaintainerGithubIds: projectMaintainerGithubIds
     voteBackend: voteBackend
     copilotConnectionTtlSeconds: copilotConnectionTtlSeconds
     wyattStagingIpCidr: wyattStagingIpCidr

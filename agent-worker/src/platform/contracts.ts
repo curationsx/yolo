@@ -96,12 +96,24 @@ export interface CommunityStore {
   createDocument<T extends object>(container: string, doc: T, partitionKey: string): Promise<void>;
   readDocument<T>(container: string, id: string, partitionKey: string): Promise<T | null>;
   upsertDocument<T extends object>(container: string, doc: T, partitionKey: string): Promise<void>;
+  replaceDocument<T extends object>(
+    container: string,
+    id: string,
+    doc: T,
+    partitionKey: string,
+    etag: string,
+  ): Promise<boolean>;
   deleteDocument(container: string, id: string, partitionKey: string): Promise<void>;
   queryDocuments<T>(
     container: string,
     query: string,
     parameters: CosmosQueryParameter[],
     partitionKey: string,
+  ): Promise<T[]>;
+  queryDocumentsCrossPartition<T>(
+    container: string,
+    query: string,
+    parameters: CosmosQueryParameter[],
   ): Promise<T[]>;
 }
 

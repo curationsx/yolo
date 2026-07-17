@@ -17,7 +17,9 @@ import {
   createDocument,
   deleteDocument,
   queryDocuments,
+  queryDocumentsCrossPartition,
   readDocument,
+  replaceDocument,
   upsertDocument,
   type CosmosConfig,
 } from "../cosmos.ts";
@@ -109,10 +111,14 @@ export function createCloudflareCommunityStore(config: {
     readDocument: (container, id, partitionKey) => readDocument(cfg(container), id, partitionKey),
     upsertDocument: (container, doc, partitionKey) =>
       upsertDocument(cfg(container), doc, partitionKey),
+    replaceDocument: (container, id, doc, partitionKey, etag) =>
+      replaceDocument(cfg(container), id, doc, partitionKey, etag),
     deleteDocument: (container, id, partitionKey) =>
       deleteDocument(cfg(container), id, partitionKey),
     queryDocuments: (container, query, parameters, partitionKey) =>
       queryDocuments(cfg(container), query, parameters, partitionKey),
+    queryDocumentsCrossPartition: (container, query, parameters) =>
+      queryDocumentsCrossPartition(cfg(container), query, parameters),
   };
 }
 

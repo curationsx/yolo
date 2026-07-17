@@ -48,6 +48,7 @@ export interface AzureGatewayConfig {
   copilotRunsPerIpDaily: string;
   copilotRunsGlobalDaily: string;
   softwareTargets: string;
+  projectMaintainerGithubIds: string;
   voteBackend: "kv" | "durable";
 }
 
@@ -97,6 +98,7 @@ export function loadAzureConfig(env: EnvRecord): AzureGatewayConfig {
     copilotRunsPerIpDaily: env.COPILOT_RUNS_PER_IP_DAILY || "10",
     copilotRunsGlobalDaily: env.COPILOT_RUNS_GLOBAL_DAILY || "100",
     softwareTargets: required(env, "SOFTWARE_TARGETS", missing),
+    projectMaintainerGithubIds: env.PROJECT_MAINTAINER_GITHUB_IDS || "",
     voteBackend: env.VOTE_BACKEND === "kv" ? "kv" : "durable",
   };
 

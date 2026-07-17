@@ -114,6 +114,7 @@ export function buildAzureEnv(
     COPILOT_RUNS_PER_IP_DAILY: config.copilotRunsPerIpDaily,
     COPILOT_RUNS_GLOBAL_DAILY: config.copilotRunsGlobalDaily,
     SOFTWARE_TARGETS: config.softwareTargets,
+    PROJECT_MAINTAINER_GITHUB_IDS: config.projectMaintainerGithubIds,
     VOTE_BACKEND: config.voteBackend,
   };
 

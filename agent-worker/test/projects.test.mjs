@@ -602,3 +602,63 @@ test("failed evidence persistence leaves no Project and releases create quota", 
   );
   assert.equal(env.quota.releases.length, 1);
 });
+
+test("returned-draft resubmission conflict releases create quota", async () => {
+  const env = projectEnv();
+  const token = addSession(env);
+  installGithubFixture();
+  const previewResponse = await handleRequest(previewRequest(token), env);
+  const preview = await previewResponse.json();
+  const firstRequestId = "12121212-1212-4212-8212-121212121212";
+  const firstCreate = await handleRequest(
+    new Request("https://api.curations.dev/api/projects", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        project_id: preview.preview.project_id,
+        preview_version: preview.preview_version,
+        preview_consistency_token: preview.preview_consistency_token,
+        request_id: firstRequestId,
+        consent: true,
+      }),
+    }),
+    env,
+  );
+  assert.equal(firstCreate.status, 201);
+
+  const projectKey = env.community.key(
+    "engagements",
+    preview.preview.project_id,
+    preview.preview.project_id,
+  );
+  const returnedDraft = structuredClone(env.community.documents.get(projectKey));
+  returnedDraft.status = "draft";
+  returnedDraft._etag = "etag-returned-draft";
+  env.community.documents.set(projectKey, returnedDraft);
+
+  env.community.replaceDocument = async () => false;
+  const retry = await handleRequest(
+    new Request("https://api.curations.dev/api/projects", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        project_id: preview.preview.project_id,
+        preview_version: preview.preview_version,
+        preview_consistency_token: preview.preview_consistency_token,
+        request_id: "34343434-3434-4434-8434-343434343434",
+        consent: true,
+      }),
+    }),
+    env,
+  );
+
+  assert.equal(retry.status, 409);
+  assert.match((await retry.json()).error, /refresh before resubmitting/);
+  assert.equal(env.quota.releases.length, 1);
+});
