@@ -1,0 +1,75 @@
+name: Hygiene Audit
+
+on:
+  pull_request:
+    paths:
+      - "scripts/audit/**"
+      - "schemas/**"
+      - ".github/workflows/hygiene-audit.yml"
+  workflow_dispatch:
+    inputs:
+      repo_url:
+        description: "Public repository URL to audit"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hygiene-audit-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install audit dependencies
+        run: python -m pip install jsonschema==4.26.0 pytest==8.4.2
+
+      - name: Run audit tests
+        run: pytest scripts/audit/tests -q
+
+      - name: Dogfood this repository
+        run: |
+          python scripts/audit/hygiene.py . --out self-audit.json
+          python scripts/audit/validate.py self-audit.json
+
+  run:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install validator dependency
+        run: python -m pip install jsonschema==4.26.0
+
+      - name: Run hygiene audit
+        run: |
+          python scripts/audit/hygiene.py "${{ inputs.repo_url }}" --out run-record.json
+          python scripts/audit/validate.py run-record.json
+
+      - name: Upload run-record artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hygiene-run-record
+          path: run-record.json
