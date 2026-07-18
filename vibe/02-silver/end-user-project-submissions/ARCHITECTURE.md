@@ -133,3 +133,62 @@ relates_to: audit-orchestration.md
 
 The platform submits its own PRD to itself using the same intake contract, same run-record
 schema, same ledger rails. Its self-audit trail is public: "we eat our own cooking, verifiably."
+
+---
+
+## Audit Orchestration and the Project Evidence Registry
+
+> Added 2026-07-18 — reconciliation note from the three-engine audit synthesis.
+> Closes the "two audit engines" tension identified by GPT-5.6 Sol and documented
+> in `docs/audits/2026-07-18-silver-audit-synthesis.md`.
+
+**One project identity. One evidence model. One audit history.**
+
+Audit runs are not a parallel product — they are a **phase of the Project Evidence
+Registry ingestion lifecycle**. The sequence is:
+
+```
+Project submission
+  → identity/ownership/evidence gate   (agent-worker/src/repository-verification.ts)
+  → Tier A capability executor         (scripts/audit/hygiene.py — and future Tier A scripts)
+  → run-record                         (schema-valid JSON artifact, commit-bound)
+  → optional publication               (owner-controlled, per finding)
+```
+
+### Identity/ownership gate (`repository-verification.ts`)
+
+`agent-worker/src/repository-verification.ts` is the **identity and evidence gate**.
+It performs:
+
+- SSO identity verification (GitHub OAuth → authenticated user)
+- Repository ownership match (authenticated user must be the repo owner or an
+  authorized collaborator)
+- Immutable SHA resolution (GitHub API → current default branch HEAD, pinned to a
+  commit SHA for the duration of the run)
+- Deterministic stack observations (marker-based file checks at the pinned SHA —
+  these are evidence declarations, not audit findings)
+
+This gate does not run hygiene checks. It produces a verified `(repo_id, commit_sha)`
+pair that is passed to the capability executor.
+
+### Tier A capability executor (`hygiene.py` and subsequent scripts)
+
+The Python runner consumes the `(repo_id, commit_sha)` pair produced by the gate.
+It never re-derives ownership and never fetches HEAD of a mutable branch. It
+executes the hygiene checks defined in `taxonomy/capabilities.yaml` against the
+pinned SHA and emits a run-record that carries both the gate's verified identity
+fields and the runner's findings.
+
+### What this means in practice
+
+- There is no second submission universe. A run-record cannot exist without a
+  prior identity gate pass; the gate output is a required input to the executor.
+- The TS verification code and the Python hygiene runner do not overlap. If a
+  file check appears in both, it is because stack detection (evidence) and hygiene
+  (audit finding) are different claims — evidence says "this file exists"; a hygiene
+  finding says "this file should or should not exist and here is why."
+- Future Tier A scripts (stack detection, security posture) follow the same pattern:
+  they receive the verified identity from the gate and emit findings into the same
+  run-record schema.
+- Cohort aggregation, delta tracking, and badge display all read from run-records.
+  They have one authoritative source.
