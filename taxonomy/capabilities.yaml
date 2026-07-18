@@ -1,0 +1,135 @@
+# Capabilities manifest — taxonomy/capabilities.yaml
+#
+# One versioned entry per capability. This file is the source of truth for:
+#   - the orchestrator (GitHub Actions matrix strategy)
+#   - the intake clickpath (manifest-rendered checkboxes)
+#   - run-record `ruleset_version` values
+#   - badge display copy
+#
+# Do not add a capability here until the corresponding script is merged and the
+# run-record schema can reference it. Capability entries drive production behaviour;
+# they are not aspirational placeholders.
+#
+# Schema promotion path: Bronze entry shape (this file) → Gold schema validation
+# once the manifest entry shape is formalised. See the intake clickpath doc for
+# the full Gold-target shape (includes copy.plain, copy.technical, what_you_get,
+# example_finding, chip_color, community_option, bundles).
+
+capabilities:
+  - id: hygiene
+    version: "0.1.0"
+    tier: A
+    locked: true          # Tier A — always-on, un-uncheckable at intake
+
+    description:
+      plain: >
+        A free health check that runs on every submission. Checks whether your
+        repository has the basics in place: a meaningful README, a licence, a
+        .gitignore that covers common secrets, no accidentally committed sensitive
+        files, and a sensible top-level structure.
+      technical: >
+        Static-analysis pass over the repository tree at a pinned commit SHA.
+        No LLM calls. Checks: .gitignore presence and coverage against a known-bad
+        filename list; sensitive filename detection (*.env, *.pem, *.key, id_rsa,
+        credentials.*, etc.); vendored/binary bulk detection (large non-text blobs
+        in source tree); README non-triviality (length, heading structure); licence
+        file presence; top-level directory structure conventions.
+
+    # Capability matrix cell(s) this entry covers.
+    # Format: domain × platform × artifact. "any" means the check is
+    # platform-agnostic and domain-agnostic.
+    matrix:
+      domain: any
+      platform: any
+      artifact: hygiene
+
+    checks:
+      - id: gitignore_present
+        label: ".gitignore present"
+        severity: fail
+        description: >
+          A .gitignore file must exist at the repository root.
+      - id: gitignore_coverage
+        label: ".gitignore covers common secret patterns"
+        severity: warn
+        description: >
+          .gitignore should contain patterns that prevent committing .env, *.pem,
+          *.key, id_rsa, credentials.*, and similar sensitive file types.
+      - id: sensitive_filenames
+        label: "No sensitive filenames committed"
+        severity: fail
+        description: >
+          The repository tree at the pinned commit must contain no files matching
+          the sensitive-filename list (.env, *.pem, *.key, id_rsa, credentials.*,
+          *.pfx, *.p12, secrets.*, etc.).
+      - id: no_vendored_binary_bulk
+        label: "No unexpected vendored or binary bulk"
+        severity: warn
+        description: >
+          Source trees should not contain large binary blobs or wholesale-vendored
+          third-party code outside a clearly named vendor/ or third_party/ directory.
+      - id: readme_nontrivial
+        label: "README is non-trivial"
+        severity: warn
+        description: >
+          A README (README.md, README.rst, README.txt, or README) must exist and
+          contain more than a project name and a single line of boilerplate. Minimum
+          meaningful content: description of what the project does, and at least one
+          section heading.
+      - id: licence_present
+        label: "Licence file present"
+        severity: warn
+        description: >
+          A LICENCE, LICENSE, LICENCE.md, or LICENSE.md file must exist at the
+          repository root.
+      - id: top_level_structure
+        label: "Top-level directory structure is coherent"
+        severity: info
+        description: >
+          The repository root should not be a flat dump of files with no
+          organisational structure. At least one subdirectory or a recognised
+          single-file project pattern (e.g. a solo script + README) must be present.
+
+    execution_context:
+      runner: github-actions
+      language: python
+      entrypoint: scripts/audit/hygiene.py
+      # The script receives a verified (repo_id, commit_sha) pair from the
+      # identity gate (agent-worker/src/repository-verification.ts) so it never
+      # re-derives ownership.
+      inputs:
+        - name: repo_url
+          description: "Public GitHub HTTPS clone URL"
+        - name: commit_sha
+          description: >
+            Immutable commit SHA resolved by the identity gate. The script pins
+            its fetch to this SHA; it never audits HEAD of a mutable branch.
+      compute: own-actions-minutes    # BYOC — runs in the submitter's GitHub Actions
+
+    output_contract:
+      schema: schemas/run-record.schema.json
+      # Required fields this capability populates in the run-record:
+      fields:
+        - run_id
+        - repo_fingerprint
+        - commit_sha
+        - ruleset_version           # must equal "hygiene/0.1.0"
+        - matrix_cells              # ["hygiene"]
+        - findings                  # one entry per check above
+        - checks_passed
+        - checks_total
+        - execution_context
+        - tokens_spent              # always 0 for Tier A (no LLM calls)
+        - wall_clock_seconds
+        - github_api_requests
+        - files_inspected
+        - bytes_inspected
+        - previous_run              # null on first run; run_id of prior run thereafter
+
+    # Fields not yet in the v0.1.0 schema; tracked in docs/audits/measurement-spec.md
+    # for inclusion in a future schema minor version.
+    pending_schema_fields:
+      - retry_count
+      - cache_hit
+      - actions_minutes_billed
+      - abandonment_point
