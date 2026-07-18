@@ -7,8 +7,8 @@
 #     --config-dir <dir> --work-dir <dir> --logs-dir <dir> -d <domain>
 #     --non-interactive --agree-tos --email <addr>
 # and copies a FIXED, pre-generated, self-signed test-only certificate/key
-# pair (test/fixtures/data/fake-api-{fullchain,privkey}.pem -- never a real
-# key, never used for anything but local offline test crypto operations)
+# pair (test/fixtures/data/fake-api-{fullchain,privkey}.pem.fixture -- never
+# a real key, never used for anything but local offline test crypto operations)
 # into Certbot's standard `<config-dir>/live/<domain>/` layout, falling
 # back to generating a fresh one if that fixture is missing for some
 # reason -- no network access either way. Using the FIXED pair keeps its
@@ -46,9 +46,9 @@ if [[ "${1:-}" == "certonly" ]]; then
   fi
   live_dir="${config_dir}/live/${domain}"
   mkdir -p "$live_dir"
-  if [[ -f "${FIXTURE_DATA_DIR}/fake-api-fullchain.pem" && -f "${FIXTURE_DATA_DIR}/fake-api-privkey.pem" ]]; then
-    cp "${FIXTURE_DATA_DIR}/fake-api-fullchain.pem" "${live_dir}/fullchain.pem"
-    cp "${FIXTURE_DATA_DIR}/fake-api-privkey.pem" "${live_dir}/privkey.pem"
+  if [[ -f "${FIXTURE_DATA_DIR}/fake-api-fullchain.pem.fixture" && -f "${FIXTURE_DATA_DIR}/fake-api-privkey.pem.fixture" ]]; then
+    cp "${FIXTURE_DATA_DIR}/fake-api-fullchain.pem.fixture" "${live_dir}/fullchain.pem"
+    cp "${FIXTURE_DATA_DIR}/fake-api-privkey.pem.fixture" "${live_dir}/privkey.pem"
   else
     (
       umask 077
