@@ -1,0 +1,211 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/curationsx/yolo/schemas/run-record.schema.json",
+  "title": "Audit run record",
+  "description": "Validates deterministic and generative audit run-records emitted by Curations.DEV scripts.",
+  "type": "object",
+  "required": [
+    "run_id",
+    "repo_fingerprint",
+    "matrix_cells",
+    "findings",
+    "tokens_spent",
+    "script_versions",
+    "previous_run",
+    "cohort_ref",
+    "created_at",
+    "badge_level",
+    "execution_context",
+    "dispute",
+    "correction"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "uuidOrNull": {
+      "oneOf": [
+        {
+          "type": "string",
+          "format": "uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "lineageEntry": {
+      "type": "object",
+      "required": ["run_id", "relation"],
+      "additionalProperties": false,
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "relation": {
+          "type": "string",
+          "enum": ["disputes", "supersedes", "references"]
+        }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "required": ["artifact", "confidence", "detail", "severity"],
+      "additionalProperties": false,
+      "properties": {
+        "artifact": {
+          "type": "string",
+          "minLength": 1
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "detail": {
+          "type": "string",
+          "minLength": 1
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["info", "warn", "fail"]
+        }
+      }
+    },
+    "executionContext": {
+      "type": "object",
+      "required": ["model", "cli_version", "entitlement_type"],
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "type": ["string", "null"]
+        },
+        "cli_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "entitlement_type": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "dispute": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "required": ["status", "detail", "lineage"],
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["open", "under_review", "resolved", "rejected"]
+            },
+            "detail": {
+              "type": "string",
+              "minLength": 1
+            },
+            "lineage": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/lineageEntry"
+              },
+              "minItems": 1
+            }
+          }
+        }
+      ]
+    },
+    "correction": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "required": ["detail", "corrected_at", "lineage"],
+          "additionalProperties": false,
+          "properties": {
+            "detail": {
+              "type": "string",
+              "minLength": 1
+            },
+            "corrected_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "lineage": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/lineageEntry"
+              },
+              "minItems": 1
+            }
+          }
+        }
+      ]
+    }
+  },
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "repo_fingerprint": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "matrix_cells": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/finding"
+      },
+      "minItems": 1
+    },
+    "tokens_spent": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "script_versions": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^\\d+\\.\\d+\\.\\d+$"
+      },
+      "minProperties": 1
+    },
+    "previous_run": {
+      "$ref": "#/$defs/uuidOrNull"
+    },
+    "cohort_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "badge_level": {
+      "type": "string",
+      "enum": ["gold", "silver", "bronze", "needs-work"]
+    },
+    "execution_context": {
+      "$ref": "#/$defs/executionContext"
+    },
+    "dispute": {
+      "$ref": "#/$defs/dispute"
+    },
+    "correction": {
+      "$ref": "#/$defs/correction"
+    }
+  }
+}
