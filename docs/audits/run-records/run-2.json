@@ -1,0 +1,88 @@
+{
+  "run_id": "845bb09b-612d-4000-8d29-6cd528e9f91e",
+  "repo_fingerprint": "sha256:4cb1f41cb63f8feb35818b8aae2c2765fcf6b535087f31fe561062c298d93682",
+  "matrix_cells": [
+    "hygiene"
+  ],
+  "findings": [
+    {
+      "check_id": "gitignore_present",
+      "artifact": "hygiene",
+      "confidence": 1.0,
+      "passed": true,
+      "severity": "info",
+      "detail": ".gitignore is present at the repository root."
+    },
+    {
+      "check_id": "gitignore_coverage",
+      "artifact": "hygiene",
+      "confidence": 1.0,
+      "passed": true,
+      "severity": "info",
+      "detail": ".gitignore covers common secret and junk patterns."
+    },
+    {
+      "check_id": "sensitive_filenames",
+      "artifact": "hygiene",
+      "confidence": 1.0,
+      "passed": false,
+      "severity": "fail",
+      "detail": "Sensitive-looking files are committed: scripts/azure/test/fixtures/data/fake-api-fullchain.pem, scripts/azure/test/fixtures/data/fake-api-privkey.pem. Fix: remove them from git and rotate any exposed credentials."
+    },
+    {
+      "check_id": "no_vendored_binary_bulk",
+      "artifact": "hygiene",
+      "confidence": 1.0,
+      "passed": true,
+      "severity": "info",
+      "detail": "No unexpected vendored or binary bulk detected."
+    },
+    {
+      "check_id": "readme_nontrivial",
+      "artifact": "hygiene",
+      "confidence": 1.0,
+      "passed": true,
+      "severity": "info",
+      "detail": "README.md is present and has meaningful content."
+    },
+    {
+      "check_id": "licence_present",
+      "artifact": "hygiene",
+      "confidence": 1.0,
+      "passed": false,
+      "severity": "warn",
+      "detail": "LICENSE file is missing. Fix: add a standard license file at the repository root."
+    },
+    {
+      "check_id": "top_level_structure",
+      "artifact": "hygiene",
+      "confidence": 1.0,
+      "passed": true,
+      "severity": "info",
+      "detail": "Top-level directory structure looks coherent."
+    }
+  ],
+  "tokens_spent": 0,
+  "script_versions": {
+    "hygiene": "0.1.0",
+    "run_record_schema": "1.1.0"
+  },
+  "previous_run": "3c8534f9-d1ec-442a-82dc-1ffa1d84311d",
+  "cohort_ref": "v0.1-tier-a",
+  "created_at": "2026-07-18T09:58:20.038412Z",
+  "execution_context": {
+    "model": null,
+    "cli_version": "hygiene.py/0.1.0 (python 3.12.3)",
+    "entitlement_type": null
+  },
+  "dispute": null,
+  "correction": null,
+  "wall_clock_seconds": 0.021,
+  "github_api_requests": 0,
+  "files_inspected": 393,
+  "bytes_inspected": 5247872,
+  "checks_passed": 5,
+  "checks_total": 7,
+  "ruleset_version": "hygiene/0.1.0",
+  "commit_sha": "f0aa420fa8e8495c01f7876ee4088bda6fa8c7ed"
+}

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/curationsx/yolo/schemas/run-record.schema.json",
   "title": "Audit run record",
-  "description": "Validates deterministic and generative audit run-records emitted by Curations.DEV scripts.",
+  "description": "Validates deterministic and generative audit run-records emitted by Curations.DEV scripts. Schema version 1.1.0 — adds measurement fields and per-check finding structure per docs/audits/measurement-spec.md.",
   "type": "object",
   "required": [
     "run_id",
@@ -14,10 +14,17 @@
     "previous_run",
     "cohort_ref",
     "created_at",
-    "badge_level",
     "execution_context",
     "dispute",
-    "correction"
+    "correction",
+    "wall_clock_seconds",
+    "github_api_requests",
+    "files_inspected",
+    "bytes_inspected",
+    "checks_passed",
+    "checks_total",
+    "ruleset_version",
+    "commit_sha"
   ],
   "additionalProperties": false,
   "$defs": {
@@ -49,9 +56,16 @@
     },
     "finding": {
       "type": "object",
-      "required": ["artifact", "confidence", "detail", "severity"],
+      "required": ["check_id", "passed", "artifact", "confidence", "detail", "severity"],
       "additionalProperties": false,
       "properties": {
+        "check_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "passed": {
+          "type": "boolean"
+        },
         "artifact": {
           "type": "string",
           "minLength": 1
@@ -195,6 +209,7 @@
       "format": "date-time"
     },
     "badge_level": {
+      "description": "Convenience label only — not required. Primary badge is derived from checks_passed/checks_total + ruleset_version.",
       "type": "string",
       "enum": ["gold", "silver", "bronze", "needs-work"]
     },
@@ -206,6 +221,53 @@
     },
     "correction": {
       "$ref": "#/$defs/correction"
+    },
+    "wall_clock_seconds": {
+      "description": "Total elapsed time from audit_repository entry to run-record write, in seconds.",
+      "type": "number",
+      "minimum": 0
+    },
+    "github_api_requests": {
+      "description": "Number of GitHub API / git network operations during the run. 0 for local-path runs; 1 for remote-URL runs (git clone).",
+      "type": "integer",
+      "minimum": 0
+    },
+    "files_inspected": {
+      "description": "Number of files the runner examined (tracked via repository_files()).",
+      "type": "integer",
+      "minimum": 0
+    },
+    "bytes_inspected": {
+      "description": "Total bytes of tracked files in the repository tree.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "checks_passed": {
+      "description": "Number of individual checks that returned a passing result.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "checks_total": {
+      "description": "Total number of checks attempted. For hygiene/0.1.0 this is always 7.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "ruleset_version": {
+      "description": "Capability version that produced this record, e.g. 'hygiene/0.1.0'. Matches taxonomy/capabilities.yaml.",
+      "type": "string",
+      "minLength": 1
+    },
+    "commit_sha": {
+      "description": "Immutable commit SHA the runner observed. Null for local non-git directories.",
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   }
 }
