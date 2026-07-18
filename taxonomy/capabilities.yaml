@@ -67,7 +67,7 @@ capabilities:
         severity: warn
         description: >
           Source trees should not contain large binary blobs or wholesale-vendored
-          third-party code outside a clearly named vendor/ or third_party/ directory.
+          third-party code outside a clearly named vendor/ or third-party/ directory.
       - id: readme_nontrivial
         label: "README is non-trivial"
         severity: warn
@@ -80,7 +80,7 @@ capabilities:
         label: "Licence file present"
         severity: warn
         description: >
-          A LICENCE, LICENSE, LICENCE.md, or LICENSE.md file must exist at the
+          A LICENSE, LICENSE.md, LICENCE, or LICENCE.md file must exist at the
           repository root.
       - id: top_level_structure
         label: "Top-level directory structure is coherent"

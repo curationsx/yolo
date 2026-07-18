@@ -162,7 +162,7 @@ It performs:
 
 - SSO identity verification (GitHub OAuth → authenticated user)
 - Repository ownership match (authenticated user must be the repo owner or an
-  authorised collaborator)
+  authorized collaborator)
 - Immutable SHA resolution (GitHub API → current default branch HEAD, pinned to a
   commit SHA for the duration of the run)
 - Deterministic stack observations (marker-based file checks at the pinned SHA —

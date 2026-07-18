@@ -103,6 +103,6 @@ is enabled.
 Before adding anything to the in-scope list, answer:
 - Does this advance the stranger-completion gate above?
 - Does it displace an existing in-scope item, or is there explicit capacity for it?
-- Is there a run-record or schema artefact that proves it works?
+- Is there a run-record or schema artifact that proves it works?
 
 If any answer is "no", the item goes on the frozen list with a target version.
