@@ -186,7 +186,7 @@ def has_gitignore_coverage(patterns: list[str], token: str) -> bool:
     return False
 
 
-def find_secret_like_files(files: list[Path]) -> list[Path]:
+def find_sensitive_filenames(files: list[Path]) -> list[Path]:
     matches: list[Path] = []
     for path in files:
         name = path.name
@@ -302,12 +302,12 @@ def audit_repository(root: Path, source: str) -> dict[str, object]:
                 )
             )
 
-    secret_like = find_secret_like_files(files)
-    if secret_like:
+    sensitive_filenames = find_sensitive_filenames(files)
+    if sensitive_filenames:
         findings.append(
             make_finding(
                 "fail",
-                f"Secret-looking files are committed: {summarise_paths(secret_like)}. Fix: remove them from git and rotate any exposed credentials.",
+                f"Sensitive-looking files are committed: {summarise_paths(sensitive_filenames)}. Fix: remove them from git and rotate any exposed credentials.",
             )
         )
 
