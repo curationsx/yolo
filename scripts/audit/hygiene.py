@@ -11,13 +11,15 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 import uuid
 from pathlib import Path
 from urllib.parse import urlparse
 
 SCRIPT_VERSION = "0.1.0"
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "1.1.0"
 COHORT_REF = "v0.1-tier-a"
+RULESET_VERSION = "hygiene/0.1.0"
 TOP_LEVEL_NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 MAX_BINARY_SIZE = 5 * 1024 * 1024
 MAX_TOP_LEVEL_ENTRIES = 30
@@ -29,6 +31,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("target", help="Repository URL or local path to audit")
     parser.add_argument("--out", help="Optional path to write the run-record JSON")
+    parser.add_argument(
+        "--previous-run",
+        dest="previous_run",
+        default=None,
+        help="UUID of the previous run-record (sets the previous_run lineage field)",
+    )
     return parser.parse_args(argv)
 
 
@@ -139,12 +147,24 @@ def build_repo_fingerprint(root: Path, source: str, files: list[Path]) -> str:
     return f"sha256:{digest}"
 
 
-def make_finding(severity: str, detail: str) -> dict[str, object]:
+def make_check_finding(
+    check_id: str,
+    passed: bool,
+    severity_on_fail: str,
+    detail: str,
+) -> dict[str, object]:
+    """Build a per-check finding dict matching the run-record schema.
+
+    When a check passes the severity is always ``"info"``; when it fails the
+    severity is taken from the capability manifest (``severity_on_fail``).
+    """
     return {
+        "check_id": check_id,
         "artifact": "hygiene",
         "confidence": 1.0,
+        "passed": passed,
+        "severity": "info" if passed else severity_on_fail,
         "detail": detail,
-        "severity": severity,
     }
 
 
@@ -259,31 +279,46 @@ def top_level_entries(files: list[Path]) -> list[str]:
     return sorted(entries)
 
 
-def badge_level(findings: list[dict[str, object]]) -> str:
-    severities = [finding["severity"] for finding in findings]
-    warn_count = severities.count("warn")
-    if "fail" in severities:
-        return "needs-work"
-    if warn_count == 0:
-        return "gold"
-    if warn_count == 1:
-        return "silver"
-    return "bronze"
-
-
-def audit_repository(root: Path, source: str) -> dict[str, object]:
+def audit_repository(
+    root: Path, source: str, previous_run: str | None = None
+) -> dict[str, object]:
+    start_time = time.monotonic()
     files = repository_files(root)
+
+    # Accumulate bytes inspected across all tracked files.
+    bytes_inspected = 0
+    for rel_path in files:
+        try:
+            bytes_inspected += (root / rel_path).stat().st_size
+        except OSError:
+            pass
+
     findings: list[dict[str, object]] = []
 
+    # --- Check 1: gitignore_present ---
     gitignore_path = root / ".gitignore"
-    if not gitignore_path.exists():
+    gitignore_exists = gitignore_path.exists()
+    if gitignore_exists:
         findings.append(
-            make_finding(
-                "warn",
-                "Missing .gitignore. Fix: add .gitignore entries for node_modules, .env, dist, build, __pycache__, and .DS_Store.",
+            make_check_finding(
+                "gitignore_present",
+                True,
+                "fail",
+                ".gitignore is present at the repository root.",
             )
         )
     else:
+        findings.append(
+            make_check_finding(
+                "gitignore_present",
+                False,
+                "fail",
+                "Missing .gitignore. Fix: add .gitignore entries for node_modules, .env, dist, build, __pycache__, and .DS_Store.",
+            )
+        )
+
+    # --- Check 2: gitignore_coverage ---
+    if gitignore_exists:
         patterns = load_gitignore_patterns(root)
         expected = [
             ("node_modules", "node_modules"),
@@ -296,80 +331,153 @@ def audit_repository(root: Path, source: str) -> dict[str, object]:
         missing = [label for label, token in expected if not has_gitignore_coverage(patterns, token)]
         if missing:
             findings.append(
-                make_finding(
+                make_check_finding(
+                    "gitignore_coverage",
+                    False,
                     "warn",
                     f".gitignore is missing common junk coverage for {', '.join(missing)}. Fix: add ignore rules for those paths.",
                 )
             )
-
-    sensitive_filenames = find_sensitive_filenames(files)
-    if sensitive_filenames:
-        findings.append(
-            make_finding(
-                "fail",
-                f"Sensitive-looking files are committed: {summarise_paths(sensitive_filenames)}. Fix: remove them from git and rotate any exposed credentials.",
+        else:
+            findings.append(
+                make_check_finding(
+                    "gitignore_coverage",
+                    True,
+                    "warn",
+                    ".gitignore covers common secret and junk patterns.",
+                )
             )
-        )
-
-    bulk_artifacts = find_bulk_artifacts(files)
-    if bulk_artifacts:
+    else:
         findings.append(
-            make_finding(
-                "fail",
-                f"Build artifacts or vendored bulk are committed: {summarise_paths(bulk_artifacts)}. Fix: remove generated directories from git and ignore them.",
-            )
-        )
-
-    large_binaries = find_large_binaries(root, files)
-    if large_binaries:
-        findings.append(
-            make_finding(
-                "fail",
-                f"Large binaries over 5 MB are committed: {summarise_paths(large_binaries)}. Fix: remove them from git or move them to releases/storage.",
-            )
-        )
-
-    if not has_nontrivial_readme(root):
-        findings.append(
-            make_finding(
+            make_check_finding(
+                "gitignore_coverage",
+                False,
                 "warn",
-                "README.md is missing or too thin. Fix: add a heading and at least 300 characters describing the project and how to use it.",
+                ".gitignore is absent; coverage cannot be assessed. Fix: add a .gitignore with common secret and junk patterns.",
             )
         )
 
-    if not has_license(root):
+    # --- Check 3: sensitive_filenames ---
+    sensitive = find_sensitive_filenames(files)
+    if sensitive:
         findings.append(
-            make_finding(
+            make_check_finding(
+                "sensitive_filenames",
+                False,
+                "fail",
+                f"Sensitive-looking files are committed: {summarise_paths(sensitive)}. Fix: remove them from git and rotate any exposed credentials.",
+            )
+        )
+    else:
+        findings.append(
+            make_check_finding(
+                "sensitive_filenames",
+                True,
+                "fail",
+                "No sensitive-looking filenames detected in the repository tree.",
+            )
+        )
+
+    # --- Check 4: no_vendored_binary_bulk ---
+    bulk = find_bulk_artifacts(files)
+    large = find_large_binaries(root, files)
+    all_bulk = bulk + [f for f in large if f not in bulk]
+    if all_bulk:
+        findings.append(
+            make_check_finding(
+                "no_vendored_binary_bulk",
+                False,
+                "warn",
+                f"Build artifacts or vendored bulk are committed: {summarise_paths(all_bulk)}. Fix: remove generated directories from git and ignore them.",
+            )
+        )
+    else:
+        findings.append(
+            make_check_finding(
+                "no_vendored_binary_bulk",
+                True,
+                "warn",
+                "No unexpected vendored or binary bulk detected.",
+            )
+        )
+
+    # --- Check 5: readme_nontrivial ---
+    if has_nontrivial_readme(root):
+        findings.append(
+            make_check_finding(
+                "readme_nontrivial",
+                True,
+                "warn",
+                "README.md is present and has meaningful content.",
+            )
+        )
+    else:
+        findings.append(
+            make_check_finding(
+                "readme_nontrivial",
+                False,
+                "warn",
+                "README.md is missing or too thin. Fix: add a heading and at least 300 characters describing the project.",
+            )
+        )
+
+    # --- Check 6: licence_present ---
+    if has_license(root):
+        findings.append(
+            make_check_finding(
+                "licence_present",
+                True,
+                "warn",
+                "Licence file is present at the repository root.",
+            )
+        )
+    else:
+        findings.append(
+            make_check_finding(
+                "licence_present",
+                False,
                 "warn",
                 "LICENSE file is missing. Fix: add a standard license file at the repository root.",
             )
         )
 
+    # --- Check 7: top_level_structure ---
     top_level = top_level_entries(files)
     odd_names = [name for name in top_level if not TOP_LEVEL_NAME_RE.fullmatch(name)]
     if odd_names:
         findings.append(
-            make_finding(
-                "warn",
+            make_check_finding(
+                "top_level_structure",
+                False,
+                "info",
                 f"Top-level names contain spaces or unusual characters: {', '.join(odd_names[:5])}. Fix: rename them to letters, numbers, dots, underscores, or hyphens.",
             )
         )
-
-    if len(top_level) >= MAX_TOP_LEVEL_ENTRIES:
+    elif len(top_level) >= MAX_TOP_LEVEL_ENTRIES:
         findings.append(
-            make_finding(
-                "warn",
+            make_check_finding(
+                "top_level_structure",
+                False,
+                "info",
                 f"Top-level structure is crowded ({len(top_level)} entries). Fix: keep the repository root under 30 top-level entries.",
             )
         )
-
-    if not findings:
+    else:
         findings.append(
-            make_finding(
+            make_check_finding(
+                "top_level_structure",
+                True,
                 "info",
-                "Hygiene checks passed. Fix: keep running `python scripts/audit/hygiene.py .` before publishing new runs.",
+                "Top-level directory structure looks coherent.",
             )
         )
+
+    checks_total = len(findings)  # Always 7 for hygiene/0.1.0
+    checks_passed = sum(1 for f in findings if f["passed"])
+
+    commit_sha, _ = git_metadata(root)
+
+    wall_clock_seconds = round(time.monotonic() - start_time, 3)
 
     return {
         "run_id": str(uuid.uuid4()),
@@ -381,10 +489,9 @@ def audit_repository(root: Path, source: str) -> dict[str, object]:
             "hygiene": SCRIPT_VERSION,
             "run_record_schema": SCHEMA_VERSION,
         },
-        "previous_run": None,
+        "previous_run": previous_run,
         "cohort_ref": COHORT_REF,
         "created_at": dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z"),
-        "badge_level": badge_level(findings),
         "execution_context": {
             "model": None,
             "cli_version": f"hygiene.py/{SCRIPT_VERSION} (python {sys.version.split()[0]})",
@@ -392,6 +499,14 @@ def audit_repository(root: Path, source: str) -> dict[str, object]:
         },
         "dispute": None,
         "correction": None,
+        "wall_clock_seconds": wall_clock_seconds,
+        "github_api_requests": 1 if is_remote_target(source) else 0,
+        "files_inspected": len(files),
+        "bytes_inspected": bytes_inspected,
+        "checks_passed": checks_passed,
+        "checks_total": checks_total,
+        "ruleset_version": RULESET_VERSION,
+        "commit_sha": commit_sha,
     }
 
 
@@ -399,7 +514,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     root, tempdir = resolve_repository(args.target)
     try:
-        record = audit_repository(root, args.target)
+        record = audit_repository(root, args.target, previous_run=args.previous_run)
     finally:
         if tempdir is not None:
             tempdir.cleanup()

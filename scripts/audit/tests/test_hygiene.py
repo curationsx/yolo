@@ -42,35 +42,48 @@ def write_clean_repo(root: Path) -> None:
     root.joinpath("app.py").write_text("print('ok')\n", encoding="utf-8")
 
 
-def test_clean_repo_is_gold(tmp_path: Path) -> None:
+def get_finding(record: dict, check_id: str) -> dict:
+    """Return the finding with the given check_id, or raise."""
+    return next(f for f in record["findings"] if f["check_id"] == check_id)
+
+
+def test_clean_repo_passes_all_checks(tmp_path: Path) -> None:
     write_clean_repo(tmp_path)
 
     record = hygiene.audit_repository(tmp_path, str(tmp_path))
 
-    assert record["badge_level"] == "gold"
+    assert record["checks_passed"] == record["checks_total"] == 7
+    assert record["ruleset_version"] == "hygiene/0.1.0"
     assert validate.validate_record(record) == []
     assert all(finding["severity"] in {"info", "warn", "fail"} for finding in record["findings"])
 
 
-def test_missing_gitignore_warns(tmp_path: Path) -> None:
+def test_missing_gitignore_fails_gitignore_present(tmp_path: Path) -> None:
     write_clean_repo(tmp_path)
     tmp_path.joinpath(".gitignore").unlink()
 
     record = hygiene.audit_repository(tmp_path, str(tmp_path))
 
-    assert record["badge_level"] == "silver"
-    assert any(finding["severity"] == "warn" and ".gitignore" in finding["detail"] for finding in record["findings"])
+    gitignore_finding = get_finding(record, "gitignore_present")
+    assert gitignore_finding["passed"] is False
+    assert gitignore_finding["severity"] == "fail"
+    coverage_finding = get_finding(record, "gitignore_coverage")
+    assert coverage_finding["passed"] is False
+    assert record["checks_total"] == 7
     assert validate.validate_record(record) == []
 
 
-def test_committed_env_file_fails(tmp_path: Path) -> None:
+def test_committed_env_file_fails_sensitive_filenames(tmp_path: Path) -> None:
     write_clean_repo(tmp_path)
     tmp_path.joinpath(".env").write_text("SECRET=1\n", encoding="utf-8")
 
     record = hygiene.audit_repository(tmp_path, str(tmp_path))
 
-    assert record["badge_level"] == "needs-work"
-    assert any(finding["severity"] == "fail" and ".env" in finding["detail"] for finding in record["findings"])
+    sensitive_finding = get_finding(record, "sensitive_filenames")
+    assert sensitive_finding["passed"] is False
+    assert sensitive_finding["severity"] == "fail"
+    assert ".env" in sensitive_finding["detail"]
+    assert record["checks_total"] == 7
     assert validate.validate_record(record) == []
 
 
@@ -78,5 +91,11 @@ def test_this_repo_emits_a_valid_run_record() -> None:
     record = hygiene.audit_repository(ROOT, str(ROOT))
 
     assert record["matrix_cells"] == ["hygiene"]
+    assert record["checks_total"] == 7
+    assert record["ruleset_version"] == "hygiene/0.1.0"
+    assert isinstance(record["wall_clock_seconds"], float)
+    assert record["github_api_requests"] == 0
+    assert record["files_inspected"] > 0
+    assert record["bytes_inspected"] > 0
     assert validate.validate_record(record) == []
     json.dumps(record)
