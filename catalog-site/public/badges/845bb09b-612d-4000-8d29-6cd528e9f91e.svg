@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="223.6" height="31" role="img" aria-label="Tier A: 5/7 · hygiene/0.1.0">
+  <title>Tier A: 5/7 · hygiene/0.1.0</title>
+  <rect x="3" y="3" width="220.6" height="28" fill="#1a1614"/>
+  <rect x="0" y="0" width="220.6" height="28" fill="#faf7f2" stroke="#1a1614" stroke-width="2"/>
+  <rect x="0" y="0" width="63.8" height="28" fill="#1a1614"/>
+  <rect x="63.8" y="0" width="41.9" height="28" fill="#faf7f2" stroke="#1a1614" stroke-width="1"/>
+  <g font-family="JetBrains Mono, IBM Plex Mono, ui-monospace, Courier New, monospace" font-size="12" text-anchor="middle">
+    <text x="31.9" y="18.5" fill="#faf7f2" font-weight="700">TIER A</text>
+    <text x="84.8" y="18.5" fill="#1a1614" font-weight="700">5/7</text>
+    <text x="163.1" y="18.5" fill="#1a1614">hygiene/0.1.0</text>
+  </g>
+</svg>

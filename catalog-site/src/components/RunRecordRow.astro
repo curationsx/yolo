@@ -25,6 +25,12 @@ const shortRunId = record.run_id.slice(0, 8);
 const shortFingerprint = record.repo_fingerprint.replace('sha256:', '').slice(0, 12);
 const lineage = record.previous_run ? `prev ${record.previous_run.slice(0, 8)}` : 'genesis';
 const recordUrl = `https://github.com/${SELF_AUDIT_REPO}/blob/main/docs/audits/run-records/`;
+
+// Count-form badge (Lane C). Served from /badges/{run_id}.svg; the README
+// snippet matches scripts/audit/badge.py render_markdown byte-for-byte.
+const displayUrl = 'https://curations.dev/';
+const badgePath = `/badges/${record.run_id}.svg`;
+const badgeSnippet = `[![${countForm(record)}](${displayUrl}badges/${record.run_id}.svg)](${displayUrl})`;
 ---
 
 <article class:list={['run-record-row', { 'run-record-row--latest': latest }]}>
@@ -53,6 +59,14 @@ const recordUrl = `https://github.com/${SELF_AUDIT_REPO}/blob/main/docs/audits/r
           </li>
         ))}
       </ul>
+    )}
+
+    {latest && (
+      <div class="run-record-badge">
+        <span class="run-record-badge-label">README badge</span>
+        <img src={badgePath} alt={countForm(record)} height="31" />
+        <code class="run-record-badge-snippet">{badgeSnippet}</code>
+      </div>
     )}
 
     {!latest && failing.length > 0 && (
