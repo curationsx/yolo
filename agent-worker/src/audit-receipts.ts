@@ -53,6 +53,16 @@ export interface ReceiptRunRecord {
 export interface AuditReceiptDoc {
   id: string;
   doc_type: typeof DOC_TYPE;
+  /**
+   * Carries the partition value. The production Cosmos container partitions
+   * on /tool_id (infra/modules/foundry-integration.bicep); the Azure adapter
+   * derives the write partition from the document BODY while point-reads
+   * pass the partition argument explicitly — so this field must always equal
+   * the partition argument (the document id) or reads miss the document
+   * entirely. Found live in the 2026-07-19 stranger rehearsal:
+   * "No receipt with that run_id" on publish after a successful store.
+   */
+  tool_id: string;
   owner_id: string;
   owner_login: string;
   repository: { owner: string; name: string };
@@ -261,6 +271,7 @@ export async function handleReceiptSubmit(
   const doc: AuditReceiptDoc = {
     id,
     doc_type: DOC_TYPE,
+    tool_id: id,
     owner_id: session.user.id,
     owner_login: session.user.login,
     repository: {
