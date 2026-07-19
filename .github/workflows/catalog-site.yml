@@ -122,68 +122,13 @@ jobs:
       - name: Check patch hygiene
         run: git diff --check
 
-  deploy:
-    name: Deploy Worker + Pages
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: verify
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    environment:
-      name: production
-      url: https://curations.dev
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v7
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: "24"
-          cache: npm
-          cache-dependency-path: |
-            catalog-site/package-lock.json
-            agent-worker/package-lock.json
-            agent-worker/copilot-runtime/package-lock.json
-
-      - name: Install deployment dependencies
-        run: |
-          npm --prefix agent-worker ci
-          npm --prefix agent-worker/copilot-runtime ci
-          npm --prefix catalog-site ci
-
-      - name: Deploy agent gateway
-        working-directory: agent-worker
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-        run: npx wrangler deploy
-
-      - name: Build static site
-        working-directory: catalog-site
-        env:
-          ASTRO_BASE: /
-          ASTRO_SITE: https://curations.dev
-          PUBLIC_AGENT_API: https://api.curations.dev
-        run: npm run build
-
-      - name: Deploy Cloudflare Pages
-        working-directory: catalog-site
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          ../agent-worker/node_modules/.bin/wrangler pages deploy dist \
-            --project-name curations-dev \
-            --branch main \
-            --commit-hash "$GITHUB_SHA" \
-            --commit-dirty=false
-
-      - name: Verify production
-        run: |
-          curl --fail --silent --show-error --retry 8 --retry-delay 5 \
-            --retry-all-errors https://api.curations.dev/api/health \
-            | grep -q '"ok":true'
-          curl --fail --silent --show-error --retry 8 --retry-delay 5 \
-            --retry-all-errors https://curations.dev/cookbooks/ \
-            | grep -q 'Prompts as code'
+  # The legacy "Deploy Worker + Pages" (Cloudflare) job was retired here on
+  # 2026-07-19, completing the Phase 0 mandate in
+  # docs/PRD-project-evidence-registry.md §12: production DNS resolves
+  # curations.dev to Azure Static Web Apps and api.curations.dev to Azure
+  # Container Apps (completed cutover), so the Cloudflare deploy could only
+  # fail (missing credentials) or, worse, recreate a second production
+  # authority. Production deploys happen exclusively through
+  # .github/workflows/azure-deploy.yml (workflow_dispatch, environment-gated).
+  # The Worker source remains platform-neutral and the wrangler dry-run above
+  # still verifies it compiles for the Cloudflare target.
