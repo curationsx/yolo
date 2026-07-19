@@ -27,8 +27,10 @@ import {
  * Immutable curationsx/yolo commit that callers pin for both the reusable
  * workflow reference and `audit_ref`. Update deliberately in a reviewed PR
  * (never a mutable branch name — see tools/watchdog-ducky-handoff.md).
+ * Current pin: post-#61 main — includes the `previous_run` lineage input
+ * (gap G3), so generated callers can produce truthful re-run deltas.
  */
-export const AUDIT_WORKFLOW_PIN = "d91f5f700cb2c1ed6088361babdeaa11f78789b9";
+export const AUDIT_WORKFLOW_PIN = "c72de4f77d64199a969c7466a83d614217facd84";
 
 /** Path the caller creates in their own repository. */
 export const CALLER_WORKFLOW_PATH = ".github/workflows/hygiene-audit.yml";
@@ -100,6 +102,17 @@ export function callerWorkflow(
 
 on:
   workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: "Full 40-character commit SHA to audit (defaults to the SHA pinned below)"
+        required: false
+        default: "${commitSha}"
+        type: string
+      previous_run:
+        description: "run_id of your previous run-record (re-runs only; enables a truthful delta)"
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -109,8 +122,9 @@ jobs:
     uses: curationsx/yolo/.github/workflows/hygiene-audit-reusable.yml@${AUDIT_WORKFLOW_PIN}
     with:
       repo_url: https://github.com/${owner}/${name}.git
-      commit_sha: ${commitSha}
+      commit_sha: \${{ inputs.commit_sha }}
       audit_ref: ${AUDIT_WORKFLOW_PIN}
+      previous_run: \${{ inputs.previous_run }}
 `;
 }
 
