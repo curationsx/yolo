@@ -25,6 +25,13 @@ import {
 } from "./copilot.ts";
 import { handleAuditIntake } from "./audit-intake.ts";
 import {
+  handlePublicAuditRecords,
+  handleReceiptList,
+  handleReceiptPublish,
+  handleReceiptRevoke,
+  handleReceiptSubmit,
+} from "./audit-receipts.ts";
+import {
   corsHeaders,
   handleAsk,
   handleCreateComment,
@@ -136,6 +143,21 @@ export async function handleRequest(req: Request, env: Env): Promise<Response> {
   }
   if (url.pathname === "/api/audit/intake" && req.method === "POST") {
     return handleAuditIntake(req, env, cors);
+  }
+  if (url.pathname === "/api/audit/receipts" && req.method === "POST") {
+    return handleReceiptSubmit(req, env, cors);
+  }
+  if (url.pathname === "/api/audit/receipts" && req.method === "GET") {
+    return handleReceiptList(req, env, cors);
+  }
+  if (url.pathname === "/api/audit/receipts/publish" && req.method === "POST") {
+    return handleReceiptPublish(req, env, cors);
+  }
+  if (url.pathname === "/api/audit/receipts/revoke" && req.method === "POST") {
+    return handleReceiptRevoke(req, env, cors);
+  }
+  if (url.pathname === "/api/audit/records" && req.method === "GET") {
+    return handlePublicAuditRecords(env, cors);
   }
   if (url.pathname === "/api/projects/preview" && req.method === "POST") {
     return handleProjectPreview(req, env, cors);

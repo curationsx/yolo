@@ -1,0 +1,227 @@
+---
+/**
+ * Your receipts (Lane D) — owner-only view of audit receipts.
+ *
+ * Receipts land privately. This page shows the full private findings, the
+ * EXACT public preview (what would go public, nothing more), and the two
+ * explicit acts: publish and revoke. Security-shaped findings are marked
+ * "never published" — the public projection carries only their count.
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+const apiBase = import.meta.env.PUBLIC_AGENT_API ?? '';
+---
+
+<BaseLayout
+  title="Your audit receipts — CURATIONS.DEV"
+  description="Private-first audit receipts. Review the exact public preview, then publish or revoke explicitly. Security findings are never published — only their count."
+>
+  <section class="audit-intake" data-receipts data-api={apiBase}>
+    <header class="run-records-header">
+      <h1>Your audit receipts</h1>
+      <p class="run-records-tagline">
+        Receipts are private until you say otherwise. Publishing is an explicit
+        act, security findings never go public (only their count), and you can
+        revoke at any time.
+      </p>
+    </header>
+
+    <div class="audit-intake-step" data-step-auth>
+      <h2 class="audit-intake-step-title">Identity</h2>
+      <p class="audit-intake-status" data-auth-state>Checking GitHub identity…</p>
+      <button type="button" class="audit-intake-button" data-sign-in hidden>
+        Sign in with GitHub
+      </button>
+    </div>
+
+    <div data-receipt-list hidden>
+      <h2 class="run-records-list-title">Private receipts</h2>
+      <div data-receipt-rows></div>
+      <div class="run-records-empty" data-empty hidden>
+        <p><strong>No receipts yet.</strong></p>
+        <p>
+          Run a Tier A audit from the <a href="/submit/project/">audit intake</a>,
+          download the run-record artifact from your Actions run, and submit it
+          here — it stays private until you publish.
+        </p>
+      </div>
+    </div>
+
+    <template data-receipt-template>
+      <article class="receipt">
+        <div class="receipt-heading">
+          <span class="run-record-repo" data-repo></span>
+          <span class="run-record-tag" data-visibility></span>
+          <span class="run-record-countform" data-countform></span>
+        </div>
+        <p class="run-record-meta" data-meta></p>
+
+        <details class="receipt-findings">
+          <summary>Private findings (owner-only)</summary>
+          <ul class="receipt-finding-list" data-findings></ul>
+        </details>
+
+        <details class="receipt-preview">
+          <summary>Exact public preview</summary>
+          <pre class="audit-intake-yaml"><code data-preview></code></pre>
+          <p class="receipt-preview-note">
+            This projection is everything that would be visible publicly.
+            Security findings appear only as a count.
+          </p>
+        </details>
+
+        <div class="receipt-actions">
+          <button type="button" class="audit-intake-button" data-publish>
+            Publish this receipt
+          </button>
+          <button type="button" class="audit-intake-button receipt-revoke" data-revoke hidden>
+            Revoke public record
+          </button>
+        </div>
+        <p class="audit-intake-refusal" data-action-error role="alert" hidden></p>
+      </article>
+    </template>
+  </section>
+</BaseLayout>
+
+<script>
+  import {
+    authHeaders,
+    beginGithubSignIn,
+    broadcastAuth,
+    consumeOAuthResult,
+    currentUser,
+  } from '../../lib/browser-auth';
+
+  const root = document.querySelector<HTMLElement>('[data-receipts]')!;
+  const api = root.dataset.api ?? '';
+  const authState = root.querySelector<HTMLElement>('[data-auth-state]')!;
+  const signIn = root.querySelector<HTMLButtonElement>('[data-sign-in]')!;
+  const listWrap = root.querySelector<HTMLElement>('[data-receipt-list]')!;
+  const rows = root.querySelector<HTMLElement>('[data-receipt-rows]')!;
+  const empty = root.querySelector<HTMLElement>('[data-empty]')!;
+  const template = root.querySelector<HTMLTemplateElement>('[data-receipt-template]')!;
+
+  consumeOAuthResult();
+  signIn.addEventListener('click', () => beginGithubSignIn(api, '/receipts/'));
+
+  interface ReceiptEntry {
+    run_id: string;
+    repository: { owner: string; name: string };
+    run_record: {
+      findings: Array<{
+        check_id: string;
+        artifact: string;
+        passed: boolean;
+        severity: string;
+        detail: string;
+      }>;
+      checks_passed: number;
+      checks_total: number;
+      ruleset_version: string;
+      commit_sha: string;
+      created_at: string;
+    };
+    published: boolean;
+    published_at: string | null;
+    public_preview: unknown;
+  }
+
+  const post = async (path: string, body: object): Promise<{ ok: boolean; error?: string }> => {
+    const response = await fetch(`${api}${path}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...authHeaders() },
+      body: JSON.stringify(body),
+    });
+    const payload = await response.json().catch(() => ({}));
+    return { ok: response.ok, error: payload.error };
+  };
+
+  const renderReceipt = (entry: ReceiptEntry): HTMLElement => {
+    const node = template.content.firstElementChild!.cloneNode(true) as HTMLElement;
+    const record = entry.run_record;
+    node.querySelector('[data-repo]')!.textContent =
+      `${entry.repository.owner}/${entry.repository.name}`;
+    node.querySelector('[data-visibility]')!.textContent = entry.published
+      ? 'published'
+      : 'private';
+    node.querySelector('[data-countform]')!.textContent =
+      `Tier A: ${record.checks_passed}/${record.checks_total} · ${record.ruleset_version}`;
+    node.querySelector('[data-meta]')!.textContent =
+      `run ${entry.run_id.slice(0, 8)} · commit ${record.commit_sha.slice(0, 7)} · ${record.created_at}`;
+
+    const findings = node.querySelector('[data-findings]')!;
+    for (const finding of record.findings) {
+      const item = document.createElement('li');
+      const neverPublished = !finding.passed && finding.severity === 'fail';
+      item.className = neverPublished
+        ? 'receipt-finding receipt-finding--security'
+        : 'receipt-finding';
+      item.textContent =
+        `${finding.passed ? '✓' : '✗'} ${finding.check_id} — ${finding.detail}` +
+        (neverPublished ? '  [security-shaped: never published]' : '');
+      findings.append(item);
+    }
+
+    node.querySelector('[data-preview]')!.textContent = JSON.stringify(
+      entry.public_preview,
+      null,
+      2,
+    );
+
+    const publish = node.querySelector<HTMLButtonElement>('[data-publish]')!;
+    const revoke = node.querySelector<HTMLButtonElement>('[data-revoke]')!;
+    const actionError = node.querySelector<HTMLElement>('[data-action-error]')!;
+    publish.hidden = entry.published;
+    revoke.hidden = !entry.published;
+
+    publish.addEventListener('click', async () => {
+      const consent = window.confirm(
+        'Publish this receipt? Only the exact public preview shown above goes ' +
+          'public. Security findings stay private (count only). You can revoke later.',
+      );
+      if (!consent) return;
+      const result = await post('/api/audit/receipts/publish', {
+        run_id: entry.run_id,
+        confirm: true,
+      });
+      if (result.ok) return location.reload();
+      actionError.textContent = result.error ?? 'Publishing failed.';
+      actionError.hidden = false;
+    });
+
+    revoke.addEventListener('click', async () => {
+      const result = await post('/api/audit/receipts/revoke', { run_id: entry.run_id });
+      if (result.ok) return location.reload();
+      actionError.textContent = result.error ?? 'Revocation failed.';
+      actionError.hidden = false;
+    });
+
+    return node;
+  };
+
+  void (async () => {
+    const user = await currentUser(api);
+    broadcastAuth(user);
+    if (!user) {
+      authState.textContent = 'Sign in with GitHub to see your receipts. They are visible only to you.';
+      signIn.hidden = false;
+      return;
+    }
+    authState.textContent = `Signed in as @${user.login}. Receipts below are visible only to you.`;
+    listWrap.hidden = false;
+
+    try {
+      const response = await fetch(`${api}/api/audit/receipts`, { headers: authHeaders() });
+      if (!response.ok) throw new Error(String(response.status));
+      const { receipts } = (await response.json()) as { receipts: ReceiptEntry[] };
+      if (receipts.length === 0) {
+        empty.hidden = false;
+        return;
+      }
+      for (const entry of receipts) rows.append(renderReceipt(entry));
+    } catch {
+      empty.hidden = false;
+    }
+  })();
+</script>
