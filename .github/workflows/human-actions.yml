@@ -23,6 +23,7 @@ on:
         required: false
         type: number
   schedule:
+    # Offset minute is intentionally non-zero to avoid top-of-hour bursts.
     - cron: "23 */6 * * *"
 
 permissions:

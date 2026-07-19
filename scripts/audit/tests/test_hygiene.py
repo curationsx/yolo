@@ -149,7 +149,7 @@ def test_lowercase_sha_is_accepted_before_git_io() -> None:
     hygiene._validate_sha_format("a" * 40)
 
 
-def test_uppercase_sha_rejected_before_git_io(monkeypatch) -> None:
+def test_uppercase_sha_is_rejected_before_git_io(monkeypatch) -> None:
     """Uppercase SHA must fail fast before any git subprocess call."""
     import pytest
 
