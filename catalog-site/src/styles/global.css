@@ -6142,3 +6142,124 @@ a.member-capability-row:hover,
   -webkit-user-select: all;
   user-select: all;
 }
+
+/* Audit intake (Lane A) — /submit/project/ front door. */
+.audit-intake {
+  max-width: 56rem;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-3) var(--space-8);
+}
+
+.audit-intake-step {
+  border: 2px solid var(--border-color);
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.audit-intake-step-title {
+  margin: 0 0 var(--space-1);
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.audit-intake-status,
+.audit-intake-summary,
+.audit-intake-path {
+  margin: 0 0 var(--space-1);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.audit-intake-label {
+  display: block;
+  margin-bottom: var(--space-0-5);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted-foreground);
+}
+
+.audit-intake-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.audit-intake-input {
+  flex: 1 1 20rem;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  padding: var(--space-1);
+  border: 2px solid var(--border-color);
+  border-radius: 0;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.audit-intake-input:focus-visible {
+  outline: 2px solid var(--border-color);
+  outline-offset: 2px;
+}
+
+.audit-intake-button {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: var(--space-1) var(--space-2);
+  border: 2px solid var(--border-color);
+  border-radius: 0;
+  background: var(--border-color);
+  color: var(--background);
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+}
+
+.audit-intake-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.audit-intake-refusal {
+  margin: var(--space-1) 0 0;
+  padding: var(--space-1);
+  border: 2px solid var(--coral-red);
+  color: var(--coral-red);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+
+.audit-intake-yaml {
+  margin: 0 0 var(--space-1);
+  padding: var(--space-1);
+  border: 1px solid var(--border-color);
+  background: var(--background);
+  overflow-x: auto;
+}
+
+.audit-intake-yaml code {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.55;
+  -webkit-user-select: all;
+  user-select: all;
+}
+
+.audit-intake-steps {
+  margin: 0 0 var(--space-1);
+  padding-left: var(--space-3);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.7;
+}
+
+.audit-intake-links {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+}

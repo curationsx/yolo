@@ -23,6 +23,7 @@ import {
   handleCopilotRun,
   handleCopilotStatus,
 } from "./copilot.ts";
+import { handleAuditIntake } from "./audit-intake.ts";
 import {
   corsHeaders,
   handleAsk,
@@ -132,6 +133,9 @@ export async function handleRequest(req: Request, env: Env): Promise<Response> {
   }
   if (url.pathname === "/api/discussions/comment" && req.method === "POST") {
     return handleCreateComment(req, env, cors);
+  }
+  if (url.pathname === "/api/audit/intake" && req.method === "POST") {
+    return handleAuditIntake(req, env, cors);
   }
   if (url.pathname === "/api/projects/preview" && req.method === "POST") {
     return handleProjectPreview(req, env, cors);

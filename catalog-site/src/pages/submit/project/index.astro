@@ -1,0 +1,176 @@
+---
+/**
+ * Audit intake (Lane A) — the front door for the v0.1 Tier A loop.
+ *
+ * Sign in with GitHub → submit a repository you own → receive a caller
+ * workflow pinned to an immutable curationsx/yolo commit. The audit runs in
+ * the submitter's own GitHub Actions (BYOC) — never on CURATIONS compute.
+ * Refusals from the worker are shown verbatim: they are plain-language,
+ * owner-respecting reasons, not error codes.
+ */
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+
+const apiBase = import.meta.env.PUBLIC_AGENT_API ?? '';
+---
+
+<BaseLayout
+  title="Set up a Tier A audit — CURATIONS.DEV"
+  description="Sign in with GitHub, submit a repository you own, and get a pinned one-click workflow that runs the Tier A hygiene audit in your own Actions."
+>
+  <section class="audit-intake" data-audit-intake data-api={apiBase}>
+    <header class="run-records-header">
+      <h1>Set up a Tier A audit</h1>
+      <p class="run-records-tagline">
+        Three steps: sign in, name a repository you own, commit the generated
+        workflow. The audit runs in <em>your</em> GitHub Actions — your compute,
+        your billing, your evidence.
+      </p>
+    </header>
+
+    <aside class="run-records-byoc">
+      <h2>What we will never do</h2>
+      <p>
+        We never ask for write access to your repository, never run your code on
+        our servers, and discard the GitHub token after sign-in. The generated
+        workflow is pinned to an immutable commit — nothing changes underneath you.
+      </p>
+    </aside>
+
+    <div class="audit-intake-step" data-step-auth>
+      <h2 class="audit-intake-step-title">1 · Identity</h2>
+      <p class="audit-intake-status" data-auth-state>Checking GitHub identity…</p>
+      <button type="button" class="audit-intake-button" data-sign-in hidden>
+        Sign in with GitHub
+      </button>
+    </div>
+
+    <form class="audit-intake-step" data-step-repo hidden>
+      <h2 class="audit-intake-step-title">2 · Your repository</h2>
+      <label class="audit-intake-label" for="repository-url">
+        Public repository you own
+      </label>
+      <div class="audit-intake-controls">
+        <input
+          id="repository-url"
+          name="repository-url"
+          type="url"
+          class="audit-intake-input"
+          placeholder="https://github.com/you/your-repo"
+          autocomplete="off"
+          spellcheck="false"
+          required
+        />
+        <button type="submit" class="audit-intake-button" data-check>
+          Check repository
+        </button>
+      </div>
+      <p class="audit-intake-refusal" data-refusal role="alert" hidden></p>
+    </form>
+
+    <div class="audit-intake-step" data-step-workflow hidden>
+      <h2 class="audit-intake-step-title">3 · Commit the pinned workflow</h2>
+      <p class="audit-intake-summary" data-summary></p>
+      <p class="audit-intake-path">
+        Create <code data-workflow-path></code> with:
+      </p>
+      <pre class="audit-intake-yaml"><code data-workflow-yaml></code></pre>
+      <ol class="audit-intake-steps" data-next-steps></ol>
+      <p class="audit-intake-links">
+        <a data-guide-link href="#">Stranger guide</a> ·
+        <a href="/">Public run records</a>
+      </p>
+    </div>
+  </section>
+</BaseLayout>
+
+<script>
+  import {
+    authHeaders,
+    beginGithubSignIn,
+    broadcastAuth,
+    consumeOAuthResult,
+    currentUser,
+  } from '../../../lib/browser-auth';
+
+  const root = document.querySelector<HTMLElement>('[data-audit-intake]')!;
+  const api = root.dataset.api ?? '';
+  const authState = root.querySelector<HTMLElement>('[data-auth-state]')!;
+  const signIn = root.querySelector<HTMLButtonElement>('[data-sign-in]')!;
+  const repoStep = root.querySelector<HTMLFormElement>('[data-step-repo]')!;
+  const workflowStep = root.querySelector<HTMLElement>('[data-step-workflow]')!;
+  const input = root.querySelector<HTMLInputElement>('#repository-url')!;
+  const check = root.querySelector<HTMLButtonElement>('[data-check]')!;
+  const refusal = root.querySelector<HTMLElement>('[data-refusal]')!;
+  const summary = root.querySelector<HTMLElement>('[data-summary]')!;
+  const workflowPath = root.querySelector<HTMLElement>('[data-workflow-path]')!;
+  const workflowYaml = root.querySelector<HTMLElement>('[data-workflow-yaml]')!;
+  const nextSteps = root.querySelector<HTMLOListElement>('[data-next-steps]')!;
+  const guideLink = root.querySelector<HTMLAnchorElement>('[data-guide-link]')!;
+
+  consumeOAuthResult();
+
+  const renderSignedOut = (): void => {
+    authState.textContent = 'Sign in with GitHub to begin. We request read:user only.';
+    signIn.hidden = false;
+    repoStep.hidden = true;
+    workflowStep.hidden = true;
+  };
+
+  const renderSignedIn = (login: string): void => {
+    authState.textContent = `Signed in as @${login}.`;
+    signIn.hidden = true;
+    repoStep.hidden = false;
+  };
+
+  signIn.addEventListener('click', () => beginGithubSignIn(api, '/submit/project/'));
+
+  void (async () => {
+    const user = await currentUser(api);
+    broadcastAuth(user);
+    if (user) renderSignedIn(user.login);
+    else renderSignedOut();
+  })();
+
+  repoStep.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    refusal.hidden = true;
+    workflowStep.hidden = true;
+    check.disabled = true;
+    check.textContent = 'Checking…';
+    try {
+      const response = await fetch(`${api}/api/audit/intake`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ repository_url: input.value.trim() }),
+      });
+      const body = await response.json();
+      if (!response.ok) {
+        refusal.textContent = body.error ?? 'The repository could not be checked.';
+        refusal.hidden = false;
+        return;
+      }
+      summary.textContent =
+        `${body.repository.owner}/${body.repository.name} · ` +
+        `${body.repository.default_branch} @ ${body.commit_sha.slice(0, 12)} · ` +
+        `audit pinned to curationsx/yolo@${body.audit_ref.slice(0, 12)}`;
+      workflowPath.textContent = body.workflow_path;
+      workflowYaml.textContent = body.workflow_yaml;
+      nextSteps.replaceChildren(
+        ...body.next_steps.map((step: string) => {
+          const item = document.createElement('li');
+          item.textContent = step;
+          return item;
+        }),
+      );
+      guideLink.href = body.guide_url;
+      workflowStep.hidden = false;
+    } catch {
+      refusal.textContent =
+        'The audit service could not be reached. Nothing was submitted — try again shortly.';
+      refusal.hidden = false;
+    } finally {
+      check.disabled = false;
+      check.textContent = 'Check repository';
+    }
+  });
+</script>
