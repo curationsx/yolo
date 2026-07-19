@@ -5,6 +5,7 @@
  * hairline separators, hard shadows, mono metadata per the Visual Oracle.
  */
 import {
+  computeRunDelta,
   countForm,
   formatCreatedAt,
   SELF_AUDIT_REPO,
@@ -13,11 +14,15 @@ import {
 
 interface Props {
   record: RunRecord;
+  /** The record referenced by previous_run, when loaded. */
+  previous?: RunRecord;
   /** Newest record gets the primary border + full check list. */
   latest?: boolean;
 }
 
-const { record, latest = false } = Astro.props as Props;
+const { record, previous, latest = false } = Astro.props as Props;
+
+const delta = computeRunDelta(record, previous);
 
 const failing = record.findings.filter((finding) => !finding.passed);
 const shortSha = record.commit_sha.slice(0, 7);
@@ -49,6 +54,26 @@ const badgeSnippet = `[![${countForm(record)}](${displayUrl}badges/${record.run_
     <p class="run-record-meta">
       run <a href={recordUrl}>{shortRunId}</a> · commit {shortSha} · fp {shortFingerprint} · {formatCreatedAt(record.created_at)} · {record.files_inspected} files · {record.wall_clock_seconds}s · {lineage}
     </p>
+
+    {delta && (
+      <p class="run-record-delta">
+        Δ {delta.no_change ? (
+          `no change vs run ${delta.previous_run.slice(0, 8)}`
+        ) : (
+          <>
+            {delta.fixed.map((checkId) => (
+              <span class="run-record-delta-fixed">+{checkId} </span>
+            ))}
+            {delta.regressed.map((checkId) => (
+              <span class="run-record-delta-regressed">-{checkId} </span>
+            ))}
+            {delta.added.length > 0 && `new: ${delta.added.join(', ')} `}
+            {delta.removed.length > 0 && `dropped: ${delta.removed.join(', ')} `}
+            vs run {delta.previous_run.slice(0, 8)}
+          </>
+        )}
+      </p>
+    )}
 
     {latest && (
       <ul class="run-record-checks">
