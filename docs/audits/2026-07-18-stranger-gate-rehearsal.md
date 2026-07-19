@@ -45,7 +45,7 @@ rehearsal; requires live strangers. Instrumentation note in G6.
 | G2 | Worker + site deployment with `PUBLIC_AGENT_API` set; local builds honestly show "Identity gateway unavailable" | Blocking | Undocumented environment knowledge | Ops follow-up; document the deploy contract |
 | G3 | Reusable workflow has no `previous_run` input, so BYOC re-runs cannot carry lineage — the delta tool then (correctly) refuses the comparison | High | Step 6 impossible for strangers without tribal knowledge of `--previous-run` | Lane E follow-up: one `workflow_dispatch` input + pass-through to `hygiene.py --previous-run`; document in stranger guide |
 | G4 | Badge SVGs are served only for committed self-audit records; a stranger's published record has no badge URL | High | Step 7 dead-ends after publish | Lane C/D follow-up: serve `/badges/{run_id}.svg` for published receipts from the worker |
-| G5 | `external-byoc-test.md` is a runbook, not yet an executed external run | Medium | Step 3 evidence is self-referential | Execute the `curationsdev/community` runbook once the stack merges |
+| G5 | ~~`external-byoc-test.md` is a runbook, not yet an executed external run~~ **CLOSED 2026-07-19**: runbook executed from `curationsdev/community` — run 1 `1cfefdca` (6/7, real `gitignore_coverage` finding), fix committed, run 2 `e9560484` (7/7, `previous_run` lineage) — first external truthful delta: `+gitignore_coverage vs run 1cfefdca`. Evidence: `docs/audits/external/curationsdev-community/` | ~~Medium~~ Closed | Step 3 evidence no longer self-referential | Done |
 | G6 | First-fix rate (≥60%) has no measurement hook | Medium | Metric unmeasurable at launch | Measurement follow-up per `docs/audits/measurement-spec.md` |
 
 ## What already holds without deployment

@@ -1,0 +1,88 @@
+{
+  "run_id": "1cfefdca-0109-4dad-ae79-a8665f60a12c",
+  "repo_fingerprint": "sha256:c435c559c96821e8d29a2d5f56afd9cd292dba0999f99c8ce6b40fb4ff8c7422",
+  "matrix_cells": [
+    "hygiene"
+  ],
+  "findings": [
+    {
+      "check_id": "gitignore_present",
+      "artifact": "hygiene",
+      "confidence": 1.0,
+      "passed": true,
+      "severity": "info",
+      "detail": ".gitignore is present at the repository root."
+    },
+    {
+      "check_id": "gitignore_coverage",
+      "artifact": "hygiene",
+      "confidence": 1.0,
+      "passed": false,
+      "severity": "warn",
+      "detail": ".gitignore is missing common junk coverage for build, __pycache__. Fix: add ignore rules for those paths."
+    },
+    {
+      "check_id": "sensitive_filenames",
+      "artifact": "hygiene",
+      "confidence": 1.0,
+      "passed": true,
+      "severity": "info",
+      "detail": "No sensitive-looking filenames detected in the repository tree."
+    },
+    {
+      "check_id": "no_vendored_binary_bulk",
+      "artifact": "hygiene",
+      "confidence": 1.0,
+      "passed": true,
+      "severity": "info",
+      "detail": "No unexpected vendored or binary bulk detected."
+    },
+    {
+      "check_id": "readme_nontrivial",
+      "artifact": "hygiene",
+      "confidence": 1.0,
+      "passed": true,
+      "severity": "info",
+      "detail": "README.md is present and has meaningful content."
+    },
+    {
+      "check_id": "licence_present",
+      "artifact": "hygiene",
+      "confidence": 1.0,
+      "passed": true,
+      "severity": "info",
+      "detail": "Licence file is present at the repository root."
+    },
+    {
+      "check_id": "top_level_structure",
+      "artifact": "hygiene",
+      "confidence": 1.0,
+      "passed": true,
+      "severity": "info",
+      "detail": "Top-level directory structure looks coherent."
+    }
+  ],
+  "tokens_spent": 0,
+  "script_versions": {
+    "hygiene": "0.1.0",
+    "run_record_schema": "1.1.0"
+  },
+  "previous_run": null,
+  "cohort_ref": "v0.1-tier-a",
+  "created_at": "2026-07-19T08:41:49.828562Z",
+  "execution_context": {
+    "model": null,
+    "cli_version": "hygiene.py/0.1.0 (python 3.12.13)",
+    "entitlement_type": null
+  },
+  "dispute": null,
+  "correction": null,
+  "wall_clock_seconds": 0.008,
+  "github_api_requests": 1,
+  "files_inspected": 65,
+  "bytes_inspected": 492552,
+  "checks_passed": 6,
+  "checks_total": 7,
+  "ruleset_version": "hygiene/0.1.0",
+  "commit_sha": "35274c724cea88a9fa190b12033178b920f23d73"
+}
