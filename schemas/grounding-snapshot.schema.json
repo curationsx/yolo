@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://curations.dev/schemas/grounding-snapshot.schema.json",
+  "title": "Curations.DEV grounding snapshot",
+  "description": "The public contract for versioned world-state snapshots (schema 0.1.0). A snapshot is what a grounding agent captured about a category's state of the art at a moment in time — the temporal axis of the moonshot dataset. Snapshot CONTENTS live in the private store (open-core split); this contract plus each snapshot's digest hash are public so citations are verifiable without exposing the corpus.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "snapshot_ref",
+    "captured_at",
+    "provider",
+    "categories",
+    "content_digest",
+    "spend"
+  ],
+  "properties": {
+    "snapshot_ref": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Stable reference, e.g. 'bing/2026-W30/devtools'. Cited by suggestion plans and run-records."
+    },
+    "captured_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "provider": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Named service, e.g. 'azure-foundry-bing-grounding'."
+    },
+    "categories": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Category ids (taxonomy/categories.yaml) this snapshot covers."
+    },
+    "queries": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "The literal queries issued — versioned inputs, reproducible intent."
+    },
+    "content_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "Digest of the private snapshot content. Public verifiability without public contents."
+    },
+    "item_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "spend": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cap_usd", "spent_usd"],
+      "properties": {
+        "cap_usd": { "type": "number", "minimum": 0 },
+        "spent_usd": { "type": "number", "minimum": 0 },
+        "within_cap": { "type": "boolean" }
+      },
+      "description": "Bounded spend, recorded per snapshot. Exceeding the cap fails the capture — never silently."
+    },
+    "previous_snapshot": {
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "null" }
+      ],
+      "description": "Lineage to the prior snapshot for the same category set — trend deltas walk this chain exactly like run-record lineage."
+    }
+  }
+}

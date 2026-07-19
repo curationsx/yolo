@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://curations.dev/schemas/suggestion-plan.schema.json",
+  "title": "Curations.DEV suggestion plan",
+  "description": "The public contract for curator-generated suggestion plans (schema 0.1.0). A plan is a recorded artifact, not a chat message: it names the run-record it responds to, cites every source that informed it, and emits steps the OWNER executes with their own entitlements. The platform never writes to an end-user repository. A re-run that acted on a plan carries this plan's plan_id in its run-record suggestion_plan_ref field — that link is what turns deltas into intervention->outcome rows.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "plan_id",
+    "responds_to_run",
+    "created_at",
+    "generator",
+    "citations",
+    "steps"
+  ],
+  "properties": {
+    "plan_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "Unique id for this plan; referenced by later run-records."
+    },
+    "responds_to_run": {
+      "type": "string",
+      "minLength": 1,
+      "description": "run_id of the run-record whose findings this plan addresses."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "generator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 },
+        "prompt_components": {
+          "description": "Versioned metaprompt parts assembled for this plan (capability manifest, category snapshot, lineage digest, ...). Prompts are composed, versioned data — never an unversioned blob.",
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "grounding": {
+      "description": "World-state provenance. Null when the plan used no live grounding.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["provider", "snapshot_ref"],
+          "properties": {
+            "provider": { "type": "string", "minLength": 1 },
+            "snapshot_ref": { "type": "string", "minLength": 1 }
+          }
+        },
+        { "type": "null" }
+      ]
+    },
+    "citations": {
+      "description": "Every source that informed the plan. An uncited claim does not ship — plans with an empty citations list are invalid by policy for generative content and permitted only for purely deterministic template plans.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "ref"],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["wiki", "grounding-snapshot", "cohort-digest", "run-record", "capability-manifest"]
+          },
+          "ref": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["step_id", "kind", "title", "body"],
+        "properties": {
+          "step_id": { "type": "string", "minLength": 1 },
+          "kind": {
+            "type": "string",
+            "enum": ["gh-cli", "copilot-prompt", "installable-action", "manual"],
+            "description": "Execution lane. All lanes run on the owner's side with the owner's entitlements."
+          },
+          "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The runnable content: a command, a prompt, a workflow snippet, or plain-language instructions."
+          },
+          "addresses_check": {
+            "type": "string",
+            "description": "check_id of the finding this step addresses, when applicable."
+          }
+        }
+      }
+    },
+    "consent_note": {
+      "type": "string",
+      "description": "Plain-language statement of what executing this plan shares back, if anything. Absence means: nothing is shared back automatically."
+    }
+  }
+}

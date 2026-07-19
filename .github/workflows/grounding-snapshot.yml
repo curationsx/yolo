@@ -1,0 +1,68 @@
+name: Grounding Snapshot (weekly world-state capture)
+
+# Phase B stub — the temporal axis of the moonshot dataset.
+#
+# Captures per-category world-state snapshots on a schedule so cohort closes
+# and suggestion plans can cite "what the world knew at that moment"
+# (schemas/grounding-snapshot.schema.json). ACTIVATION-GATED: until the
+# repository variable GROUNDING_ENABLED is set to 'true' (a deliberate,
+# reviewed act — it implies Azure AI Foundry Bing Grounding spend), each run
+# verifies the contracts and exits cleanly. The schedule exists NOW so that
+# activation is one variable away, not one build-out away.
+
+on:
+  schedule:
+    - cron: "41 5 * * 1" # weekly, Mondays
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify grounding contracts
+        run: |
+          python -m pip install jsonschema==4.26.0 pyyaml==6.0.3
+          python - <<'PYEOF'
+          import json
+          from jsonschema import Draft202012Validator
+          import yaml
+
+          for path in (
+              "schemas/grounding-snapshot.schema.json",
+              "schemas/suggestion-plan.schema.json",
+          ):
+              schema = json.load(open(path))
+              Draft202012Validator.check_schema(schema)
+              print(f"contract OK: {path}")
+
+          categories = yaml.safe_load(open("taxonomy/categories.yaml"))
+          ids = [e["id"] for axis in ("domain", "platform", "stack") for e in categories[axis]]
+          assert len(ids) == len(set(ids)), "duplicate category ids"
+          print(f"vocabulary OK: {len(ids)} category ids")
+          PYEOF
+
+      - name: Capture snapshots (activation-gated)
+        env:
+          GROUNDING_ENABLED: ${{ vars.GROUNDING_ENABLED }}
+        run: |
+          if [ "$GROUNDING_ENABLED" != "true" ]; then
+            echo "Grounding capture not activated (vars.GROUNDING_ENABLED != 'true')."
+            echo "Contracts verified; schedule live; activation is one reviewed variable away."
+            exit 0
+          fi
+          echo "ERROR: activation requested but the capture agent is not implemented yet."
+          echo "Implement the Foundry Bing Grounding call (bounded by taxonomy/cohorts.yaml"
+          echo "spend caps) before enabling GROUNDING_ENABLED."
+          exit 1
