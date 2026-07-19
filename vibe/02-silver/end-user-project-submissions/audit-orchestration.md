@@ -132,8 +132,18 @@ makes the public commons coherent.
 
 ## 10. Promotion Criteria → Gold
 
-- [ ] Run-record JSON schema drafted in `schemas/`
-- [ ] Capability-matrix manifest format drafted in `taxonomy/`
-- [ ] Cohort boundary config format drafted in `taxonomy/`
-- [ ] Intake checklist UX copy drafted (Tier A/B/C)
-- [ ] Quota numbers proposed and reviewed
+- [x] Run-record JSON schema drafted in `schemas/` — shipped as
+  `schemas/run-record.schema.json`, now v1.2.0 (measurement fields 1.1.0;
+  categories / suggestion_plan_ref / grounding 1.2.0)
+- [x] Capability-matrix manifest format drafted in `taxonomy/` — shipped as
+  `taxonomy/capabilities.yaml` (hygiene/0.1.0, 7 checks) plus
+  `taxonomy/categories.yaml` (domain × platform × stack vocabulary)
+- [x] Cohort boundary config format drafted in `taxonomy/` — shipped as
+  `taxonomy/cohorts.yaml`; derived ledger published at
+  `docs/audits/cohort-ledger.json` via `scripts/cohort/derive.py`
+- [ ] Intake checklist UX copy drafted (Tier A/B/C) — Tier A intake copy is
+  live at `/submit/project/`; Tier B/C checkbox copy awaits the
+  manifest-rendered intake (v0.2, with the Creative Visual Director's lenses)
+- [x] Quota numbers proposed and reviewed — live in code: audit receipts
+  20/day (`audit-receipts.ts`), community threads/day, Copilot run caps
+  (`agent-worker/src/env.ts` limits)
