@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/curationsx/yolo/schemas/run-record.schema.json",
   "title": "Audit run record",
-  "description": "Validates deterministic and generative audit run-records emitted by Curations.DEV scripts. Schema version 1.1.0 — adds measurement fields and per-check finding structure per docs/audits/measurement-spec.md.",
+  "description": "Validates deterministic and generative audit run-records emitted by Curations.DEV scripts. Schema version 1.2.0 — adds optional moonshot-dataset fields (categories, suggestion_plan_ref, grounding) on top of 1.1.0's measurement fields; every 1.1.0 record remains valid.",
   "type": "object",
   "required": [
     "run_id",
@@ -263,6 +263,69 @@
         {
           "type": "string",
           "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "categories": {
+      "description": "Optional (schema 1.2.0) — category flags from taxonomy/categories.yaml. 'observed' ids are deterministically detected from repository markers; 'declared' ids are owner-stated at intake. The two are never merged (Evidence Registry rule: observation and declaration stay distinguishable).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["vocabulary_version", "observed"],
+      "properties": {
+        "vocabulary_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "observed": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "declared": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "suggestion_plan_ref": {
+      "description": "Optional (schema 1.2.0) — id of the suggestion-plan artifact this run responds to, when the run is a re-run after acting on a plan. Null/absent for organic runs. This field is what turns re-run deltas into intervention->outcome rows.",
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "grounding": {
+      "description": "Optional (schema 1.2.0) — world-state provenance for any generated guidance associated with this run. Names the versioned grounding snapshot consulted, so every suggestion can cite what the world knew at that moment.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["provider", "snapshot_ref"],
+          "properties": {
+            "provider": {
+              "type": "string",
+              "minLength": 1
+            },
+            "snapshot_ref": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
         },
         {
           "type": "null"

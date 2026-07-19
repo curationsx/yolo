@@ -4,8 +4,11 @@ on:
   pull_request:
     paths:
       - "scripts/audit/**"
+      - "scripts/cohort/**"
       - "schemas/**"
+      - "taxonomy/**"
       - "docs/audits/run-records/**"
+      - "docs/audits/external/**"
       - ".github/workflows/hygiene-audit.yml"
       - ".github/workflows/hygiene-audit-reusable.yml"
   workflow_dispatch:
@@ -42,10 +45,10 @@ jobs:
           python-version: "3.12"
 
       - name: Install audit dependencies
-        run: python -m pip install jsonschema==4.26.0 pytest==8.4.2
+        run: python -m pip install jsonschema==4.26.0 pytest==8.4.2 pyyaml==6.0.3
 
-      - name: Run audit tests
-        run: pytest scripts/audit/tests -q
+      - name: Run audit + cohort derivation tests
+        run: pytest scripts/audit/tests scripts/cohort/tests -q
 
       - name: Dogfood this repository
         run: |
