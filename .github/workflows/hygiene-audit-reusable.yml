@@ -9,12 +9,16 @@ name: Hygiene Audit (Reusable / BYOC)
 #
 #   jobs:
 #     audit:
-#       uses: curationsx/yolo/.github/workflows/hygiene-audit-reusable.yml@main
+#       uses: curationsx/yolo/.github/workflows/hygiene-audit-reusable.yml@<immutable-yolo-commit-sha>
 #       with:
 #         repo_url: https://github.com/your-org/your-repo.git
 #         commit_sha: <full 40-character SHA>
+#         audit_ref: <same immutable yolo commit SHA as above>
 #
 # See docs/audits/stranger-guide.md for complete instructions.
+# For reproducible evidence, callers should pin both the reusable workflow
+# reference and `audit_ref` to immutable full commit SHAs. The default
+# `audit_ref: main` is provided for temporary warm-up/testing only.
 
 on:
   workflow_call:
@@ -26,6 +30,11 @@ on:
       commit_sha:
         description: "Full 40-character immutable commit SHA to audit (never audits mutable HEAD)"
         required: true
+        type: string
+      audit_ref:
+        description: "curationsx/yolo ref containing audit implementation (prefer immutable full commit SHA; default main is for warm-up only)"
+        required: false
+        default: "main"
         type: string
     outputs:
       checks_passed:
@@ -54,6 +63,7 @@ jobs:
         env:
           COMMIT_SHA: ${{ inputs.commit_sha }}
           REPO_URL: ${{ inputs.repo_url }}
+          AUDIT_REF: ${{ inputs.audit_ref }}
         run: |
           if ! echo "$COMMIT_SHA" | grep -qE '^[0-9a-f]{40}$'; then
             echo "ERROR: commit_sha must be a full 40-character lowercase hexadecimal SHA."
@@ -64,12 +74,21 @@ jobs:
             echo "ERROR: repo_url is required."
             exit 1
           fi
+          if [ -z "$AUDIT_REF" ]; then
+            echo "ERROR: audit_ref is required and must be non-empty."
+            exit 1
+          fi
+          if ! echo "$AUDIT_REF" | grep -qE '^[A-Za-z0-9._/-]{1,255}$'; then
+            echo "ERROR: audit_ref must be a simple git ref or full commit SHA."
+            echo "Supplied value: $AUDIT_REF"
+            exit 1
+          fi
 
       - name: Check out curationsx/yolo audit scripts
         uses: actions/checkout@v4
         with:
           repository: curationsx/yolo
-          ref: main
+          ref: ${{ inputs.audit_ref }}
           sparse-checkout: |
             scripts/audit
             schemas
@@ -111,6 +130,7 @@ jobs:
           total    = record["checks_total"]
           version  = record["ruleset_version"]
           sha      = record.get("commit_sha") or "unknown"
+          audit_ref = os.environ.get("AUDIT_REF", "unknown")
           # Emit outputs for caller consumption.
           github_output = os.environ.get("GITHUB_OUTPUT", "")
           if github_output:
@@ -123,6 +143,7 @@ jobs:
               f"## Tier A: {passed}/{total} \u00b7 {version}",
               "",
               f"**Audited commit:** `{sha}`",
+              f"**Audit implementation ref:** `{audit_ref}`",
               "",
               "The downloadable `run-record.json` artifact is commit-bound and schema-valid.",
               "",
@@ -138,6 +159,8 @@ jobs:
           else:
               print("\n".join(lines))
           PYEOF
+        env:
+          AUDIT_REF: ${{ inputs.audit_ref }}
 
       - name: Upload run-record artifact
         uses: actions/upload-artifact@v4

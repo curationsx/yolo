@@ -5,6 +5,10 @@ deterministic Tier A hygiene audit against any public GitHub repository using
 their **own** GitHub Actions entitlement.  No write access to `curationsx/yolo`
 is required, and the audit does not write to your repository.
 
+For the specific external product-promise handoff using
+`curationsdev/community`, see
+[`external-byoc-test.md`](./external-byoc-test.md).
+
 ---
 
 ## Prerequisites
@@ -36,17 +40,26 @@ on:
         description: "Full 40-character immutable commit SHA"
         required: true
         type: string
+      audit_ref:
+        description: "curationsx/yolo audit implementation ref (full commit SHA strongly recommended)"
+        required: true
+        type: string
 
 jobs:
   audit:
-    uses: curationsx/yolo/.github/workflows/hygiene-audit-reusable.yml@main
+    uses: curationsx/yolo/.github/workflows/hygiene-audit-reusable.yml@<immutable-yolo-commit-sha>
     with:
       repo_url: ${{ inputs.repo_url }}
       commit_sha: ${{ inputs.commit_sha }}
+      audit_ref: ${{ inputs.audit_ref }}
 ```
 
 Commit and push this file to your repository's default branch.  No secrets or
 additional configuration are needed.
+
+> For reproducible evidence, pin both the reusable workflow `uses:` reference
+> and `audit_ref` to immutable full commit SHAs. A branch ref may be used only
+> for temporary pre-merge warm-up testing.
 
 ---
 
@@ -81,10 +94,12 @@ git ls-remote https://github.com/org/repo.git refs/heads/main
 
 1. Go to your repository on GitHub.
 2. Click **Actions** → **Run Tier A Hygiene Audit** → **Run workflow**.
-3. Fill in the two required inputs:
+3. Fill in the required inputs:
    - **repo_url**: the HTTPS URL of the public repository to audit
      (e.g. `https://github.com/org/repo.git`)
    - **commit_sha**: the full 40-character SHA obtained in Step 2
+   - **audit_ref**: immutable full `curationsx/yolo` commit SHA containing the
+     audit implementation
 4. Click **Run workflow**.
 
 ---

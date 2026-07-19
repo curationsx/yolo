@@ -5,6 +5,8 @@ import json
 import subprocess
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[3]
 HYGIENE_PATH = ROOT / "scripts" / "audit" / "hygiene.py"
 VALIDATE_PATH = ROOT / "scripts" / "audit" / "validate.py"
@@ -145,10 +147,23 @@ def test_commit_sha_arg_is_accepted(tmp_path: Path) -> None:
     assert args.commit_sha == "a" * 40
 
 
+def test_lowercase_sha_is_accepted_before_git_io() -> None:
+    hygiene._validate_sha_format("a" * 40)
+
+
+def test_uppercase_sha_is_rejected_before_git_io(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Uppercase SHA must fail fast before any git subprocess call."""
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("subprocess.run should not be called for invalid SHA")
+
+    monkeypatch.setattr(hygiene.subprocess, "run", fail_if_called)
+    with pytest.raises(SystemExit, match="Invalid commit SHA"):
+        hygiene.resolve_repository("https://github.com/curationsx/yolo.git", commit_sha="A" * 40)
+
+
 def test_invalid_sha_format_raises(tmp_path: Path) -> None:
     """An obviously malformed SHA (too short) must be rejected before any git I/O."""
-    import pytest
-
     with pytest.raises(SystemExit, match="Invalid commit SHA"):
         hygiene.resolve_repository(str(tmp_path), commit_sha="not-a-sha")
 
@@ -165,8 +180,6 @@ def test_correct_sha_local_repo_passes(tmp_path: Path) -> None:
 
 def test_sha_mismatch_local_repo_fails_closed(tmp_path: Path) -> None:
     """resolve_repository must raise SystemExit when the supplied SHA does not match HEAD."""
-    import pytest
-
     write_clean_repo(tmp_path)
     _init_git_repo(tmp_path)
 

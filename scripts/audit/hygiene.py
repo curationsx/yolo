@@ -25,7 +25,7 @@ MAX_BINARY_SIZE = 5 * 1024 * 1024
 MAX_TOP_LEVEL_ENTRIES = 30
 
 
-SHA_RE = re.compile(r"^[0-9a-f]{40}$", re.IGNORECASE)
+SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
