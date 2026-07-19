@@ -1,53 +1,68 @@
 ---
+/**
+ * Homepage — public run-record display (Lane B).
+ *
+ * Renders only real run-records loaded from docs/audits/run-records/.
+ * If none exist, an honest empty state renders — never a placeholder row.
+ * Falsifying proof for this page: remove the JSON records and rebuild;
+ * any fabricated row that still renders is a Lane B failure.
+ */
 import BaseLayout from '../layouts/BaseLayout.astro';
+import RunRecordRow from '../components/RunRecordRow.astro';
+import { loadRunRecords, SELF_AUDIT_REPO } from '../data/run-records';
+
+const records = loadRunRecords();
+const recordsUrl = `https://github.com/${SELF_AUDIT_REPO}/tree/main/docs/audits/run-records`;
+const workflowUrl = `https://github.com/${SELF_AUDIT_REPO}/blob/main/.github/workflows/hygiene-audit-reusable.yml`;
+const schemaVersion = records[0]?.script_versions?.run_record_schema;
 ---
 
-<BaseLayout title="Curations.DEV - Tier A Run Records">
-  <div class="max-w-4xl mx-auto py-12 px-6">
-    <header class="mb-12">
-      <h1 class="text-4xl font-bold font-mono tracking-tight text-neutral-900 dark:text-white mb-4">Curations.DEV // Tier A Records</h1>
-      <p class="text-xl text-neutral-600 dark:text-neutral-400">
-        Deterministic, single-player hygiene outputs. You execute the audit securely in your own GitHub Actions environment. We display the badge. No AI required for entry.
+<BaseLayout
+  title="CURATIONS.DEV — Tier A run records"
+  description="Public Tier A hygiene run records. Deterministic audits executed in your own GitHub Actions — real evidence, no mocks."
+>
+  <section class="run-records-page">
+    <header class="run-records-header">
+      <h1>Tier A run records</h1>
+      <p class="run-records-tagline">
+        Deterministic hygiene audits. You run them in your own GitHub Actions —
+        your compute, your billing, your evidence. We display the record.
       </p>
     </header>
 
-    <div class="bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-600 dark:border-blue-400 p-6 rounded-r-md mb-12 shadow-sm">
-      <h2 class="text-lg font-bold text-blue-900 dark:text-blue-200 mb-2">Build Your Own Compute (BYOC)</h2>
-      <p class="text-blue-800 dark:text-blue-300 font-mono text-sm">
-        Our Tier A audits run securely on your billing tab. Your code never hits an opaque server.
-        See <a href="https://github.com/curationsx/yolo/blob/main/docs/ROADMAP.md" class="underline hover:text-blue-600">ROADMAP.md</a> for our strict v0.1 scope boundary.
+    <aside class="run-records-byoc">
+      <h2>Bring your own compute</h2>
+      <p>
+        Tier A audits execute in your Actions environment from
+        a <a href={workflowUrl}>pinned reusable workflow</a>. Your code never
+        touches our servers. Scope is deliberately narrow — see
+        the <a href={`https://github.com/${SELF_AUDIT_REPO}/blob/main/docs/ROADMAP.md`}>v0.1 cut-list</a>.
       </p>
-    </div>
+    </aside>
 
-    <!-- Tier A Badge Prototype -->
-    <div class="bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg overflow-hidden shadow-sm">
-      <div class="px-6 py-4 bg-neutral-50 dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-700 flex justify-between items-center">
-        <h3 class="font-bold flex items-center gap-2">
-          <span class="w-3 h-3 rounded-full bg-emerald-500"></span> 
-          yolo / hygiene
-        </h3>
-        <span class="text-sm font-mono bg-neutral-200 dark:bg-neutral-700 px-2 py-1 rounded text-neutral-700 dark:text-neutral-300">Run ID: 0bc-9d7a</span>
-      </div>
-      <div class="p-6">
-        <ul class="space-y-3 font-mono text-sm">
-          <li class="flex items-start gap-3">
-            <span class="text-emerald-600 dark:text-emerald-400">✓</span> 
-            <span class="text-neutral-800 dark:text-neutral-200">gitignore_present - .gitignore covers common secret patterns</span>
-          </li>
-          <li class="flex items-start gap-3">
-            <span class="text-emerald-600 dark:text-emerald-400">✓</span> 
-            <span class="text-neutral-800 dark:text-neutral-200">sensitive_filenames - No sensitive filenames committed</span>
-          </li>
-          <li class="flex items-start gap-3">
-            <span class="text-emerald-600 dark:text-emerald-400">✓</span> 
-            <span class="text-neutral-800 dark:text-neutral-200">readme_nontrivial - README is non-trivial</span>
-          </li>
-          <li class="flex items-start gap-3">
-            <span class="text-emerald-600 dark:text-emerald-400">✓</span> 
-            <span class="text-neutral-800 dark:text-neutral-200">licence_present - Licence file present</span>
-          </li>
-        </ul>
-      </div>
-    </div>
-  </div>
+    <section class="run-records-list" aria-label="Public run records">
+      <h2 class="run-records-list-title">Public records</h2>
+
+      {records.length === 0 ? (
+        <div class="run-records-empty">
+          <p><strong>No public run records yet.</strong></p>
+          <p>
+            Run the Tier A audit in your own Actions via the
+            <a href={workflowUrl}>reusable workflow</a>, then publish the
+            run-record. Records rendered here are loaded from
+            <a href={recordsUrl}>docs/audits/run-records</a> — nothing is mocked.
+          </p>
+        </div>
+      ) : (
+        <>
+          {records.map((record, index) => (
+            <RunRecordRow record={record} latest={index === 0} />
+          ))}
+          <p class="run-records-provenance">
+            {records.length} records · source <a href={recordsUrl}>docs/audits/run-records</a>{schemaVersion ? ` · run_record_schema ${schemaVersion}` : ''}
+          </p>
+        </>
+      )}
+    </section>
+  </section>
 </BaseLayout>
