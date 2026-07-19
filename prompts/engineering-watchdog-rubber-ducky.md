@@ -5,7 +5,7 @@ category: engineering
 version: 0.1.0
 status: draft
 license: MIT
-tags: [engineering, debugging, strategy, introspection]
+tags: [engineering, product, debugging, strategy, introspection]
 ---
 
 # Strategic Watchdog & Rubber-Ducky Partner 🦆🛡️
