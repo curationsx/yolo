@@ -1,0 +1,62 @@
+{
+  "cohorts": [
+    {
+      "cohort_id": "2026-Q3",
+      "first_fix_rate": 1.0,
+      "first_run_journeys": 2,
+      "improved_journeys": 2,
+      "improved_runs": 3,
+      "inquiry_buckets": {
+        "declared": {},
+        "observed": {}
+      },
+      "linked_reruns": 3,
+      "no_change_runs": 0,
+      "regressed_runs": 0,
+      "run_ids": [
+        "1b46552b-3b20-4000-82c1-affb800d9ad7",
+        "1cfefdca-0109-4dad-ae79-a8665f60a12c",
+        "3c8534f9-d1ec-442a-82dc-1ffa1d84311d",
+        "845bb09b-612d-4000-8d29-6cd528e9f91e",
+        "e9560484-70f2-4de3-ae56-d3b16f932bc2"
+      ],
+      "sub_cohorts": {
+        "2026-Q3.r2": 2,
+        "2026-Q3.r3": 1
+      },
+      "total_runs": 5,
+      "unique_journeys": 2,
+      "window": {
+        "closes_at": "2026-09-30",
+        "opened_at": "2026-07-01"
+      }
+    },
+    {
+      "cohort_id": "2026-Q4",
+      "first_fix_rate": null,
+      "first_run_journeys": 0,
+      "improved_journeys": 0,
+      "improved_runs": 0,
+      "inquiry_buckets": {
+        "declared": {},
+        "observed": {}
+      },
+      "linked_reruns": 0,
+      "no_change_runs": 0,
+      "regressed_runs": 0,
+      "run_ids": [],
+      "sub_cohorts": {},
+      "total_runs": 0,
+      "unique_journeys": 0,
+      "window": {
+        "closes_at": "2026-12-31",
+        "opened_at": "2026-10-01"
+      }
+    }
+  ],
+  "config_version": "cohorts/0.1.0",
+  "corpus_fingerprint": "sha256:b340fa8db2d1cc79c2e595cbdb071393f44eb523e6f6af44319b42988a4eab3b",
+  "ledger_version": "cohort-ledger/0.1.0",
+  "total_records": 5,
+  "unassigned_run_ids": []
+}
