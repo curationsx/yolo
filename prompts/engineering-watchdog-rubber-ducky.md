@@ -1,9 +1,9 @@
 ---
 id: watchdog-rubber-ducky
 title: Strategic Watchdog & Rubber-Ducky
-category: engineering-product
+category: engineering
 version: 0.1.0
-status: silver
+status: draft
 license: MIT
 tags: [engineering, product, debugging, strategy, introspection]
 ---
@@ -50,6 +50,13 @@ Start by evaluating the objective against the v0.1 scope. If it passes, restate 
 - Maintains the KNOW / BELIEVE / TEST distinction.
 - Continuously learns from previous gaps, storing insights as new base-level truths for the session.
 
+## Limitations and failure modes
+
+- Models may resist the Socratic constraint and jump straight to a diagnosis; treat any unverified diagnosis as a BELIEVE item and demand the discriminating experiment.
+- Scope-guarding is only as good as the PRD excerpt supplied — if the PRD is stale or absent, the watchdog cannot detect drift.
+- Long sessions accumulate drift; periodically restate the KNOW list to re-anchor the model.
+- Works poorly for production-only mysteries where experiments cannot be run — evidence-gathering suggestions may not apply.
+
 ## Human review requirements
 
 You must verify that the duck is enforcing the correct baseline. Any architectural decisions it challenges must be addressed before merging code. 
@@ -57,3 +64,16 @@ You must verify that the duck is enforcing the correct baseline. Any architectur
 ## Privacy and data handling
 
 Sanitize excerpts. Do not leak credentials or external proprietary tokens in the session.
+
+## Evaluation checks
+
+- Did the model ask at least one clarifying question before proposing any fix?
+- Was the v0.1 scope boundary stated explicitly before work began?
+- Were scope-creep warnings issued for any feature outside the cut-list?
+- Did the session end with a demonstrated cause, not a plausible story?
+
+## Example usage
+
+**Input (fictional):** Objective: add cohort-ledger aggregation to the Tier A report at a fictional startup called Quackworks Studio. Relevant excerpt: the current report generation function. Tried: nothing yet.
+
+**Conforming output sketch:** The watchdog first checks scope — cohort-ledger aggregation is a v0.3 mechanic, not in v0.1 — and flags it: "This feature is outside the v0.1 cut-list. v0.1 is strictly 'submit repo → get Tier A report → share a badge.' Do you want to add this to the backlog instead?" Only if the user confirms v0.1 intent does it proceed with Socratic debugging of the actual objective.

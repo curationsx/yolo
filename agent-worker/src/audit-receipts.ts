@@ -16,6 +16,7 @@
  */
 
 import { evaluateIntake } from "./audit-intake.ts";
+import { badgeMarkdown } from "./audit-badges.ts";
 import { getSession } from "./auth.ts";
 import { json } from "./community.ts";
 import type { Env } from "./env.ts";
@@ -311,18 +312,29 @@ export async function handleReceiptList(
     ],
   );
   const now = new Date().toISOString();
+  const origin = new URL(req.url).origin;
   return json(
     {
-      receipts: docs.map((doc) => ({
-        run_id: doc.run_record.run_id,
-        repository: doc.repository,
-        run_record: doc.run_record,
-        published: doc.published,
-        published_at: doc.published_at,
-        revoked_at: doc.revoked_at,
-        public_preview: doc.public ?? redactForPublic(doc, now),
-        created_at: doc.created_at,
-      })),
+      receipts: docs.map((doc) => {
+        const badgeUrl = doc.published
+          ? `${origin}/api/audit/badges/${doc.run_record.run_id}.svg`
+          : null;
+        return {
+          run_id: doc.run_record.run_id,
+          repository: doc.repository,
+          run_record: doc.run_record,
+          published: doc.published,
+          published_at: doc.published_at,
+          revoked_at: doc.revoked_at,
+          public_preview: doc.public ?? redactForPublic(doc, now),
+          badge_url: badgeUrl,
+          badge_markdown:
+            badgeUrl && doc.public
+              ? badgeMarkdown({ ...doc.public, run_id: doc.run_record.run_id }, badgeUrl)
+              : null,
+          created_at: doc.created_at,
+        };
+      }),
     },
     200,
     cors,
@@ -380,7 +392,20 @@ export async function handleReceiptPublish(
     updated_at: now,
   };
   await env.community.upsertDocument(env.COSMOS_CONTAINER, published, doc.id);
-  return json({ published: true, public_record: published.public }, 200, cors);
+  const badgeUrl = `${new URL(req.url).origin}/api/audit/badges/${doc.run_record.run_id}.svg`;
+  return json(
+    {
+      published: true,
+      public_record: published.public,
+      badge_url: badgeUrl,
+      badge_markdown: badgeMarkdown(
+        { ...published.public!, run_id: doc.run_record.run_id },
+        badgeUrl,
+      ),
+    },
+    200,
+    cors,
+  );
 }
 
 export async function handleReceiptRevoke(
