@@ -1,0 +1,251 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import MemberPrivateGate from '../../components/MemberPrivateGate.astro';
+import MemberPrivateNav from '../../components/MemberPrivateNav.astro';
+import {
+  memberFixture,
+  memberSettingsSections,
+  type MemberSettingsSectionFixture,
+} from '../../data/member-showcase-preview';
+import { withBase } from '../../lib/labels';
+
+interface Props extends MemberSettingsSectionFixture {}
+
+export function getStaticPaths() {
+  return memberSettingsSections.map((item) => ({
+    params: { section: item.section },
+    props: item,
+  }));
+}
+
+const { section, label, description } = Astro.props;
+const fixtureEnabled =
+  import.meta.env.DEV && import.meta.env.PUBLIC_MEMBER_FIXTURES === 'true';
+const fixtureQuery = fixtureEnabled ? '?fixture_auth=1' : '';
+---
+
+<BaseLayout
+  title={`${label} settings - CURATIONS.DEV`}
+  description={description}
+  communityPreview
+  noindex
+>
+  <MemberPrivateGate fixtureEnabled={fixtureEnabled}>
+    <MemberPrivateNav current="settings" fixtureEnabled={fixtureEnabled} />
+    {
+      fixtureEnabled ? (
+        <>
+          <header class="discovery-header member-private-page-header">
+            <div>
+              <p class="discovery-eyebrow">Private member workspace · fixture</p>
+              <h1>Settings</h1>
+              <p>{description}</p>
+            </div>
+            <span class="project-builder-status">No persistence</span>
+          </header>
+
+          <nav class="discovery-tabs member-settings-tabs" aria-label="Settings sections">
+            {memberSettingsSections.map((item) => (
+              <a
+                class:list={{ 'is-active': section === item.section }}
+                href={withBase(`/settings/${item.section}/${fixtureQuery}`)}
+                aria-current={section === item.section ? 'page' : undefined}
+              >
+                {item.label}
+              </a>
+            ))}
+          </nav>
+
+          <form class="member-settings-form" data-fixture-settings>
+            {section === 'profile' && (
+              <fieldset>
+                <legend>Public CURATIONS profile</legend>
+                <div class="field-grid">
+                  <label>
+                    Display name
+                    <input name="display_name" value={memberFixture.displayName} />
+                  </label>
+                  <label>
+                    GitHub login
+                    <input value={`@${memberFixture.login}`} disabled />
+                    <span class="field-help">Identity source; managed through GitHub.</span>
+                  </label>
+                  <label class="field-span">
+                    Bio
+                    <textarea name="bio" rows="4">{memberFixture.bio}</textarea>
+                  </label>
+                  <label>
+                    Website
+                    <input type="url" name="website" value={memberFixture.website} />
+                  </label>
+                  <label>
+                    Location
+                    <input name="location" value={memberFixture.location} />
+                  </label>
+                  <label class="check-row field-span">
+                    <input type="checkbox" checked /> Enable public CURATIONS profile
+                  </label>
+                </div>
+              </fieldset>
+            )}
+
+            {section === 'account' && (
+              <fieldset>
+                <legend>Account and GitHub identity</legend>
+                <div class="member-settings-list">
+                  <article>
+                    <span>Linked identity</span>
+                    <strong>@{memberFixture.login}</strong>
+                    <p>Normal OAuth requests `read:user`, reads the profile once, and discards the provider token.</p>
+                  </article>
+                  <article>
+                    <span>Active session</span>
+                    <strong>This browser</strong>
+                    <p>CURATIONS session tokens are revocable through sign-out.</p>
+                  </article>
+                  <article>
+                    <span>Data controls</span>
+                    <strong>Export · deactivate · delete</strong>
+                    <p>Public conversation attribution and private account data follow separate retention contracts.</p>
+                  </article>
+                </div>
+              </fieldset>
+            )}
+
+            {section === 'contact' && (
+              <fieldset>
+                <legend>Verified contact visibility</legend>
+                <div class="field-grid">
+                  <label>
+                    Contact email
+                    <input type="email" name="contact_email" value="hello@example.com" />
+                    <span class="field-help">
+                      Entered separately for this fixture; never imported from GitHub.
+                    </span>
+                  </label>
+                  <label>
+                    Visibility
+                    <select name="contact_visibility">
+                      <option selected>Private</option>
+                      <option>Signed-in members</option>
+                      <option>Public</option>
+                    </select>
+                  </label>
+                  <label class="check-row field-span">
+                    <input type="checkbox" checked />
+                    Illustrative verification complete
+                  </label>
+                </div>
+                <p class="field-help">
+                  Signed-in visibility reduces casual exposure but cannot prevent
+                  scraping. Fixture only; no email or verification token is sent.
+                </p>
+              </fieldset>
+            )}
+
+            {section === 'notifications' && (
+              <fieldset>
+                <legend>Inbox and notification preferences</legend>
+                <div class="member-setting-choices">
+                  <label class="check-row"><input type="checkbox" checked /> Replies and mentions</label>
+                  <label class="check-row"><input type="checkbox" checked /> Maintainer review decisions</label>
+                  <label class="check-row"><input type="checkbox" checked /> Project and Showcase revisions</label>
+                  <label class="check-row"><input type="checkbox" /> Optional email summary</label>
+                  <label class="check-row"><input type="checkbox" checked /> Watched-thread updates</label>
+                  <label class="check-row"><input type="checkbox" checked /> New reviewed Skill matches</label>
+                </div>
+              </fieldset>
+            )}
+
+            {section === 'privacy' && (
+              <fieldset>
+                <legend>Privacy and safety</legend>
+                <div class="member-setting-choices">
+                  <label class="check-row"><input type="checkbox" /> Open new Showcases to Roast by default</label>
+                  <label class="check-row"><input type="checkbox" checked /> Allow feedback invitations</label>
+                  <label class="check-row"><input type="checkbox" checked /> Show optional profile location</label>
+                  <label class="check-row"><input type="checkbox" /> Publish Watch, Follow, or Save activity</label>
+                </div>
+                <div class="member-settings-list">
+                  <article>
+                    <span>Blocked members</span>
+                    <strong>0</strong>
+                    <p>Blocks prevent new interaction; moderation records remain separate.</p>
+                  </article>
+                  <article>
+                    <span>Muted threads</span>
+                    <strong>1</strong>
+                    <p>Mute changes notifications, not public conversation history.</p>
+                  </article>
+                  <article>
+                    <span>Reports</span>
+                    <strong>0 open</strong>
+                    <p>Reporting never silently deletes another member’s contribution.</p>
+                  </article>
+                </div>
+              </fieldset>
+            )}
+
+            {section === 'ai-and-execution' && (
+              <fieldset>
+                <legend>AI and execution boundaries</legend>
+                <div class="member-setting-choices">
+                  <label class="check-row"><input type="checkbox" /> Invite hosted AI on new Projects</label>
+                  <label class="check-row"><input type="checkbox" /> Invite hosted AI on new Showcases</label>
+                </div>
+                <div class="member-settings-list">
+                  <article>
+                    <span>Copilot CLI breakdown</span>
+                    <strong>User-run, local, explicit</strong>
+                    <p>CURATIONS provides prompt text and receives only the breakdown the member approves.</p>
+                  </article>
+                  <article>
+                    <span>Use My Copilot</span>
+                    <strong>Separate one-run authorization</strong>
+                    <p>Uses the authenticated member’s GitHub Copilot plan.</p>
+                  </article>
+                  <article>
+                    <span>Run in My Terminal</span>
+                    <strong>Copy only</strong>
+                    <p>CURATIONS receives neither the local prompt nor the local result.</p>
+                  </article>
+                </div>
+              </fieldset>
+            )}
+
+            <div class="submission-nav">
+              <a
+                class="community-action"
+                href={withBase(`/members/${memberFixture.login.toLowerCase()}/`)}
+              >
+                Public profile
+              </a>
+              <button class="community-action community-action-primary" type="submit">
+                Save settings
+              </button>
+            </div>
+            <p class="field-help" data-fixture-settings-status aria-live="polite">
+              Fixture only. No setting is persisted.
+            </p>
+          </form>
+        </>
+      ) : (
+        <section class="member-workspace-unavailable">
+          <p class="discovery-eyebrow">Authenticated shell only</p>
+          <h1>Settings persistence is not enabled.</h1>
+          <p>No private account preference is embedded in production HTML.</p>
+        </section>
+      )
+    }
+  </MemberPrivateGate>
+</BaseLayout>
+
+<script>
+  for (const form of document.querySelectorAll<HTMLFormElement>('[data-fixture-settings]')) {
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const status = form.querySelector<HTMLElement>('[data-fixture-settings-status]');
+      if (status) status.textContent = 'Fixture saved in appearance only. No request was sent.';
+    });
+  }
+</script>

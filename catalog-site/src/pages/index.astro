@@ -1,72 +1,136 @@
 ---
-/**
- * Homepage — public run-record display (Lane B).
- *
- * Renders only real run-records loaded from docs/audits/run-records/.
- * If none exist, an honest empty state renders — never a placeholder row.
- * Falsifying proof for this page: remove the JSON records and rebuild;
- * any fabricated row that still renders is a Lane B failure.
- */
+import { getCollection } from 'astro:content';
 import BaseLayout from '../layouts/BaseLayout.astro';
-import RunRecordRow from '../components/RunRecordRow.astro';
-import { loadRunRecords, SELF_AUDIT_REPO } from '../data/run-records';
+import BoardActivityFeed from '../components/BoardActivityFeed.astro';
+import CommunityHomepage from '../components/CommunityHomepage.astro';
+import SoftwareCard from '../components/SoftwareCard.astro';
+import {
+  CATEGORY_LABELS,
+  DEPLOYMENT_LABELS,
+  LICENSE_LABELS,
+  withBase,
+} from '../lib/labels';
 
-const records = loadRunRecords();
-const recordsUrl = `https://github.com/${SELF_AUDIT_REPO}/tree/main/docs/audits/run-records`;
-const workflowUrl = `https://github.com/${SELF_AUDIT_REPO}/blob/main/.github/workflows/hygiene-audit-reusable.yml`;
-const schemaVersion = records[0]?.script_versions?.run_record_schema;
+const featuredOrder = new Map(
+  ['ollama', 'supabase', 'cloudflare', 'n8n', 'langfuse', 'obsidian'].map(
+    (id, index) => [id, index],
+  ),
+);
+const entries = (await getCollection('software')).map((e) => e.data);
+const featuredEntries = entries.filter((entry) => entry.featured);
+const directoryEntries = entries.filter((entry) => !entry.featured);
+featuredEntries.sort(
+  (a, b) =>
+    (featuredOrder.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
+      (featuredOrder.get(b.id) ?? Number.MAX_SAFE_INTEGER) ||
+    a.name.localeCompare(b.name),
+);
+directoryEntries.sort((a, b) => a.name.localeCompare(b.name));
+const feedTools = featuredEntries.map((entry) => ({ id: entry.id, name: entry.name }));
+
+const categories = [...new Set(entries.map((e) => e.category))].sort();
+const deployments = [...new Set(entries.map((e) => e.deployment))].sort();
+const licenses = [...new Set(entries.flatMap((e) => (e.license ? [e.license] : [])))].sort();
+const communityPreview = import.meta.env.PUBLIC_COMMUNITY_PREVIEW === 'true';
 ---
 
 <BaseLayout
-  title="CURATIONS.DEV — Tier A run records"
-  description="Public Tier A hygiene run records. Deterministic audits executed in your own GitHub Actions — real evidence, no mocks."
+  title={communityPreview
+    ? 'CURATIONS.DEV — share what you’re building'
+    : 'CURATIONS.DEV — software for Human × AI work'}
+  description={communityPreview
+    ? 'A conversation-first community for people building software with AI.'
+    : 'A curated, job-to-be-done directory of software for Human × AI workflows. Not a ranking. No paid placement. Verify current terms directly.'}
+  communityPreview={communityPreview}
 >
-  <section class="run-records-page">
-    <header class="run-records-header">
-      <h1>Tier A run records</h1>
-      <p class="run-records-tagline">
-        Deterministic hygiene audits. You run them in your own GitHub Actions —
-        your compute, your billing, your evidence. We display the record.
-      </p>
-    </header>
+  {
+    communityPreview ? (
+      <CommunityHomepage />
+    ) : (
+      <>
+        <section class="board-search-shell" aria-labelledby="board-search-label">
+          <form class="board-search" role="search">
+            <label class="visually-hidden" id="board-search-label" for="filter-search">
+              Search the CURATIONSX Board
+            </label>
+            <span class="board-search-icon" aria-hidden="true">⌕</span>
+            <input
+              type="search"
+              id="filter-search"
+              placeholder='Ask the Board — "Where do I start on my PRD?"'
+              autocomplete="off"
+            />
+            <button type="submit">Search</button>
+          </form>
+          <p>Curated search · results link to source evidence · no paid placement</p>
+        </section>
 
-    <aside class="run-records-byoc">
-      <h2>Bring your own compute</h2>
-      <p>
-        Tier A audits execute in your Actions environment from
-        a <a href={workflowUrl}>pinned reusable workflow</a>. Your code never
-        touches our servers. Scope is deliberately narrow — see
-        the <a href={`https://github.com/${SELF_AUDIT_REPO}/blob/main/docs/ROADMAP.md`}>v0.1 cut-list</a>.
-      </p>
-    </aside>
-
-    <section class="run-records-list" aria-label="Public run records">
-      <h2 class="run-records-list-title">Public records</h2>
-
-      {records.length === 0 ? (
-        <div class="run-records-empty">
-          <p><strong>No public run records yet.</strong></p>
-          <p>
-            Run the Tier A audit in your own Actions via the
-            <a href={workflowUrl}>reusable workflow</a>, then publish the
-            run-record. Records rendered here are loaded from
-            <a href={recordsUrl}>docs/audits/run-records</a> — nothing is mocked.
+        <div class="board-filter-bar">
+          <div>
+            <label for="filter-category">Category</label>
+            <select id="filter-category">
+              <option value="">All</option>
+              {categories.map((c) => <option value={c}>{CATEGORY_LABELS[c]}</option>)}
+            </select>
+          </div>
+          <div>
+            <label for="filter-deployment">Deployment</label>
+            <select id="filter-deployment">
+              <option value="">All</option>
+              {deployments.map((d) => <option value={d}>{DEPLOYMENT_LABELS[d]}</option>)}
+            </select>
+          </div>
+          <div>
+            <label for="filter-license">Licensing</label>
+            <select id="filter-license">
+              <option value="">All</option>
+              {licenses.map((l) => <option value={l}>{LICENSE_LABELS[l]}</option>)}
+            </select>
+          </div>
+          <p class="result-count" data-result-count aria-live="polite">
+            {entries.length} stacks
           </p>
         </div>
-      ) : (
-        <>
-          {records.map((record, index) => (
-            <RunRecordRow
-              record={record}
-              previous={records.find((candidate) => candidate.run_id === record.previous_run)}
-              latest={index === 0}
-            />
-          ))}
-          <p class="run-records-provenance">
-            {records.length} records · source <a href={recordsUrl}>docs/audits/run-records</a>{schemaVersion ? ` · run_record_schema ${schemaVersion}` : ''}
-          </p>
-        </>
-      )}
-    </section>
-  </section>
+
+        <div class="board-home-layout">
+          <div class="board-stack-column">
+            {
+              featuredEntries.length > 0 && (
+                <section id="featured-stacks" class="board-list-section" data-card-section>
+                  <header class="board-list-heading">
+                    <h1>Featured stacks</h1>
+                    <span>sorted by community upvotes</span>
+                  </header>
+                  <ul class="stack-list" data-directory-grid>
+                    {featuredEntries.map((entry) => <SoftwareCard entry={entry} />)}
+                  </ul>
+                </section>
+              )
+            }
+
+            <section class="board-list-section board-list-section-all" data-card-section>
+              <header class="board-list-heading">
+                <h2>All stacks</h2>
+                <span>durable facts · verify current terms directly</span>
+              </header>
+              <ul class="stack-list" data-directory-grid>
+                {directoryEntries.map((entry) => <SoftwareCard entry={entry} />)}
+              </ul>
+            </section>
+
+            <a class="board-submit-stack" href={withBase('/submit/')}>Submit a stack</a>
+          </div>
+
+          <BoardActivityFeed tools={feedTools} />
+        </div>
+      </>
+    )
+  }
 </BaseLayout>
+
+<script>
+  import { initFilters } from '../components/SoftwareFilters';
+  import { initSoftwareVotes } from '../components/SoftwareVotes';
+  initFilters();
+  void initSoftwareVotes();
+</script>

@@ -1,0 +1,172 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import CapabilityStamp from '../../components/CapabilityStamp.astro';
+import ShowcaseRow from '../../components/ShowcaseRow.astro';
+import StackPill from '../../components/StackPill.astro';
+import {
+  memberFeedbackFixture,
+  memberFixture,
+  memberLibraryFixture,
+  showcaseFixture,
+} from '../../data/member-showcase-preview';
+import { skillFixtureBySlug } from '../../data/capability-preview';
+import { withBase } from '../../lib/labels';
+
+export function getStaticPaths() {
+  return [{ params: { login: memberFixture.login.toLowerCase() } }];
+}
+
+const contributedSkill = skillFixtureBySlug['schema-first-planning'];
+---
+
+<BaseLayout
+  title={`${memberFixture.displayName} - CURATIONS member`}
+  description={`Public CURATIONS profile for @${memberFixture.login}.`}
+  communityPreview
+  noindex
+>
+  <a class="community-page-back" href={withBase('/')}>← Community Board</a>
+  <p class="community-preview-note">Public member profile fixture · no private account data</p>
+
+  <header class="member-profile-header">
+    <img
+      src={memberFixture.avatarUrl}
+      alt=""
+      width="104"
+      height="104"
+      loading="eager"
+      referrerpolicy="no-referrer"
+    />
+    <div>
+      <p class="discovery-eyebrow">CURATIONS member</p>
+      <h1>{memberFixture.displayName}</h1>
+      <p class="member-profile-login">@{memberFixture.login}</p>
+      <p>{memberFixture.bio}</p>
+      <div class="member-profile-links">
+        <span>GitHub identity linked</span>
+        <a href={memberFixture.githubUrl} target="_blank" rel="noopener">
+          View GitHub ↗
+        </a>
+        <a href={memberFixture.website}>Website ↗</a>
+      </div>
+    </div>
+  </header>
+
+  <div class="member-metric-strip" aria-label="Public member contribution summary">
+    <span><strong>0</strong> Projects</span>
+    <span><strong>1</strong> PRD Showcase</span>
+    <span><strong>19</strong> useful replies</span>
+    <span><strong>4</strong> adopted outcomes</span>
+  </div>
+
+  <nav class="discovery-tabs member-profile-tabs" aria-label="Member profile sections">
+    <a class="is-active" href="#projects">Projects</a>
+    <a href="#showcases">Showcases</a>
+    <a href="#feedback">Feedback</a>
+    <a href="#stack">Stack</a>
+    <a href="#library">Library</a>
+  </nav>
+
+  <div class="board-home-layout discovery-layout">
+    <main class="board-stack-column">
+      <section id="projects" class="board-list-section">
+        <header class="board-list-heading">
+          <h2>Projects</h2>
+          <span>public work + human questions</span>
+        </header>
+        <article class="member-activity-row">
+          <span class="member-activity-marker">PROJECTS</span>
+          <div>
+            <strong>No public Projects yet.</strong>
+            <p>This standalone Showcase does not create a full Project record.</p>
+            <small>Project intake remains a separate, deeper improvement loop.</small>
+          </div>
+        </article>
+      </section>
+
+      <section id="showcases" class="board-list-section board-list-section-all">
+        <header class="board-list-heading">
+          <h2>PRD Showcases</h2>
+          <span>public plans shared for discussion</span>
+        </header>
+        <div class="project-list">
+          <ShowcaseRow showcase={showcaseFixture} />
+        </div>
+      </section>
+
+      <section id="feedback" class="board-list-section board-list-section-all">
+        <header class="board-list-heading">
+          <h2>Public feedback</h2>
+          <span>owner-recorded outcomes only</span>
+        </header>
+        <article class="member-activity-row">
+          <span class="member-activity-marker">HUMAN</span>
+          <div>
+            <strong>{memberFeedbackFixture.title}</strong>
+            <p>{memberFeedbackFixture.context}</p>
+            <small>{memberFeedbackFixture.outcome} · {memberFeedbackFixture.age}</small>
+          </div>
+        </article>
+      </section>
+
+      <section id="library" class="board-list-section board-list-section-all">
+        <header class="board-list-heading">
+          <h2>Community Library</h2>
+          <span>public contributions + explicit outcomes</span>
+        </header>
+        <div class="member-contribution-list">
+          <a
+            class="member-activity-row member-activity-link"
+            href={withBase(`/skills/${contributedSkill.slug}/`)}
+          >
+            <CapabilityStamp kind="community-submitted" />
+            <div>
+              <strong>{contributedSkill.title}</strong>
+              <p>Intentional public Skill fixture contribution</p>
+              <small>{contributedSkill.version} · {contributedSkill.lifecycle}</small>
+            </div>
+          </a>
+          <article class="member-activity-row">
+            <span class="library-type library-type-review">{memberLibraryFixture.type}</span>
+            <div>
+              <strong>{memberLibraryFixture.title}</strong>
+              <p>{memberLibraryFixture.outcome}</p>
+              <small>{memberLibraryFixture.version}</small>
+            </div>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <aside class="board-feed discovery-rail member-profile-rail">
+      <h2>Member context</h2>
+      <section class="community-pulse-section">
+        <h3>About</h3>
+        <p>{memberFixture.location} · joined {memberFixture.joined}</p>
+        <p>
+          CURATIONS profile fields are member-controlled. GitHub remains the
+          external identity source.
+        </p>
+      </section>
+      <section id="stack" class="community-pulse-section">
+        <h3>Stack in public work</h3>
+        <div class="project-detail-stacks">
+          <StackPill slug="astro" />
+          <StackPill slug="typescript" />
+          <StackPill slug="github" />
+        </div>
+        <p>Declared by the public Showcase fixture. Private Follows are not shown.</p>
+      </section>
+      <section class="community-pulse-section">
+        <h3>Private workspace</h3>
+        <a class="discovery-feature-link" href={withBase('/me/')}>
+          Open My CURATIONS →
+        </a>
+      </section>
+      <p class="community-pulse-note">
+        No follower count, inferred expertise, sentiment score, or private GitHub
+        activity appears here.
+      </p>
+    </aside>
+  </div>
+</BaseLayout>

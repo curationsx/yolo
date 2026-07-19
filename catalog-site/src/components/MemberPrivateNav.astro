@@ -1,0 +1,43 @@
+---
+import { withBase } from '../lib/labels';
+
+type MemberSection =
+  | 'home'
+  | 'matches'
+  | 'watched'
+  | 'following'
+  | 'saved'
+  | 'inbox'
+  | 'settings';
+
+interface Props {
+  current: MemberSection;
+  fixtureEnabled: boolean;
+}
+
+const { current, fixtureEnabled } = Astro.props;
+const fixtureQuery = fixtureEnabled ? '?fixture_auth=1' : '';
+const links = [
+  { id: 'home', label: 'My CURATIONS', href: `/me/${fixtureQuery}` },
+  { id: 'matches', label: 'Matches', href: `/me/matches/${fixtureQuery}` },
+  { id: 'watched', label: 'Watched', href: `/me/watched/${fixtureQuery}` },
+  { id: 'following', label: 'Following', href: `/me/following/${fixtureQuery}` },
+  { id: 'saved', label: 'Saved', href: `/me/saved/${fixtureQuery}` },
+  { id: 'inbox', label: 'Inbox', href: `/inbox/${fixtureQuery}` },
+  { id: 'settings', label: 'Settings', href: `/settings/profile/${fixtureQuery}` },
+] as const;
+---
+
+<nav class="member-private-nav" aria-label="Private member workspace">
+  {
+    links.map((link) => (
+      <a
+        class:list={{ 'is-active': current === link.id }}
+        href={withBase(link.href)}
+        aria-current={current === link.id ? 'page' : undefined}
+      >
+        {link.label}
+      </a>
+    ))
+  }
+</nav>

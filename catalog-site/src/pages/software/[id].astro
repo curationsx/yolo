@@ -2,6 +2,7 @@
 import { getCollection } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import DeploymentBadge from '../../components/DeploymentBadge.astro';
+import EngagePanel from '../../components/EngagePanel.astro';
 import CompanyBoard from '../../components/CompanyBoard.astro';
 import {
   CATEGORY_LABELS,
@@ -164,9 +165,19 @@ const landing = LANDING[entry.id];
           }
         </dl>
       </aside>
-      </div>
 
-
+      {
+        landing && (
+          <EngagePanel
+            toolId={entry.id}
+            toolName={entry.name}
+            personaName={landing.persona.display_name}
+            disclosure={landing.persona.disclosure}
+            groundingNote={landing.persona.grounding_note}
+          />
+        )
+      }
+    </div>
   </section>
 
   {

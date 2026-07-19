@@ -1,0 +1,28 @@
+---
+import ProjectBuilderJourney from '../../../components/ProjectBuilderJourney.astro';
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { withBase } from '../../../lib/labels';
+---
+
+<BaseLayout
+  title="Share your Project - CURATIONS.DEV"
+  description="Preview the builder-controlled journey from public GitHub Project and working plan to a private review and human feedback request."
+  communityPreview
+  noindex
+>
+  <a class="community-page-back" href={withBase('/projects/')}>← All Projects</a>
+
+  <header class="discovery-header project-builder-header">
+    <div>
+      <p class="discovery-eyebrow">Project submission preview</p>
+      <h1>Share your Project</h1>
+      <p>
+        Bring a public repository and working plan, review the exact context
+        privately, then decide whether to ask the community one useful question.
+      </p>
+    </div>
+    <span class="project-builder-status">Private submission preview</span>
+  </header>
+
+  <ProjectBuilderJourney />
+</BaseLayout>

@@ -1,0 +1,161 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import MemberPrivateGate from '../../components/MemberPrivateGate.astro';
+import MemberPrivateNav from '../../components/MemberPrivateNav.astro';
+import ShowcaseStatusPill from '../../components/ShowcaseStatusPill.astro';
+import {
+  memberFixture,
+  memberNotifications,
+  showcaseFixture,
+} from '../../data/member-showcase-preview';
+import { withBase } from '../../lib/labels';
+
+const fixtureEnabled =
+  import.meta.env.DEV && import.meta.env.PUBLIC_MEMBER_FIXTURES === 'true';
+---
+
+<BaseLayout
+  title="My CURATIONS"
+  description="Private CURATIONS member workspace."
+  communityPreview
+  noindex
+>
+  <MemberPrivateGate fixtureEnabled={fixtureEnabled}>
+    <MemberPrivateNav current="home" fixtureEnabled={fixtureEnabled} />
+    {
+      fixtureEnabled ? (
+        <>
+          <header class="member-private-header">
+            <img
+              src={memberFixture.avatarUrl}
+              alt=""
+              width="72"
+              height="72"
+              referrerpolicy="no-referrer"
+            />
+            <div>
+              <p class="discovery-eyebrow">Private member home · fixture</p>
+              <h1>My CURATIONS</h1>
+              <p>
+                Signed in as <strong>@{memberFixture.login}</strong> · GitHub proves identity;
+                this workspace belongs to CURATIONS.
+              </p>
+            </div>
+            <a
+              class="community-action"
+              href={withBase(`/members/${memberFixture.login.toLowerCase()}/`)}
+            >
+              Public profile
+            </a>
+          </header>
+
+          <nav class="discovery-tabs" aria-label="My CURATIONS views">
+            <a class="is-active" href="#overview">Overview</a>
+            <a href="#drafts">Drafts</a>
+            <a href="#pending">Pending review</a>
+            <a href={withBase('/me/matches/?fixture_auth=1')}>Matches</a>
+            <a href={withBase('/me/watched/?fixture_auth=1')}>Watched</a>
+          </nav>
+
+          <div class="board-home-layout discovery-layout member-private-layout">
+            <main class="board-stack-column">
+              <section id="overview" class="board-list-section">
+                <header class="board-list-heading">
+                  <h2>Needs attention</h2>
+                  <span>{memberNotifications.filter((item) => item.unread).length} unread</span>
+                </header>
+                <div class="member-inbox-list">
+                  {memberNotifications.slice(0, 2).map((item) => (
+                    <a
+                      class:list={['member-inbox-row', item.unread && 'is-unread']}
+                      href={withBase(item.href)}
+                    >
+                      <span class={`member-notification-type member-notification-${item.type}`}>
+                        {item.type}
+                      </span>
+                      <span>
+                        {item.unread && <span class="visually-hidden">Unread: </span>}
+                        <strong>{item.title}</strong>
+                        <small>{item.detail}</small>
+                      </span>
+                      <time>{item.age}</time>
+                    </a>
+                  ))}
+                </div>
+              </section>
+
+              <section id="drafts" class="board-list-section board-list-section-all">
+                <header class="board-list-heading">
+                  <h2>Your work</h2>
+                  <span>private until exact preview + consent</span>
+                </header>
+                <article class="member-work-row">
+                  <span class="project-stage project-stage-idea">Draft</span>
+                  <div>
+                    <strong>Draft Showcase revision</strong>
+                    <p>{showcaseFixture.title}</p>
+                    <small>Unpublished revision · exact preview not submitted</small>
+                  </div>
+                  <a href={withBase('/showcase/new/')}>Continue →</a>
+                </article>
+                <article id="pending" class="member-work-row">
+                  <span class="project-stage project-stage-feedback">Pending review</span>
+                  <div>
+                    <strong>CURATIONS.DEV Project fixture</strong>
+                    <p>Exact public preview sent to maintainer review.</p>
+                    <small>No Project record exists in this visual proof.</small>
+                  </div>
+                  <a href={withBase('/projects/new/')}>Review →</a>
+                </article>
+              </section>
+            </main>
+
+            <aside class="board-feed discovery-rail">
+              <h2>Workspace index</h2>
+              <section class="community-pulse-section">
+                <h3>PRD Showcase</h3>
+                <div class="member-status-line">
+                  <ShowcaseStatusPill kind="open-roast" />
+                  <span>1 open</span>
+                </div>
+                <a
+                  class="discovery-feature-link"
+                  href={withBase(`/showcase/${showcaseFixture.slug}/`)}
+                >
+                  View Showcase →
+                </a>
+              </section>
+              <section id="saved" class="community-pulse-section">
+                <h3>Capability graph</h3>
+                <a class="discovery-feature-link" href={withBase('/me/matches/?fixture_auth=1')}>
+                  2 reviewed matches →
+                </a>
+                <a class="discovery-feature-link" href={withBase('/me/saved/?fixture_auth=1')}>
+                  2 saved items →
+                </a>
+              </section>
+              <section id="following" class="community-pulse-section">
+                <h3>Watched + Following</h3>
+                <p>3 concrete objects · 2 categories · 3 tools</p>
+                <p>Watch remains separate from Follow and Save.</p>
+              </section>
+              <p class="community-pulse-note">
+                Fixture mode is compile-time local/CI only. Production HTML contains
+                no private member fixture.
+              </p>
+            </aside>
+          </div>
+        </>
+      ) : (
+        <section class="member-workspace-unavailable">
+          <p class="discovery-eyebrow">Authenticated shell only</p>
+          <h1>Member persistence is not enabled.</h1>
+          <p>
+            This route contains no private fixture data in the production build.
+            Profile, drafts, and settings arrive only after the visual contract is approved.
+          </p>
+        </section>
+      )
+    }
+  </MemberPrivateGate>
+</BaseLayout>

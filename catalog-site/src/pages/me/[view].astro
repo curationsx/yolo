@@ -1,0 +1,223 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import CapabilityStamp from '../../components/CapabilityStamp.astro';
+import MemberPrivateGate from '../../components/MemberPrivateGate.astro';
+import MemberPrivateNav from '../../components/MemberPrivateNav.astro';
+import {
+  followedCapabilityFixtures,
+  savedCapabilityFixtures,
+  skillFixtureBySlug,
+  skillMatchFixtures,
+  watchedCapabilityFixtures,
+} from '../../data/capability-preview';
+import { withBase } from '../../lib/labels';
+
+type MemberCapabilityView = 'matches' | 'watched' | 'following' | 'saved';
+
+interface Props {
+  view: MemberCapabilityView;
+  label: string;
+  description: string;
+}
+
+export function getStaticPaths() {
+  const views: Props[] = [
+    {
+      view: 'matches',
+      label: 'PRD matches',
+      description: 'Reviewed Skill matches tied to one approved PRD revision.',
+    },
+    {
+      view: 'watched',
+      label: 'Watched',
+      description: 'Private update subscriptions for concrete objects.',
+    },
+    {
+      view: 'following',
+      label: 'Following',
+      description: 'Private taxonomy feeds for Project types, tools, and Stacks.',
+    },
+    {
+      view: 'saved',
+      label: 'Saved',
+      description: 'Private Artifact and Program references; nothing is installed or run.',
+    },
+  ];
+  return views.map((view) => ({
+    params: { view: view.view },
+    props: view,
+  }));
+}
+
+const { view, label, description } = Astro.props;
+const fixtureEnabled =
+  import.meta.env.DEV && import.meta.env.PUBLIC_MEMBER_FIXTURES === 'true';
+---
+
+<BaseLayout
+  title={`${label} - My CURATIONS`}
+  description={description}
+  communityPreview
+  noindex
+>
+  <MemberPrivateGate fixtureEnabled={fixtureEnabled}>
+    <MemberPrivateNav current={view} fixtureEnabled={fixtureEnabled} />
+    {
+      fixtureEnabled ? (
+        <>
+          <header class="discovery-header member-private-page-header">
+            <div>
+              <p class="discovery-eyebrow">Private member workspace · fixture</p>
+              <h1>{label}</h1>
+              <p>{description}</p>
+            </div>
+            <span class="project-builder-status">No persistence</span>
+          </header>
+
+          {view === 'matches' && (
+            <section class="board-list-section member-capability-section">
+              <header class="board-list-heading">
+                <h2>Member Profiles and PRD Showcase</h2>
+                <span>approved revision 4dccc017 · explicit Refresh only</span>
+              </header>
+              <div class="member-match-list">
+                {skillMatchFixtures.map((match) => {
+                  const skill = match.skillSlug
+                    ? skillFixtureBySlug[match.skillSlug]
+                    : undefined;
+                  return (
+                    <article class="member-match-row" data-match-state={match.state}>
+                      <header>
+                        <CapabilityStamp kind={match.state} />
+                        <strong>
+                          {skill ? skill.title : `${match.requestedJob} request`}
+                        </strong>
+                      </header>
+                      <p>{match.explanation}</p>
+                      <ul>{match.constraints.map((constraint) => <li>{constraint}</li>)}</ul>
+                      <dl class="match-provenance">
+                        <div>
+                          <dt>PRD revision</dt>
+                          <dd>{match.prdRevision}</dd>
+                        </div>
+                        <div>
+                          <dt>Skill revision</dt>
+                          <dd>{match.skillRevision ?? 'No eligible reviewed Skill'}</dd>
+                        </div>
+                        <div>
+                          <dt>Catalog revision</dt>
+                          <dd>{match.catalogRevision}</dd>
+                        </div>
+                        <div>
+                          <dt>Matching rules</dt>
+                          <dd>{match.matchingRuleVersion}</dd>
+                        </div>
+                      </dl>
+                      <p class="match-rule-ids">
+                        {match.matchedRuleIds.join(' · ')}
+                      </p>
+                      <footer>
+                        <span>{match.requestedJob}</span>
+                        <span aria-hidden="true">·</span>
+                        <span>exact provenance above</span>
+                        {skill ? (
+                          <a href={withBase(`/skills/${skill.slug}/`)}>Inspect exact Skill →</a>
+                        ) : (
+                          <a href={withBase('/skills/request/')}>Start Skill Request →</a>
+                        )}
+                      </footer>
+                    </article>
+                  );
+                })}
+              </div>
+              <div class="capability-refresh">
+                <button
+                  class="community-action community-action-primary"
+                  type="button"
+                  data-refresh-matches
+                >
+                  Refresh matches
+                </button>
+                <p data-refresh-status aria-live="polite">
+                  Fixture snapshot unchanged · no repository read or model call
+                </p>
+              </div>
+            </section>
+          )}
+
+          {view === 'watched' && (
+            <section class="board-list-section member-capability-section">
+              <header class="board-list-heading">
+                <h2>Concrete update subscriptions</h2>
+                <span>identities and Program interest remain private</span>
+              </header>
+              <div class="member-capability-list">
+                {watchedCapabilityFixtures.map((item) => (
+                  <a class="member-capability-row" href={withBase(item.href)}>
+                    <span>{item.type}</span>
+                    <strong>{item.title}</strong>
+                    <small>{item.detail}</small>
+                  </a>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {view === 'following' && (
+            <section class="board-list-section member-capability-section">
+              <header class="board-list-heading">
+                <h2>Taxonomy updates</h2>
+                <span>Follow never implies quality or execution</span>
+              </header>
+              <div class="member-capability-list">
+                {followedCapabilityFixtures.map((item) => (
+                  <article class="member-capability-row">
+                    <span>{item.type}</span>
+                    <strong>{item.title}</strong>
+                    <small>{item.detail}</small>
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {view === 'saved' && (
+            <section class="board-list-section member-capability-section">
+              <header class="board-list-heading">
+                <h2>Saved references</h2>
+                <span>private collection · not an execution queue</span>
+              </header>
+              <div class="member-capability-list">
+                {savedCapabilityFixtures.map((item) => (
+                  <a class="member-capability-row" href={withBase(item.href)}>
+                    <span>{item.type}</span>
+                    <strong>{item.title}</strong>
+                    <small>{item.detail}</small>
+                  </a>
+                ))}
+              </div>
+            </section>
+          )}
+        </>
+      ) : (
+        <section class="member-workspace-unavailable">
+          <p class="discovery-eyebrow">Authenticated shell only</p>
+          <h1>{label} persistence is not enabled.</h1>
+          <p>No private capability records are embedded in production HTML.</p>
+        </section>
+      )
+    }
+  </MemberPrivateGate>
+</BaseLayout>
+
+<script>
+  for (const button of document.querySelectorAll<HTMLButtonElement>('[data-refresh-matches]')) {
+    button.addEventListener('click', () => {
+      const status = document.querySelector<HTMLElement>('[data-refresh-status]');
+      if (status) {
+        status.textContent =
+          'Fixture refresh complete. The same reviewed snapshot remains; no fetch, repository read, or model call occurred.';
+      }
+    });
+  }
+</script>
