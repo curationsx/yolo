@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 HYGIENE_PATH = ROOT / "scripts" / "audit" / "hygiene.py"
@@ -99,3 +102,127 @@ def test_this_repo_emits_a_valid_run_record() -> None:
     assert record["bytes_inspected"] > 0
     assert validate.validate_record(record) == []
     json.dumps(record)
+
+
+# ---------------------------------------------------------------------------
+# Pinned commit SHA tests
+# ---------------------------------------------------------------------------
+
+
+def _init_git_repo(root: Path) -> str:
+    """Initialise a git repo at *root*, commit all files, and return HEAD SHA."""
+    subprocess.run(["git", "init", str(root)], check=True, capture_output=True)
+    subprocess.run(
+        ["git", "-C", str(root), "config", "user.email", "ci@test"],
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(root), "config", "user.name", "CI"],
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(root), "add", "."],
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(root), "commit", "-m", "init"],
+        check=True,
+        capture_output=True,
+    )
+    result = subprocess.run(
+        ["git", "-C", str(root), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.strip()
+
+
+def test_commit_sha_arg_is_accepted(tmp_path: Path) -> None:
+    """--commit-sha argument must be parsed without error."""
+    args = hygiene.parse_args([".", "--commit-sha", "a" * 40])
+    assert args.commit_sha == "a" * 40
+
+
+def test_lowercase_sha_is_accepted_before_git_io() -> None:
+    hygiene._validate_sha_format("a" * 40)
+
+
+def test_uppercase_sha_is_rejected_before_git_io(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Uppercase SHA must fail fast before any git subprocess call."""
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("subprocess.run should not be called for invalid SHA")
+
+    monkeypatch.setattr(hygiene.subprocess, "run", fail_if_called)
+    with pytest.raises(SystemExit, match="Invalid commit SHA"):
+        hygiene.resolve_repository("https://github.com/curationsx/yolo.git", commit_sha="A" * 40)
+
+
+def test_invalid_sha_format_raises(tmp_path: Path) -> None:
+    """An obviously malformed SHA (too short) must be rejected before any git I/O."""
+    with pytest.raises(SystemExit, match="Invalid commit SHA"):
+        hygiene.resolve_repository(str(tmp_path), commit_sha="not-a-sha")
+
+
+def test_correct_sha_local_repo_passes(tmp_path: Path) -> None:
+    """resolve_repository with the actual HEAD SHA must succeed on a local git repo."""
+    write_clean_repo(tmp_path)
+    actual_sha = _init_git_repo(tmp_path)
+
+    root, tempdir = hygiene.resolve_repository(str(tmp_path), commit_sha=actual_sha)
+    assert tempdir is None
+    assert root == tmp_path.resolve()
+
+
+def test_sha_mismatch_local_repo_fails_closed(tmp_path: Path) -> None:
+    """resolve_repository must raise SystemExit when the supplied SHA does not match HEAD."""
+    write_clean_repo(tmp_path)
+    _init_git_repo(tmp_path)
+
+    wrong_sha = "0" * 40
+    with pytest.raises(SystemExit, match="SHA mismatch"):
+        hygiene.resolve_repository(str(tmp_path), commit_sha=wrong_sha)
+
+
+def test_pinned_sha_appears_in_run_record(tmp_path: Path) -> None:
+    """The run-record commit_sha field must equal the pinned SHA when one is supplied."""
+    write_clean_repo(tmp_path)
+    actual_sha = _init_git_repo(tmp_path)
+
+    root, _ = hygiene.resolve_repository(str(tmp_path), commit_sha=actual_sha)
+    record = hygiene.audit_repository(root, str(tmp_path))
+
+    assert record["commit_sha"] == actual_sha
+    assert validate.validate_record(record) == []
+
+
+def test_tokens_spent_is_zero(tmp_path: Path) -> None:
+    """tokens_spent must always be 0 for Tier A (no LLM calls)."""
+    write_clean_repo(tmp_path)
+    record = hygiene.audit_repository(tmp_path, str(tmp_path))
+    assert record["tokens_spent"] == 0
+
+
+def test_corpus_run_records_are_valid() -> None:
+    """Every committed run-record under docs/audits/run-records/ must be schema-valid."""
+    records_dir = ROOT / "docs" / "audits" / "run-records"
+    record_files = sorted(records_dir.glob("*.json"))
+    assert record_files, "Expected at least one committed run-record"
+
+    problems: dict[str, list[str]] = {}
+    for path in record_files:
+        record = json.loads(path.read_text(encoding="utf-8"))
+        errs = validate.validate_record(record)
+        if errs:
+            problems[path.name] = errs
+
+    if problems:
+        lines = []
+        for name, errs in problems.items():
+            lines.append(f"{name}:")
+            lines.extend(f"  {e}" for e in errs)
+        raise AssertionError("Invalid committed run-records:\n" + "\n".join(lines))

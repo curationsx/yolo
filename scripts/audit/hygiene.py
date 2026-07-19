@@ -25,6 +25,9 @@ MAX_BINARY_SIZE = 5 * 1024 * 1024
 MAX_TOP_LEVEL_ENTRIES = 30
 
 
+SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run the deterministic Tier A hygiene audit and emit a run-record JSON."
@@ -37,6 +40,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         help="UUID of the previous run-record (sets the previous_run lineage field)",
     )
+    parser.add_argument(
+        "--commit-sha",
+        dest="commit_sha",
+        default=None,
+        help=(
+            "Full 40-character immutable commit SHA to audit. "
+            "For remote URLs the clone is pinned to exactly this SHA; "
+            "the run fails closed if the SHA is invalid or unreachable. "
+            "For local paths the current HEAD must match this SHA."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -45,26 +59,97 @@ def is_remote_target(target: str) -> bool:
     return parsed.scheme in {"http", "https", "ssh", "git"} or target.startswith("git@")
 
 
-def clone_repository(url: str) -> tempfile.TemporaryDirectory[str]:
+def _validate_sha_format(commit_sha: str) -> None:
+    """Raise SystemExit if *commit_sha* is not a full 40-character hex SHA."""
+    if not SHA_RE.fullmatch(commit_sha):
+        raise SystemExit(
+            f"Invalid commit SHA: {commit_sha!r}. "
+            "Must be a full 40-character lowercase hexadecimal string."
+        )
+
+
+def clone_repository(url: str, commit_sha: str | None = None) -> tempfile.TemporaryDirectory[str]:
     tempdir = tempfile.TemporaryDirectory(prefix="hygiene-audit-")
     clone_path = Path(tempdir.name) / "repo"
-    try:
-        subprocess.run(
-            ["git", "clone", "--depth", "1", url, str(clone_path)],
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-    except subprocess.CalledProcessError as exc:
-        tempdir.cleanup()
-        raise SystemExit(exc.stderr.strip() or str(exc)) from exc
+
+    if commit_sha is not None:
+        _validate_sha_format(commit_sha)
+        # Fetch only the pinned commit: init → remote add → fetch <sha> → checkout
+        clone_path.mkdir(parents=True, exist_ok=True)
+        try:
+            subprocess.run(
+                ["git", "init", str(clone_path)],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(clone_path), "remote", "add", "origin", url],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(clone_path), "fetch", "--depth", "1", "origin", commit_sha],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(clone_path), "checkout", "FETCH_HEAD"],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            tempdir.cleanup()
+            raise SystemExit(
+                f"Failed to fetch commit {commit_sha} from {url}: {exc.stderr.strip() or str(exc)}"
+            ) from exc
+
+        # Verify the checked-out HEAD matches the requested SHA (fail closed on mismatch).
+        try:
+            result = subprocess.run(
+                ["git", "-C", str(clone_path), "rev-parse", "HEAD"],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            tempdir.cleanup()
+            raise SystemExit("Could not resolve HEAD after checkout.") from exc
+        actual_sha = result.stdout.strip()
+        if actual_sha.lower() != commit_sha.lower():
+            tempdir.cleanup()
+            raise SystemExit(
+                f"SHA mismatch: requested {commit_sha} but checked-out HEAD is {actual_sha}. "
+                "Refusing to audit an unverified revision."
+            )
+    else:
+        try:
+            subprocess.run(
+                ["git", "clone", "--depth", "1", url, str(clone_path)],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            tempdir.cleanup()
+            raise SystemExit(exc.stderr.strip() or str(exc)) from exc
     return tempdir
 
 
-def resolve_repository(target: str) -> tuple[Path, tempfile.TemporaryDirectory[str] | None]:
+def resolve_repository(
+    target: str, commit_sha: str | None = None
+) -> tuple[Path, tempfile.TemporaryDirectory[str] | None]:
     if is_remote_target(target):
-        tempdir = clone_repository(target)
+        tempdir = clone_repository(target, commit_sha)
         return Path(tempdir.name) / "repo", tempdir
 
     path = Path(target).expanduser().resolve()
@@ -72,6 +157,22 @@ def resolve_repository(target: str) -> tuple[Path, tempfile.TemporaryDirectory[s
         raise SystemExit(f"Target does not exist: {path}")
     if not path.is_dir():
         raise SystemExit(f"Target is not a directory: {path}")
+
+    if commit_sha is not None:
+        _validate_sha_format(commit_sha)
+        if not (path / ".git").exists():
+            raise SystemExit(
+                f"Cannot verify commit SHA for {path}: directory is not a git repository."
+            )
+        head_sha, _ = git_metadata(path)
+        if head_sha is None:
+            raise SystemExit(f"Cannot read HEAD for {path}.")
+        if head_sha.lower() != commit_sha.lower():
+            raise SystemExit(
+                f"SHA mismatch: requested {commit_sha} but HEAD is {head_sha}. "
+                "Refusing to audit an unverified revision."
+            )
+
     return path, None
 
 
@@ -512,7 +613,7 @@ def audit_repository(
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    root, tempdir = resolve_repository(args.target)
+    root, tempdir = resolve_repository(args.target, commit_sha=args.commit_sha)
     try:
         record = audit_repository(root, args.target, previous_run=args.previous_run)
     finally:

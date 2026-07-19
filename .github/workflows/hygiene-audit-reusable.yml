@@ -1,0 +1,170 @@
+name: Hygiene Audit (Reusable / BYOC)
+# Reusable workflow — call this from your own repository to run the Tier A
+# hygiene audit on a public GitHub repository at an explicit pinned commit SHA.
+#
+# Your GitHub Actions account is billed, not curationsx/yolo.
+# No write access to curationsx/yolo is required.
+#
+# Usage from a caller workflow in your repository:
+#
+#   jobs:
+#     audit:
+#       uses: curationsx/yolo/.github/workflows/hygiene-audit-reusable.yml@<immutable-yolo-commit-sha>
+#       with:
+#         repo_url: https://github.com/your-org/your-repo.git
+#         commit_sha: <full 40-character SHA>
+#         audit_ref: <same immutable yolo commit SHA as above>
+#
+# See docs/audits/stranger-guide.md for complete instructions.
+# For reproducible evidence, callers should pin both the reusable workflow
+# reference and `audit_ref` to immutable full commit SHAs. The default
+# `audit_ref: main` is provided for temporary warm-up/testing only.
+
+on:
+  workflow_call:
+    inputs:
+      repo_url:
+        description: "Public GitHub HTTPS repository URL to audit (e.g. https://github.com/org/repo.git)"
+        required: true
+        type: string
+      commit_sha:
+        description: "Full 40-character immutable commit SHA to audit (never audits mutable HEAD)"
+        required: true
+        type: string
+      audit_ref:
+        description: "curationsx/yolo ref containing audit implementation (prefer immutable full commit SHA; default main is for warm-up only)"
+        required: false
+        default: "main"
+        type: string
+    outputs:
+      checks_passed:
+        description: "Number of hygiene checks that passed"
+        value: ${{ jobs.audit.outputs.checks_passed }}
+      checks_total:
+        description: "Total number of hygiene checks run"
+        value: ${{ jobs.audit.outputs.checks_total }}
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      checks_passed: ${{ steps.summary.outputs.checks_passed }}
+      checks_total: ${{ steps.summary.outputs.checks_total }}
+
+    steps:
+      - name: Validate inputs
+        # Fail-fast SHA format check before any git I/O.  hygiene.py also
+        # validates the format, so this duplication is intentional for
+        # defence-in-depth and a clear workflow-level error message.
+        env:
+          COMMIT_SHA: ${{ inputs.commit_sha }}
+          REPO_URL: ${{ inputs.repo_url }}
+          AUDIT_REF: ${{ inputs.audit_ref }}
+        run: |
+          if ! echo "$COMMIT_SHA" | grep -qE '^[0-9a-f]{40}$'; then
+            echo "ERROR: commit_sha must be a full 40-character lowercase hexadecimal SHA."
+            echo "Supplied value: $COMMIT_SHA"
+            exit 1
+          fi
+          if [ -z "$REPO_URL" ]; then
+            echo "ERROR: repo_url is required."
+            exit 1
+          fi
+          if [ -z "$AUDIT_REF" ]; then
+            echo "ERROR: audit_ref is required and must be non-empty."
+            exit 1
+          fi
+          if ! echo "$AUDIT_REF" | grep -qE '^[A-Za-z0-9._/-]{1,255}$'; then
+            echo "ERROR: audit_ref must be a simple git ref or full commit SHA."
+            echo "Supplied value: $AUDIT_REF"
+            exit 1
+          fi
+
+      - name: Check out curationsx/yolo audit scripts
+        uses: actions/checkout@v4
+        with:
+          repository: curationsx/yolo
+          ref: ${{ inputs.audit_ref }}
+          sparse-checkout: |
+            scripts/audit
+            schemas
+          sparse-checkout-cone-mode: false
+          path: yolo-audit
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install validator dependency
+        run: python -m pip install jsonschema==4.26.0
+
+      - name: Run hygiene audit at pinned SHA
+        env:
+          REPO_URL: ${{ inputs.repo_url }}
+          COMMIT_SHA: ${{ inputs.commit_sha }}
+        run: |
+          python yolo-audit/scripts/audit/hygiene.py "$REPO_URL" \
+            --commit-sha "$COMMIT_SHA" \
+            --out run-record.json
+
+      - name: Validate run-record against schema
+        run: python yolo-audit/scripts/audit/validate.py run-record.json
+
+      - name: Write job summary
+        id: summary
+        run: |
+          python - <<'PYEOF'
+          import json, os, sys
+          path = "run-record.json"
+          try:
+              record = json.loads(open(path).read())
+          except Exception as e:
+              print(f"Could not read {path}: {e}", file=sys.stderr)
+              sys.exit(1)
+          passed   = record["checks_passed"]
+          total    = record["checks_total"]
+          version  = record["ruleset_version"]
+          sha      = record.get("commit_sha") or "unknown"
+          audit_ref = os.environ.get("AUDIT_REF", "unknown")
+          # Emit outputs for caller consumption.
+          github_output = os.environ.get("GITHUB_OUTPUT", "")
+          if github_output:
+              with open(github_output, "a") as fh:
+                  fh.write(f"checks_passed={passed}\n")
+                  fh.write(f"checks_total={total}\n")
+          # Write the step summary.
+          summary = os.environ.get("GITHUB_STEP_SUMMARY", "")
+          lines = [
+              f"## Tier A: {passed}/{total} \u00b7 {version}",
+              "",
+              f"**Audited commit:** `{sha}`",
+              f"**Audit implementation ref:** `{audit_ref}`",
+              "",
+              "The downloadable `run-record.json` artifact is commit-bound and schema-valid.",
+              "",
+              "| Check | Result |",
+              "|---|---|",
+          ]
+          for finding in record.get("findings", []):
+              icon = "\u2705" if finding["passed"] else "\u274c"
+              lines.append(f"| {finding['check_id']} | {icon} |")
+          if summary:
+              with open(summary, "a", encoding="utf-8") as fh:
+                  fh.write("\n".join(lines) + "\n")
+          else:
+              print("\n".join(lines))
+          PYEOF
+        env:
+          AUDIT_REF: ${{ inputs.audit_ref }}
+
+      - name: Upload run-record artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hygiene-run-record
+          path: run-record.json
+          if-no-files-found: error
