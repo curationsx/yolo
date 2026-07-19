@@ -1,0 +1,67 @@
+name: Cohort Ledger (derive + publish)
+
+# G6 measurement publication + the temporal ledger's public proof rail.
+#
+# Recomputes the cohort ledger (scripts/cohort/derive.py) from the committed
+# run-record corpora and publishes it at docs/audits/cohort-ledger.json.
+# The derivation is pure and deterministic: anyone can re-run it against the
+# same corpus and byte-compare — the published ledger is verifiable, not
+# asserted. Only commits when the derivation output actually changed.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/audits/run-records/**"
+      - "docs/audits/external/**"
+      - "taxonomy/cohorts.yaml"
+      - "scripts/cohort/**"
+  schedule:
+    - cron: "17 6 * * 1" # weekly re-derivation (catches window closes)
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cohort-ledger
+  cancel-in-progress: false
+
+jobs:
+  derive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install derivation dependency
+        run: python -m pip install pyyaml==6.0.3
+
+      - name: Derive the ledger
+        run: |
+          python scripts/cohort/derive.py \
+            --records docs/audits/run-records \
+            --records docs/audits/external/curationsdev-community \
+            --config taxonomy/cohorts.yaml \
+            --out docs/audits/cohort-ledger.json
+
+      - name: Publish if changed
+        run: |
+          if git diff --quiet -- docs/audits/cohort-ledger.json; then
+            echo "Ledger unchanged — nothing to publish."
+            exit 0
+          fi
+          git config user.name "cohort-ledger[bot]"
+          git config user.email "lapress@curations.cc"
+          git add docs/audits/cohort-ledger.json
+          git commit -m "chore(ledger): re-derive cohort ledger from corpus
+
+          Deterministic derivation via scripts/cohort/derive.py — re-run it
+          against this commit's corpus to verify byte-identical output."
+          git push
