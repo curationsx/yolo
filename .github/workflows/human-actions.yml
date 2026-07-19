@@ -46,6 +46,22 @@ jobs:
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const now = new Date().toISOString();
+            const prScopedEvents = new Set(["pull_request_target", "pull_request_review"]);
+            const failingConclusions = [
+              "failure",
+              "cancelled",
+              "timed_out",
+              "action_required",
+              "startup_failure",
+              "stale",
+            ];
+            const pendingStatusesForCheckRuns = [
+              "queued",
+              "in_progress",
+              "waiting",
+              "requested",
+              "pending",
+            ];
 
             function task(done, text) {
               return `- [${done ? "x" : " "}] ${text}`;
@@ -89,12 +105,8 @@ jobs:
                 per_page: 100,
               });
               const checkRuns = checksResp.data.check_runs || [];
-              const failingCheckRuns = checkRuns.filter((run) =>
-                ["failure", "cancelled", "timed_out", "action_required", "startup_failure", "stale"].includes(run.conclusion)
-              );
-              const pendingCheckRuns = checkRuns.filter((run) =>
-                ["queued", "in_progress", "waiting", "requested", "pending"].includes(run.status)
-              );
+              const failingCheckRuns = checkRuns.filter((run) => failingConclusions.includes(run.conclusion));
+              const pendingCheckRuns = checkRuns.filter((run) => pendingStatusesForCheckRuns.includes(run.status));
 
               const { data: combinedStatus } = await github.rest.repos.getCombinedStatusForRef({
                 owner,
@@ -205,7 +217,7 @@ jobs:
               }
             }
 
-            if (prNumbers.length === 0 && (context.eventName === "pull_request_target" || context.eventName === "pull_request_review")) {
+            if (prNumbers.length === 0 && prScopedEvents.has(context.eventName)) {
               const number = context.payload.pull_request?.number;
               if (number) {
                 prNumbers = [number];
