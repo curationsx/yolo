@@ -1,0 +1,26 @@
+name: Watchdog Ducky (Introspective Scope Monitor)
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  watchdog:
+    name: Scope Gravity & Continual Learning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: Unleash the Watchdog
+        uses: curationsx/yolo/.github/actions/watchdog-ducky@main
+        with:
+          rules-file: '.watchdog-rules.json'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

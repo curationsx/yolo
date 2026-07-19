@@ -1,0 +1,27 @@
+name: "Watchdog Ducky Action"
+description: "An introspective scope monitor that catches scope creep in PR diffs based on dynamic rules."
+inputs:
+  rules-file:
+    description: "Path to the JSON file containing the scope rules."
+    required: false
+    default: ".watchdog-rules.json"
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+    - name: Run Watchdog Script
+      env:
+        RULES_FILE: ${{ inputs.rules-file }}
+        GITHUB_EVENT_PULL_REQUEST_HTML_URL: ${{ github.event.pull_request.html_url }}
+        GITHUB_TOKEN: ${{ github.token }}
+      shell: bash
+      run: |
+        if [ ! -f "${GITHUB_ACTION_PATH}/watchdog_analyzer.py" ]; then
+          curl -s https://raw.githubusercontent.com/curationsx/yolo/main/.github/actions/watchdog-ducky/watchdog_analyzer.py -o watchdog_analyzer.py
+        else
+          cp ${GITHUB_ACTION_PATH}/watchdog_analyzer.py .
+        fi
+        python3 watchdog_analyzer.py

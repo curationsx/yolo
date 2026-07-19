@@ -1,0 +1,8 @@
+{
+    "\\bthreads\\b": "Threads/conversation layer is deferred to >= v0.3.",
+    "\\bcohort ledger\\b": "Cohort ledgers are deferred to >= v0.3.",
+    "\\bknows:? tags\\b": "KNOWS tags & identity systems are deferred to >= v0.3.",
+    "\\bwatching mechanic\\b": "Watching/homepage pulses are deferred to >= v0.3.",
+    "\\bpaid tier\\b": "Paid tier logic is deferred to >= v0.3.",
+    "gh-curations": "The gh-curations CLI extension is deferred to >= v0.3."
+}
