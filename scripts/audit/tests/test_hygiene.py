@@ -5,6 +5,8 @@ import json
 import subprocess
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[3]
 HYGIENE_PATH = ROOT / "scripts" / "audit" / "hygiene.py"
 VALIDATE_PATH = ROOT / "scripts" / "audit" / "validate.py"
@@ -149,9 +151,8 @@ def test_lowercase_sha_is_accepted_before_git_io() -> None:
     hygiene._validate_sha_format("a" * 40)
 
 
-def test_uppercase_sha_is_rejected_before_git_io(monkeypatch) -> None:
+def test_uppercase_sha_is_rejected_before_git_io(monkeypatch: pytest.MonkeyPatch) -> None:
     """Uppercase SHA must fail fast before any git subprocess call."""
-    import pytest
 
     def fail_if_called(*args, **kwargs):
         raise AssertionError("subprocess.run should not be called for invalid SHA")

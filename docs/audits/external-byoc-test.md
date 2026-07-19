@@ -1,8 +1,8 @@
 # External BYOC product-promise runbook (`curationsdev/community`)
 
-Use this runbook after the stacked follow-up change is merged into PR #48's
-branch. It validates that a caller repository can run the reusable hygiene
-workflow with immutable pins and produce reproducible evidence.
+Use this runbook for the stacked follow-up targeting PR #48's branch. It
+validates that a caller repository can run the reusable hygiene workflow with
+immutable pins and produce reproducible evidence.
 
 ## Scope and pins
 

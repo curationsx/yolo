@@ -23,7 +23,7 @@ on:
         required: false
         type: number
   schedule:
-    # Offset minute is intentionally non-zero to avoid top-of-hour bursts.
+    # Every 6 hours with a non-zero minute offset to avoid top-of-hour bursts.
     - cron: "23 */6 * * *"
 
 permissions:
@@ -93,7 +93,10 @@ jobs:
 
               const reviewDecision = await getReviewDecision(prNumber);
               const body = pr.body || "";
-              const uncheckedTasks = (body.match(/^- \[ \] /gim) || []).length;
+              const uncheckedTasks = body
+                .split(/\r?\n/)
+                .filter((line) => /^- \[ \] /.test(line))
+                .length;
               const requestedUsers = pr.requested_reviewers.map((r) => `@${r.login}`);
               const requestedTeams = pr.requested_teams.map((t) => `@${t.slug}`);
               const requestedReviewCount = requestedUsers.length + requestedTeams.length;

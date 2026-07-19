@@ -78,6 +78,11 @@ jobs:
             echo "ERROR: audit_ref is required and must be non-empty."
             exit 1
           fi
+          if ! echo "$AUDIT_REF" | grep -qE '^[A-Za-z0-9._/-]{1,255}$'; then
+            echo "ERROR: audit_ref must be a simple git ref or full commit SHA."
+            echo "Supplied value: $AUDIT_REF"
+            exit 1
+          fi
 
       - name: Check out curationsx/yolo audit scripts
         uses: actions/checkout@v4
