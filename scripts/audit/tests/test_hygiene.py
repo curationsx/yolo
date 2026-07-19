@@ -145,6 +145,22 @@ def test_commit_sha_arg_is_accepted(tmp_path: Path) -> None:
     assert args.commit_sha == "a" * 40
 
 
+def test_lowercase_sha_is_accepted_before_git_io() -> None:
+    hygiene._validate_sha_format("a" * 40)
+
+
+def test_uppercase_sha_rejected_before_git_io(monkeypatch) -> None:
+    """Uppercase SHA must fail fast before any git subprocess call."""
+    import pytest
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("subprocess.run should not be called for invalid SHA")
+
+    monkeypatch.setattr(hygiene.subprocess, "run", fail_if_called)
+    with pytest.raises(SystemExit, match="Invalid commit SHA"):
+        hygiene.resolve_repository("https://github.com/curationsx/yolo.git", commit_sha="A" * 40)
+
+
 def test_invalid_sha_format_raises(tmp_path: Path) -> None:
     """An obviously malformed SHA (too short) must be rejected before any git I/O."""
     import pytest
