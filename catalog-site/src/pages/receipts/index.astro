@@ -7,9 +7,9 @@
  * explicit acts: publish and revoke. Security-shaped findings are marked
  * "never published" — the public projection carries only their count.
  */
-import BaseLayout from '../../layouts/BaseLayout.astro';
+import BaseLayout from "../../layouts/BaseLayout.astro";
 
-const apiBase = import.meta.env.PUBLIC_AGENT_API ?? '';
+const apiBase = import.meta.env.PUBLIC_AGENT_API ?? "";
 ---
 
 <BaseLayout
@@ -28,7 +28,9 @@ const apiBase = import.meta.env.PUBLIC_AGENT_API ?? '';
 
     <div class="audit-intake-step" data-step-auth>
       <h2 class="audit-intake-step-title">Identity</h2>
-      <p class="audit-intake-status" data-auth-state>Checking GitHub identity…</p>
+      <p class="audit-intake-status" data-auth-state>
+        Checking GitHub identity…
+      </p>
       <button type="button" class="audit-intake-button" data-sign-in hidden>
         Sign in with GitHub
       </button>
@@ -40,9 +42,9 @@ const apiBase = import.meta.env.PUBLIC_AGENT_API ?? '';
       <div class="run-records-empty" data-empty hidden>
         <p><strong>No receipts yet.</strong></p>
         <p>
-          Run a Tier A audit from the <a href="/submit/project/">audit intake</a>,
-          download the run-record artifact from your Actions run, and submit it
-          here — it stays private until you publish.
+          Run a Tier A audit from the <a href="/submit/project/">audit intake</a
+          >, download the run-record artifact from your Actions run, and submit
+          it here — it stays private until you publish.
         </p>
       </div>
     </div>
@@ -63,7 +65,7 @@ const apiBase = import.meta.env.PUBLIC_AGENT_API ?? '';
 
         <details class="receipt-preview">
           <summary>Exact public preview</summary>
-          <pre class="audit-intake-yaml"><code data-preview></code></pre>
+          <pre class="audit-intake-yaml"><code data-preview /></pre>
           <p class="receipt-preview-note">
             This projection is everything that would be visible publicly.
             Security findings appear only as a count.
@@ -74,7 +76,12 @@ const apiBase = import.meta.env.PUBLIC_AGENT_API ?? '';
           <button type="button" class="audit-intake-button" data-publish>
             Publish this receipt
           </button>
-          <button type="button" class="audit-intake-button receipt-revoke" data-revoke hidden>
+          <button
+            type="button"
+            class="audit-intake-button receipt-revoke"
+            data-revoke
+            hidden
+          >
             Revoke public record
           </button>
         </div>
@@ -83,7 +90,8 @@ const apiBase = import.meta.env.PUBLIC_AGENT_API ?? '';
           <img data-badge-img alt="" height="31" />
           <code class="run-record-badge-snippet" data-badge-snippet></code>
         </div>
-        <p class="audit-intake-refusal" data-action-error role="alert" hidden></p>
+        <p class="audit-intake-refusal" data-action-error role="alert" hidden>
+        </p>
       </article>
     </template>
   </section>
@@ -96,19 +104,21 @@ const apiBase = import.meta.env.PUBLIC_AGENT_API ?? '';
     broadcastAuth,
     consumeOAuthResult,
     currentUser,
-  } from '../../lib/browser-auth';
+  } from "../../lib/browser-auth";
 
-  const root = document.querySelector<HTMLElement>('[data-receipts]')!;
-  const api = root.dataset.api ?? '';
-  const authState = root.querySelector<HTMLElement>('[data-auth-state]')!;
-  const signIn = root.querySelector<HTMLButtonElement>('[data-sign-in]')!;
-  const listWrap = root.querySelector<HTMLElement>('[data-receipt-list]')!;
-  const rows = root.querySelector<HTMLElement>('[data-receipt-rows]')!;
-  const empty = root.querySelector<HTMLElement>('[data-empty]')!;
-  const template = root.querySelector<HTMLTemplateElement>('[data-receipt-template]')!;
+  const root = document.querySelector<HTMLElement>("[data-receipts]")!;
+  const api = root.dataset.api ?? "";
+  const authState = root.querySelector<HTMLElement>("[data-auth-state]")!;
+  const signIn = root.querySelector<HTMLButtonElement>("[data-sign-in]")!;
+  const listWrap = root.querySelector<HTMLElement>("[data-receipt-list]")!;
+  const rows = root.querySelector<HTMLElement>("[data-receipt-rows]")!;
+  const empty = root.querySelector<HTMLElement>("[data-empty]")!;
+  const template = root.querySelector<HTMLTemplateElement>(
+    "[data-receipt-template]",
+  )!;
 
   consumeOAuthResult();
-  signIn.addEventListener('click', () => beginGithubSignIn(api, '/receipts/'));
+  signIn.addEventListener("click", () => beginGithubSignIn(api, "/receipts/"));
 
   interface ReceiptEntry {
     run_id: string;
@@ -134,10 +144,13 @@ const apiBase = import.meta.env.PUBLIC_AGENT_API ?? '';
     badge_markdown: string | null;
   }
 
-  const post = async (path: string, body: object): Promise<{ ok: boolean; error?: string }> => {
+  const post = async (
+    path: string,
+    body: object,
+  ): Promise<{ ok: boolean; error?: string }> => {
     const response = await fetch(`${api}${path}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', ...authHeaders() },
+      method: "POST",
+      headers: { "content-type": "application/json", ...authHeaders() },
       body: JSON.stringify(body),
     });
     const payload = await response.json().catch(() => ({}));
@@ -145,71 +158,77 @@ const apiBase = import.meta.env.PUBLIC_AGENT_API ?? '';
   };
 
   const renderReceipt = (entry: ReceiptEntry): HTMLElement => {
-    const node = template.content.firstElementChild!.cloneNode(true) as HTMLElement;
+    const node = template.content.firstElementChild!.cloneNode(
+      true,
+    ) as HTMLElement;
     const record = entry.run_record;
-    node.querySelector('[data-repo]')!.textContent =
+    node.querySelector("[data-repo]")!.textContent =
       `${entry.repository.owner}/${entry.repository.name}`;
-    node.querySelector('[data-visibility]')!.textContent = entry.published
-      ? 'published'
-      : 'private';
-    node.querySelector('[data-countform]')!.textContent =
+    node.querySelector("[data-visibility]")!.textContent = entry.published
+      ? "published"
+      : "private";
+    node.querySelector("[data-countform]")!.textContent =
       `Tier A: ${record.checks_passed}/${record.checks_total} · ${record.ruleset_version}`;
-    node.querySelector('[data-meta]')!.textContent =
+    node.querySelector("[data-meta]")!.textContent =
       `run ${entry.run_id.slice(0, 8)} · commit ${record.commit_sha.slice(0, 7)} · ${record.created_at}`;
 
-    const findings = node.querySelector('[data-findings]')!;
+    const findings = node.querySelector("[data-findings]")!;
     for (const finding of record.findings) {
-      const item = document.createElement('li');
-      const neverPublished = !finding.passed && finding.severity === 'fail';
+      const item = document.createElement("li");
+      const neverPublished = !finding.passed && finding.severity === "fail";
       item.className = neverPublished
-        ? 'receipt-finding receipt-finding--security'
-        : 'receipt-finding';
+        ? "receipt-finding receipt-finding--security"
+        : "receipt-finding";
       item.textContent =
-        `${finding.passed ? '✓' : '✗'} ${finding.check_id} — ${finding.detail}` +
-        (neverPublished ? '  [security-shaped: never published]' : '');
+        `${finding.passed ? "✓" : "✗"} ${finding.check_id} — ${finding.detail}` +
+        (neverPublished ? "  [security-shaped: never published]" : "");
       findings.append(item);
     }
 
-    node.querySelector('[data-preview]')!.textContent = JSON.stringify(
+    node.querySelector("[data-preview]")!.textContent = JSON.stringify(
       entry.public_preview,
       null,
       2,
     );
 
-    const publish = node.querySelector<HTMLButtonElement>('[data-publish]')!;
-    const revoke = node.querySelector<HTMLButtonElement>('[data-revoke]')!;
-    const actionError = node.querySelector<HTMLElement>('[data-action-error]')!;
+    const publish = node.querySelector<HTMLButtonElement>("[data-publish]")!;
+    const revoke = node.querySelector<HTMLButtonElement>("[data-revoke]")!;
+    const actionError = node.querySelector<HTMLElement>("[data-action-error]")!;
     publish.hidden = entry.published;
     revoke.hidden = !entry.published;
 
     if (entry.published && entry.badge_url && entry.badge_markdown) {
-      const badge = node.querySelector<HTMLElement>('[data-badge]')!;
-      const badgeImg = badge.querySelector<HTMLImageElement>('[data-badge-img]')!;
+      const badge = node.querySelector<HTMLElement>("[data-badge]")!;
+      const badgeImg =
+        badge.querySelector<HTMLImageElement>("[data-badge-img]")!;
       badgeImg.src = entry.badge_url;
       badgeImg.alt = `Tier A: ${record.checks_passed}/${record.checks_total} · ${record.ruleset_version}`;
-      badge.querySelector('[data-badge-snippet]')!.textContent = entry.badge_markdown;
+      badge.querySelector("[data-badge-snippet]")!.textContent =
+        entry.badge_markdown;
       badge.hidden = false;
     }
 
-    publish.addEventListener('click', async () => {
+    publish.addEventListener("click", async () => {
       const consent = window.confirm(
-        'Publish this receipt? Only the exact public preview shown above goes ' +
-          'public. Security findings stay private (count only). You can revoke later.',
+        "Publish this receipt? Only the exact public preview shown above goes " +
+          "public. Security findings stay private (count only). You can revoke later.",
       );
       if (!consent) return;
-      const result = await post('/api/audit/receipts/publish', {
+      const result = await post("/api/audit/receipts/publish", {
         run_id: entry.run_id,
         confirm: true,
       });
       if (result.ok) return location.reload();
-      actionError.textContent = result.error ?? 'Publishing failed.';
+      actionError.textContent = result.error ?? "Publishing failed.";
       actionError.hidden = false;
     });
 
-    revoke.addEventListener('click', async () => {
-      const result = await post('/api/audit/receipts/revoke', { run_id: entry.run_id });
+    revoke.addEventListener("click", async () => {
+      const result = await post("/api/audit/receipts/revoke", {
+        run_id: entry.run_id,
+      });
       if (result.ok) return location.reload();
-      actionError.textContent = result.error ?? 'Revocation failed.';
+      actionError.textContent = result.error ?? "Revocation failed.";
       actionError.hidden = false;
     });
 
@@ -220,7 +239,8 @@ const apiBase = import.meta.env.PUBLIC_AGENT_API ?? '';
     const user = await currentUser(api);
     broadcastAuth(user);
     if (!user) {
-      authState.textContent = 'Sign in with GitHub to see your receipts. They are visible only to you.';
+      authState.textContent =
+        "Sign in with GitHub to see your receipts. They are visible only to you.";
       signIn.hidden = false;
       return;
     }
@@ -228,9 +248,13 @@ const apiBase = import.meta.env.PUBLIC_AGENT_API ?? '';
     listWrap.hidden = false;
 
     try {
-      const response = await fetch(`${api}/api/audit/receipts`, { headers: authHeaders() });
+      const response = await fetch(`${api}/api/audit/receipts`, {
+        headers: authHeaders(),
+      });
       if (!response.ok) throw new Error(String(response.status));
-      const { receipts } = (await response.json()) as { receipts: ReceiptEntry[] };
+      const { receipts } = (await response.json()) as {
+        receipts: ReceiptEntry[];
+      };
       if (receipts.length === 0) {
         empty.hidden = false;
         return;
