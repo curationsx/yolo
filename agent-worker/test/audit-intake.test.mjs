@@ -77,7 +77,11 @@ test("caller workflow pins both the reusable reference and audit_ref", () => {
   );
   assert.match(yaml, new RegExp(`audit_ref: ${AUDIT_WORKFLOW_PIN}`));
   assert.match(yaml, /repo_url: https:\/\/github\.com\/stranger\/tool\.git/);
-  assert.match(yaml, new RegExp(`commit_sha: ${"a".repeat(40)}`));
+  // The audited SHA defaults to the pinned head but stays overridable for re-runs.
+  assert.match(yaml, new RegExp(`default: "${"a".repeat(40)}"`));
+  assert.match(yaml, /commit_sha: \$\{\{ inputs\.commit_sha \}\}/);
+  // Re-runs can carry lineage for truthful deltas (gap G3).
+  assert.match(yaml, /previous_run: \$\{\{ inputs\.previous_run \}\}/);
   // Never a mutable ref.
   assert.doesNotMatch(yaml, /@main/);
   // Deterministic: same input, same bytes.
