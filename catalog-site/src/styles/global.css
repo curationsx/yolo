@@ -5907,3 +5907,202 @@ a.member-capability-row:hover,
     justify-self: start;
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * Run-record display (Lane B) — real Tier A evidence rows on the homepage.
+ * Dense Board rows: zero radius, hairline separators, hard shadows, mono
+ * metadata. Latest record carries the primary 2px border treatment.
+ * ------------------------------------------------------------------------- */
+
+.run-records-page {
+  max-width: 56rem;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-3) var(--space-8);
+}
+
+.run-records-header h1 {
+  margin: 0 0 var(--space-1);
+}
+
+.run-records-tagline {
+  max-width: var(--measure);
+  margin: 0 0 var(--space-4);
+  color: var(--muted-foreground);
+  font-size: 1.05rem;
+}
+
+.run-records-byoc {
+  border: 2px solid var(--border-color);
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-6);
+}
+
+.run-records-byoc h2 {
+  margin: 0 0 var(--space-1);
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.run-records-byoc p {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.run-records-list-title {
+  margin: 0 0 var(--space-2);
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 3px solid var(--border-color);
+  padding-bottom: var(--space-1);
+}
+
+.run-record-row {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--editorial-ink-mute);
+}
+
+.run-record-row--latest {
+  border: 2px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+  background: var(--card);
+  padding: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.run-record-score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--border-color);
+  background: var(--ok-bg);
+  padding: var(--space-1);
+  text-align: center;
+  align-self: start;
+}
+
+.run-record-score strong {
+  font-family: var(--font-mono);
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.run-record-score span {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.run-record-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1);
+  margin-bottom: var(--space-0-5);
+}
+
+.run-record-repo {
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.run-record-tag {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border: 1px solid var(--border-color);
+  padding: 0.05rem 0.4rem;
+}
+
+.run-record-countform {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.run-record-meta {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.run-record-meta a {
+  color: inherit;
+}
+
+.run-record-checks {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: var(--space-0-5) var(--space-2);
+  margin: var(--space-1) 0 0;
+  padding: var(--space-1) 0 0;
+  border-top: 1px solid var(--editorial-ink-mute);
+}
+
+.run-record-check {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.run-record-check--fail,
+.run-record-fails {
+  color: var(--coral-red);
+}
+
+.run-record-fails {
+  margin: var(--space-0-5) 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.run-records-empty {
+  border: 2px solid var(--border-color);
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-3);
+}
+
+.run-records-empty p {
+  margin: 0 0 var(--space-1);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.run-records-empty p:last-child {
+  margin-bottom: 0;
+}
+
+.run-records-provenance {
+  margin: var(--space-2) 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--muted-foreground);
+}
+
+@media (max-width: 640px) {
+  .run-record-row {
+    grid-template-columns: 1fr;
+  }
+
+  .run-record-score {
+    flex-direction: row;
+    gap: var(--space-1);
+    justify-self: start;
+  }
+}

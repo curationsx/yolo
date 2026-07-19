@@ -1,0 +1,64 @@
+---
+/**
+ * RunRecordRow — one real run-record as a dense Board row (Lane B).
+ * Mirrors the project-row grid: score rail + main column. Zero radius,
+ * hairline separators, hard shadows, mono metadata per the Visual Oracle.
+ */
+import {
+  countForm,
+  formatCreatedAt,
+  SELF_AUDIT_REPO,
+  type RunRecord,
+} from '../data/run-records';
+
+interface Props {
+  record: RunRecord;
+  /** Newest record gets the primary border + full check list. */
+  latest?: boolean;
+}
+
+const { record, latest = false } = Astro.props as Props;
+
+const failing = record.findings.filter((finding) => !finding.passed);
+const shortSha = record.commit_sha.slice(0, 7);
+const shortRunId = record.run_id.slice(0, 8);
+const shortFingerprint = record.repo_fingerprint.replace('sha256:', '').slice(0, 12);
+const lineage = record.previous_run ? `prev ${record.previous_run.slice(0, 8)}` : 'genesis';
+const recordUrl = `https://github.com/${SELF_AUDIT_REPO}/blob/main/docs/audits/run-records/`;
+---
+
+<article class:list={['run-record-row', { 'run-record-row--latest': latest }]}>
+  <div class="run-record-score" aria-label={`${record.checks_passed} of ${record.checks_total} checks passed`}>
+    <strong>{record.checks_passed}/{record.checks_total}</strong>
+    <span>checks</span>
+  </div>
+
+  <div class="run-record-main">
+    <div class="run-record-heading">
+      <span class="run-record-repo">{SELF_AUDIT_REPO}</span>
+      <span class="run-record-tag">self-audit</span>
+      <span class="run-record-countform">{countForm(record)}</span>
+    </div>
+
+    <p class="run-record-meta">
+      run <a href={recordUrl}>{shortRunId}</a> · commit {shortSha} · fp {shortFingerprint} · {formatCreatedAt(record.created_at)} · {record.files_inspected} files · {record.wall_clock_seconds}s · {lineage}
+    </p>
+
+    {latest && (
+      <ul class="run-record-checks">
+        {record.findings.map((finding) => (
+          <li class:list={['run-record-check', { 'run-record-check--fail': !finding.passed }]}>
+            <span aria-hidden="true">{finding.passed ? '✓' : '✗'}</span>
+            {finding.check_id}
+          </li>
+        ))}
+      </ul>
+    )}
+
+    {!latest && failing.length > 0 && (
+      <p class="run-record-fails">
+        {failing.map((finding) => `✗ ${finding.check_id}`).join(' · ')}
+      </p>
+    )}
+  </div>
+</article>
