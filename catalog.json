@@ -138,6 +138,21 @@
       "version": "0.1.0"
     },
     {
+      "category": "engineering",
+      "file": "prompts/engineering-watchdog-rubber-ducky.md",
+      "id": "watchdog-rubber-ducky",
+      "license": "MIT",
+      "status": "draft",
+      "tags": [
+        "engineering",
+        "debugging",
+        "strategy",
+        "introspection"
+      ],
+      "title": "Strategic Watchdog & Rubber-Ducky",
+      "version": "0.1.0"
+    },
+    {
       "category": "operations",
       "file": "prompts/operations-sop-drafting.md",
       "id": "sop-drafting",
