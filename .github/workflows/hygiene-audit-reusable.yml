@@ -17,8 +17,8 @@ name: Hygiene Audit (Reusable / BYOC)
 #
 # See docs/audits/stranger-guide.md for complete instructions.
 # For reproducible evidence, callers should pin both the reusable workflow
-# reference and `audit_ref` to immutable full commit SHAs. Branch refs are only
-# appropriate for temporary pre-merge warm-up testing.
+# reference and `audit_ref` to immutable full commit SHAs. The default
+# `audit_ref: main` is provided for temporary warm-up/testing only.
 
 on:
   workflow_call:
@@ -32,7 +32,7 @@ on:
         required: true
         type: string
       audit_ref:
-        description: "curationsx/yolo ref containing audit implementation (prefer immutable full commit SHA)"
+        description: "curationsx/yolo ref containing audit implementation (prefer immutable full commit SHA; default main is for warm-up only)"
         required: false
         default: "main"
         type: string

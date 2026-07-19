@@ -164,8 +164,6 @@ def test_uppercase_sha_is_rejected_before_git_io(monkeypatch: pytest.MonkeyPatch
 
 def test_invalid_sha_format_raises(tmp_path: Path) -> None:
     """An obviously malformed SHA (too short) must be rejected before any git I/O."""
-    import pytest
-
     with pytest.raises(SystemExit, match="Invalid commit SHA"):
         hygiene.resolve_repository(str(tmp_path), commit_sha="not-a-sha")
 
@@ -182,8 +180,6 @@ def test_correct_sha_local_repo_passes(tmp_path: Path) -> None:
 
 def test_sha_mismatch_local_repo_fails_closed(tmp_path: Path) -> None:
     """resolve_repository must raise SystemExit when the supplied SHA does not match HEAD."""
-    import pytest
-
     write_clean_repo(tmp_path)
     _init_git_repo(tmp_path)
 
