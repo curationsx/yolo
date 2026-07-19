@@ -36,6 +36,47 @@ const apiBase = import.meta.env.PUBLIC_AGENT_API ?? "";
       </button>
     </div>
 
+    <form class="audit-intake-step" data-step-submit hidden>
+      <h2 class="audit-intake-step-title">Submit a run-record</h2>
+      <p class="audit-intake-status">
+        Upload the <code>run-record.json</code> artifact from your Actions run.
+        It lands privately — nothing is public until you explicitly publish.
+      </p>
+      <label class="audit-intake-label" for="receipt-repo-url">
+        Repository the record audits (you must own it)
+      </label>
+      <div class="audit-intake-controls">
+        <input
+          id="receipt-repo-url"
+          name="receipt-repo-url"
+          type="url"
+          class="audit-intake-input"
+          placeholder="https://github.com/you/your-repo"
+          autocomplete="off"
+          spellcheck="false"
+          required
+        />
+      </div>
+      <label class="audit-intake-label" for="receipt-file">
+        run-record.json (from the hygiene-run-record artifact)
+      </label>
+      <div class="audit-intake-controls">
+        <input
+          id="receipt-file"
+          name="receipt-file"
+          type="file"
+          class="audit-intake-input"
+          accept=".json,application/json"
+          required
+        />
+        <button type="submit" class="audit-intake-button" data-submit-receipt>
+          Store privately
+        </button>
+      </div>
+      <p class="audit-intake-refusal" data-submit-error role="alert" hidden></p>
+      <p class="audit-intake-status" data-submit-success hidden></p>
+    </form>
+
     <div data-receipt-list hidden>
       <h2 class="run-records-list-title">Private receipts</h2>
       <div data-receipt-rows></div>
@@ -44,7 +85,7 @@ const apiBase = import.meta.env.PUBLIC_AGENT_API ?? "";
         <p>
           Run a Tier A audit from the <a href="/submit/project/">audit intake</a
           >, download the run-record artifact from your Actions run, and submit
-          it here — it stays private until you publish.
+          it above — it stays private until you publish.
         </p>
       </div>
     </div>
@@ -113,6 +154,12 @@ const apiBase = import.meta.env.PUBLIC_AGENT_API ?? "";
   const listWrap = root.querySelector<HTMLElement>("[data-receipt-list]")!;
   const rows = root.querySelector<HTMLElement>("[data-receipt-rows]")!;
   const empty = root.querySelector<HTMLElement>("[data-empty]")!;
+  const submitForm = root.querySelector<HTMLFormElement>("[data-step-submit]")!;
+  const repoInput = root.querySelector<HTMLInputElement>("#receipt-repo-url")!;
+  const fileInput = root.querySelector<HTMLInputElement>("#receipt-file")!;
+  const submitButton = root.querySelector<HTMLButtonElement>("[data-submit-receipt]")!;
+  const submitError = root.querySelector<HTMLElement>("[data-submit-error]")!;
+  const submitSuccess = root.querySelector<HTMLElement>("[data-submit-success]")!;
   const template = root.querySelector<HTMLTemplateElement>(
     "[data-receipt-template]",
   )!;
@@ -235,6 +282,61 @@ const apiBase = import.meta.env.PUBLIC_AGENT_API ?? "";
     return node;
   };
 
+  submitForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    submitError.hidden = true;
+    submitSuccess.hidden = true;
+
+    const file = fileInput.files?.[0];
+    if (!file) {
+      submitError.textContent = "Choose the run-record.json file first.";
+      submitError.hidden = false;
+      return;
+    }
+    let runRecord: unknown;
+    try {
+      runRecord = JSON.parse(await file.text());
+    } catch {
+      submitError.textContent =
+        "That file is not valid JSON. Upload the unmodified run-record.json " +
+        "from the hygiene-run-record artifact.";
+      submitError.hidden = false;
+      return;
+    }
+
+    submitButton.disabled = true;
+    submitButton.textContent = "Storing…";
+    try {
+      const response = await fetch(`${api}/api/audit/receipts`, {
+        method: "POST",
+        headers: { "content-type": "application/json", ...authHeaders() },
+        body: JSON.stringify({
+          repository_url: repoInput.value.trim(),
+          run_record: runRecord,
+        }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        submitError.textContent =
+          body.error ?? "The receipt could not be stored.";
+        submitError.hidden = false;
+        return;
+      }
+      submitSuccess.textContent =
+        body.note ??
+        "Stored privately. Review the exact public preview below before publishing.";
+      submitSuccess.hidden = false;
+      location.reload();
+    } catch {
+      submitError.textContent =
+        "The receipt service could not be reached. Nothing was stored — try again shortly.";
+      submitError.hidden = false;
+    } finally {
+      submitButton.disabled = false;
+      submitButton.textContent = "Store privately";
+    }
+  });
+
   void (async () => {
     const user = await currentUser(api);
     broadcastAuth(user);
@@ -245,6 +347,7 @@ const apiBase = import.meta.env.PUBLIC_AGENT_API ?? "";
       return;
     }
     authState.textContent = `Signed in as @${user.login}. Receipts below are visible only to you.`;
+    submitForm.hidden = false;
     listWrap.hidden = false;
 
     try {
