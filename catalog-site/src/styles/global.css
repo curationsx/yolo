@@ -6142,7 +6142,6 @@ a.member-capability-row:hover,
   -webkit-user-select: all;
   user-select: all;
 }
-
 /* Audit intake (Lane A) — /submit/project/ front door. */
 .audit-intake {
   max-width: 56rem;
