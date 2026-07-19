@@ -42,9 +42,16 @@ function makeEnv() {
     },
     quota: { reserve: async () => ({ allowed: true }) },
     community: {
-      readDocument: async (_c, id) => docs.get(id) ?? null,
+      // Partition-faithful mock mirroring the Azure Cosmos adapter:
+      // upsert derives the partition from the DOCUMENT BODY (tool_id —
+      // the container's declared partition path), while point-reads use
+      // the caller's explicit partition argument. A document whose body
+      // lacks tool_id lands in the "undefined" partition and point-reads
+      // miss it — the exact bug the 2026-07-19 live rehearsal surfaced.
+      readDocument: async (_c, id, partition) =>
+        docs.get(`${partition}::${id}`) ?? null,
       upsertDocument: async (_c, doc) => {
-        docs.set(doc.id, doc);
+        docs.set(`${doc.tool_id}::${doc.id}`, doc);
         return doc;
       },
       queryDocumentsCrossPartition: async (_c, query, params) => {
