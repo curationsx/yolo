@@ -61,7 +61,11 @@ def main():
             with open("watchdog_report.md", "w") as f:
                 f.write(report)
             pr_url = os.environ.get("GITHUB_EVENT_PULL_REQUEST_HTML_URL")
-            subprocess.run(f"gh pr comment {pr_url} -F watchdog_report.md", shell=True, check=False)
+            if pr_url:
+                subprocess.run(
+                    ["gh", "pr", "comment", pr_url, "-F", "watchdog_report.md"],
+                    check=False,
+                )
         sys.exit(1)
     else:
         print("### ✅ Scope Secure")
