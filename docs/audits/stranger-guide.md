@@ -44,6 +44,11 @@ on:
         description: "curationsx/yolo audit implementation ref (full commit SHA strongly recommended)"
         required: true
         type: string
+      previous_run:
+        description: "run_id of your previous run-record (re-runs only; enables a truthful delta)"
+        required: false
+        default: ""
+        type: string
 
 jobs:
   audit:
@@ -52,7 +57,12 @@ jobs:
       repo_url: ${{ inputs.repo_url }}
       commit_sha: ${{ inputs.commit_sha }}
       audit_ref: ${{ inputs.audit_ref }}
+      previous_run: ${{ inputs.previous_run }}
 ```
+
+> `previous_run` requires the reusable workflow pin to include the input
+> (any `curationsx/yolo` commit from 2026-07-18 or later). Older pins reject
+> unknown inputs — bump the pin before adding the line.
 
 Commit and push this file to your repository's default branch.  No secrets or
 additional configuration are needed.
@@ -100,6 +110,8 @@ git ls-remote https://github.com/org/repo.git refs/heads/main
    - **commit_sha**: the full 40-character SHA obtained in Step 2
    - **audit_ref**: immutable full `curationsx/yolo` commit SHA containing the
      audit implementation
+   - **previous_run** *(re-runs only)*: the `run_id` from your previous
+     `run-record.json`. Leave blank on your first run.
 4. Click **Run workflow**.
 
 ---
@@ -122,6 +134,28 @@ Once the workflow completes:
 - **Artifact:** click **Summary** (top of the run page) → scroll to
   **Artifacts** → download `hygiene-run-record`.  The zip contains
   `run-record.json`, the schema-valid audit record.
+
+---
+
+## Step 5 — Re-run after a fix (truthful delta)
+
+Fix a finding, then run the workflow again with two changes:
+
+1. **commit_sha**: the new head SHA (your fix commit).
+2. **previous_run**: the `run_id` field from your previous `run-record.json`.
+
+The new record then carries explicit lineage (`previous_run`), which is what
+makes an honest comparison possible:
+
+```bash
+python scripts/audit/delta.py run-record-new.json run-record-old.json
+# e.g.  +licence_present +sensitive_filenames vs run 845bb09b
+# or:   no change vs run 845bb09b
+```
+
+The delta tool refuses comparisons between records that do not reference each
+other or that were produced under different rulesets — a delta that cannot be
+trusted is worse than no delta.
 
 ---
 
