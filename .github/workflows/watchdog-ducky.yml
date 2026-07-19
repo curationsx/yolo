@@ -19,7 +19,8 @@ jobs:
           fetch-depth: 0
           
       - name: Unleash the Watchdog
-        uses: curationsx/yolo/.github/actions/watchdog-ducky@main
+        # Local path: PRs run the action version from their own checkout.
+        uses: ./.github/actions/watchdog-ducky
         with:
           rules-file: '.watchdog-rules.json'
         env:

@@ -18,10 +18,4 @@ runs:
         GITHUB_EVENT_PULL_REQUEST_HTML_URL: ${{ github.event.pull_request.html_url }}
         GITHUB_TOKEN: ${{ github.token }}
       shell: bash
-      run: |
-        if [ ! -f "${GITHUB_ACTION_PATH}/watchdog_analyzer.py" ]; then
-          curl -s https://raw.githubusercontent.com/curationsx/yolo/main/.github/actions/watchdog-ducky/watchdog_analyzer.py -o watchdog_analyzer.py
-        else
-          cp ${GITHUB_ACTION_PATH}/watchdog_analyzer.py .
-        fi
-        python3 watchdog_analyzer.py
+      run: python3 "${GITHUB_ACTION_PATH}/watchdog_analyzer.py"

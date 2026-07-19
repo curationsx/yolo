@@ -27,7 +27,10 @@ jobs:
           fetch-depth: 0
           
       - name: Unleash the Watchdog
-        uses: curationsx/yolo/.github/actions/watchdog-ducky@main
+        # Pin to a full commit SHA (never @main) so upstream changes cannot
+        # silently alter what runs in your CI. Grab the latest SHA from
+        # https://github.com/curationsx/yolo/commits/main and update deliberately.
+        uses: curationsx/yolo/.github/actions/watchdog-ducky@<commit-sha>
         with:
           rules-file: '.watchdog-rules.json'
         env:
