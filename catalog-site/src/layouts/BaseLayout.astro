@@ -71,12 +71,14 @@ const currentPath = Astro.url.pathname;
                 <a class:list={{ active: currentPath.startsWith('/skills') }} href={withBase('/skills/')}>Skills</a>
                 <a class:list={{ active: currentPath.startsWith('/stacks') }} href={withBase('/stacks/')}>Stacks</a>
                 <a class:list={{ active: currentPath.startsWith('/library') }} href={withBase('/library/')}>Library</a>
+                <a class:list={{ active: currentPath.startsWith('/records') }} href={withBase('/records/')}>Records</a>
                 <a class:list={{ active: currentPath.startsWith('/toolkit') }} href={withBase('/toolkit/')}>Toolkit</a>
               </>
             ) : (
               <>
                 <a class:list={{ active: currentPath === '/' }} href={withBase('/')}>Stacks</a>
                 <a class:list={{ active: currentPath.startsWith('/cookbooks') }} href={withBase('/cookbooks/')}>Cookbooks</a>
+                <a class:list={{ active: currentPath.startsWith('/records') }} href={withBase('/records/')}>Records</a>
                 <a href={withBase('/#universal-feed')}>Feed</a>
                 <a class:list={{ active: currentPath.startsWith('/methodology') }} href={withBase('/methodology/')}>Method</a>
               </>

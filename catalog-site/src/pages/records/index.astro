@@ -1,0 +1,71 @@
+---
+/**
+ * Tier A run records — the public evidence surface (Lanes B/C/E),
+ * re-housed from the interim homepage onto its own Board-adjacent page
+ * during the Board restoration. Renders only real run-records loaded from
+ * docs/audits/run-records/; honest empty state when none exist.
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import RunRecordRow from '../../components/RunRecordRow.astro';
+import { loadRunRecords, SELF_AUDIT_REPO } from '../../data/run-records';
+
+const records = loadRunRecords();
+const recordsUrl = `https://github.com/${SELF_AUDIT_REPO}/tree/main/docs/audits/run-records`;
+const workflowUrl = `https://github.com/${SELF_AUDIT_REPO}/blob/main/.github/workflows/hygiene-audit-reusable.yml`;
+const schemaVersion = records[0]?.script_versions?.run_record_schema;
+---
+
+<BaseLayout
+  title="Tier A run records — CURATIONS.DEV"
+  description="Public Tier A hygiene run records. Deterministic audits executed in your own GitHub Actions — real evidence, no mocks."
+>
+  <section class="run-records-page">
+    <header class="run-records-header">
+      <h1>Tier A run records</h1>
+      <p class="run-records-tagline">
+        Deterministic hygiene audits. You run them in your own GitHub Actions —
+        your compute, your billing, your evidence. We display the record.
+      </p>
+    </header>
+
+    <aside class="run-records-byoc">
+      <h2>Bring your own compute</h2>
+      <p>
+        Tier A audits execute in your Actions environment from
+        a <a href={workflowUrl}>pinned reusable workflow</a>. Your code never
+        touches our servers. Scope is deliberately narrow — see
+        the <a href={`https://github.com/${SELF_AUDIT_REPO}/blob/main/docs/ROADMAP.md`}>v0.1 cut-list</a>.
+        Ready to run one? Start at <a href="/submit/project/">audit intake</a>.
+      </p>
+    </aside>
+
+    <section class="run-records-list" aria-label="Public run records">
+      <h2 class="run-records-list-title">Public records</h2>
+
+      {records.length === 0 ? (
+        <div class="run-records-empty">
+          <p><strong>No public run records yet.</strong></p>
+          <p>
+            Run the Tier A audit in your own Actions via the
+            <a href={workflowUrl}>reusable workflow</a>, then publish the
+            run-record. Records rendered here are loaded from
+            <a href={recordsUrl}>docs/audits/run-records</a> — nothing is mocked.
+          </p>
+        </div>
+      ) : (
+        <>
+          {records.map((record, index) => (
+            <RunRecordRow
+              record={record}
+              previous={records.find((candidate) => candidate.run_id === record.previous_run)}
+              latest={index === 0}
+            />
+          ))}
+          <p class="run-records-provenance">
+            {records.length} records · source <a href={recordsUrl}>docs/audits/run-records</a>{schemaVersion ? ` · run_record_schema ${schemaVersion}` : ''}
+          </p>
+        </>
+      )}
+    </section>
+  </section>
+</BaseLayout>

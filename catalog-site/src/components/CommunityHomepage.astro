@@ -1,0 +1,236 @@
+---
+import { withBase } from '../lib/labels';
+import {
+  activeProjects,
+  libraryFixtures,
+  needsFeedbackProjects,
+  newProjects,
+  projectCategories,
+  recentlyImprovedProjects,
+  stackCombinations,
+} from '../data/community-preview';
+import { showcaseFixture } from '../data/member-showcase-preview';
+import ProjectRow from './ProjectRow.astro';
+import ShowcaseRow from './ShowcaseRow.astro';
+
+type CommunityView = 'active' | 'new' | 'needs-feedback' | 'recently-improved';
+
+interface Props {
+  selectedView?: CommunityView;
+}
+
+const { selectedView = 'active' } = Astro.props;
+const projectTypes = projectCategories.slice(0, 3);
+const stackPatterns = stackCombinations.slice(0, 3);
+const usefulThisWeek = libraryFixtures.slice(0, 3);
+const communityViews: Record<
+  CommunityView,
+  {
+    label: string;
+    href: string;
+    heading: string;
+    description: string;
+    projects: typeof activeProjects;
+  }
+> = {
+  active: {
+    label: 'Active',
+    href: withBase('/'),
+    heading: 'Active conversations',
+    description: 'where people are helping right now',
+    projects: activeProjects,
+  },
+  new: {
+    label: 'New',
+    href: withBase('/community/new/'),
+    heading: 'New this week',
+    description: 'fresh Projects looking for a second set of eyes',
+    projects: newProjects,
+  },
+  'needs-feedback': {
+    label: 'Needs feedback',
+    href: withBase('/community/needs-feedback/'),
+    heading: 'Needs feedback',
+    description: 'open human questions waiting for useful context',
+    projects: needsFeedbackProjects,
+  },
+  'recently-improved': {
+    label: 'Recently improved',
+    href: withBase('/community/recently-improved/'),
+    heading: 'Recently improved',
+    description: 'Projects that returned with a stronger working plan',
+    projects: recentlyImprovedProjects,
+  },
+};
+const currentView = communityViews[selectedView];
+---
+
+<p class="community-preview-note">Public design preview · example Projects and activity</p>
+
+<section class="community-intro" aria-labelledby="community-intro-title">
+  <div class="community-intro-copy">
+    <p class="community-kicker">A community for people building software with AI</p>
+    <h1 id="community-intro-title">
+      Share what you’re building. <span>Get feedback.</span> Make the next version better.
+    </h1>
+    <p>
+      Connect a public GitHub project and its working plan. People and optional AI
+      guides help you spot gaps, find useful skills, and decide what to do next.
+    </p>
+  </div>
+  <aside class="community-plan-note" id="new-here">
+    <strong>New to project plans?</strong>
+    <p>
+      Start the discussion by submitting your project. Share what you are building,
+      what you want feedback on, and what decision you need help with next.
+    </p>
+    <div class="community-plan-actions">
+      <a class="community-action community-action-primary" href={withBase('/projects/new/')}>
+        Start a Project Discussion
+      </a>
+      <a class="community-action" href={withBase('/projects/')}>
+        Browse Project Examples
+      </a>
+      <a class="community-action" href={withBase('/showcase/new/')}>Share a PRD First</a>
+    </div>
+  </aside>
+</section>
+
+<section class="board-search-shell community-search" aria-labelledby="community-search-label">
+  <form class="board-search" role="search">
+    <label class="visually-hidden" id="community-search-label" for="community-search">
+      Search community Projects and PRD Showcases
+    </label>
+    <span class="board-search-icon" aria-hidden="true">⌕</span>
+    <input
+      type="search"
+      id="community-search"
+      placeholder="Search Projects, PRDs, questions, tools, or people"
+      autocomplete="off"
+    />
+    <button type="button">Search</button>
+  </form>
+  <p>Public Projects and PRDs · useful feedback · no paid placement</p>
+</section>
+
+<div class="community-view-bar" aria-label="Community views">
+  <nav class="community-view-tabs">
+    {
+      Object.entries(communityViews).map(([view, config]) => (
+        <a
+          class:list={{ 'is-active': selectedView === view }}
+          href={config.href}
+          aria-current={selectedView === view ? 'page' : undefined}
+        >
+          {config.label}
+        </a>
+      ))
+    }
+  </nav>
+  <span>Illustrative content · submissions opening soon</span>
+</div>
+
+<div class="community-tag-bar" aria-label="Project filters">
+  <span class="is-active">All</span>
+  <span>CRM</span>
+  <span>AI assistant</span>
+  <span>Automation</span>
+  <span>Local-first</span>
+  <span>Building</span>
+  <span>Needs feedback</span>
+</div>
+
+<div class="board-home-layout community-home-layout">
+  <div class="board-stack-column">
+    <section id="community-conversations" class="board-list-section">
+      <header class="board-list-heading">
+        <h2>{currentView.heading}</h2>
+        <span>{currentView.description}</span>
+      </header>
+      <div class="project-list">
+        {selectedView === 'active' && <ShowcaseRow showcase={showcaseFixture} />}
+        {currentView.projects.map((project) => <ProjectRow project={project} />)}
+      </div>
+    </section>
+
+    <section id="share-project" class="community-share">
+      <div>
+        <p>Have public work to share?</p>
+        <strong>Bring a full Project—or showcase one public PRD first.</strong>
+      </div>
+      <div class="community-share-actions">
+        <a class="community-action" href={withBase('/showcase/new/')}>Share a PRD</a>
+        <a class="community-action community-action-primary" href={withBase('/projects/new/')}>
+          Share a Project
+        </a>
+      </div>
+    </section>
+  </div>
+
+  <aside id="universal-feed" class="board-feed community-pulse">
+    <h2>Community pulse</h2>
+    <p class="community-pulse-intro">A compact view of what’s moving across shared projects.</p>
+
+    <section class="community-pulse-section">
+      <h3>What people are building</h3>
+      <div class="community-pulse-list">
+        {
+          projectTypes.map((category) => (
+            <p>
+              <a href={withBase(`/projects/types/${category.slug}/`)}>{category.name}</a>
+              <strong>{category.projectCount}</strong>
+            </p>
+          ))
+        }
+      </div>
+      <a class="community-pulse-view-all" href={withBase('/projects/')}>View all projects →</a>
+    </section>
+
+    <section class="community-pulse-section">
+      <h3>Stacks showing up</h3>
+      <div class="community-pulse-list">
+        {
+          stackPatterns.map((combination) => (
+            <p>
+              <a href={withBase(`/stacks/${combination.slug}/`)}>{combination.name}</a>
+              <strong>{combination.projectCount}</strong>
+            </p>
+          ))
+        }
+      </div>
+      <a class="community-pulse-view-all" href={withBase('/stacks/')}>View all stacks →</a>
+    </section>
+
+    <section class="community-pulse-section">
+      <h3>Useful this week</h3>
+      <div class="community-useful-list">
+        {
+          usefulThisWeek.map((resource) => (
+            <p>
+              <a href={withBase(`/library/#${resource.slug}`)}>{resource.title}</a>
+              <small>{resource.type}</small>
+            </p>
+          ))
+        }
+      </div>
+      <a class="community-pulse-view-all" href={withBase('/library/')}>
+        View all useful resources →
+      </a>
+    </section>
+
+    <section class="community-pulse-section community-people">
+      <h3>New contributors</h3>
+      <div>
+        <span class="community-person">MA</span>
+        <span class="community-person">DE</span>
+        <span class="community-person">AN</span>
+        <span class="community-person">RI</span>
+        <p>Builders sharing projects and giving useful feedback.</p>
+      </div>
+    </section>
+
+    <p class="community-pulse-note">
+      AI replies carry an <strong>AI</strong> tag. Nothing runs without you.
+    </p>
+  </aside>
+</div>
