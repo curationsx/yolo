@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build",
+    "build": "astro build && node scripts/build-wiki.mjs",
     "postbuild": "node scripts/configure-staticwebapp.mjs",
     "preview": "astro preview",
     "astro": "astro",
@@ -26,6 +26,7 @@
     "typescript": "^6.0.3"
   },
   "devDependencies": {
+    "@docmd/core": "0.8.16",
     "@playwright/test": "1.61.1"
   }
 }

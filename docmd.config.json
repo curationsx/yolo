@@ -1,0 +1,32 @@
+{
+  "title": "CURATIONS.DEV Wiki",
+  "url": "https://curations.dev/wiki",
+  "src": "docs",
+  "out": "catalog-site/dist/wiki",
+  "minify": true,
+  "autoTitleFromH1": true,
+  "layout": {
+    "spa": true,
+    "header": { "enabled": true },
+    "sidebar": { "collapsible": true, "defaultCollapsed": false },
+    "optionsMenu": {
+      "position": "sidebar-top",
+      "components": { "search": true, "themeSwitch": true }
+    },
+    "footer": {
+      "style": "minimal",
+      "content": "© 2026 CURATIONS · <a href=\"https://curations.dev/\">Back to the Board</a>",
+      "branding": true
+    }
+  },
+  "theme": { "name": "default", "appearance": "system", "codeHighlight": true },
+  "copyCode": true,
+  "pageNavigation": true,
+  "plugins": {
+    "seo": {
+      "defaultDescription": "The CURATIONS.DEV knowledge base — PRDs, guides, glossary, and audit records rendered from the repository's docs/ directory."
+    },
+    "llms": {},
+    "okf": {}
+  }
+}
