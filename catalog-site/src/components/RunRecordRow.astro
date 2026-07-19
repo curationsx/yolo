@@ -10,7 +10,7 @@ import {
   formatCreatedAt,
   SELF_AUDIT_REPO,
   type RunRecord,
-} from '../data/run-records';
+} from "../data/run-records";
 
 interface Props {
   record: RunRecord;
@@ -27,19 +27,26 @@ const delta = computeRunDelta(record, previous);
 const failing = record.findings.filter((finding) => !finding.passed);
 const shortSha = record.commit_sha.slice(0, 7);
 const shortRunId = record.run_id.slice(0, 8);
-const shortFingerprint = record.repo_fingerprint.replace('sha256:', '').slice(0, 12);
-const lineage = record.previous_run ? `prev ${record.previous_run.slice(0, 8)}` : 'genesis';
+const shortFingerprint = record.repo_fingerprint
+  .replace("sha256:", "")
+  .slice(0, 12);
+const lineage = record.previous_run
+  ? `prev ${record.previous_run.slice(0, 8)}`
+  : "genesis";
 const recordUrl = `https://github.com/${SELF_AUDIT_REPO}/blob/main/docs/audits/run-records/`;
 
 // Count-form badge (Lane C). Served from /badges/{run_id}.svg; the README
 // snippet matches scripts/audit/badge.py render_markdown byte-for-byte.
-const displayUrl = 'https://curations.dev/';
+const displayUrl = "https://curations.dev/";
 const badgePath = `/badges/${record.run_id}.svg`;
 const badgeSnippet = `[![${countForm(record)}](${displayUrl}badges/${record.run_id}.svg)](${displayUrl})`;
 ---
 
-<article class:list={['run-record-row', { 'run-record-row--latest': latest }]}>
-  <div class="run-record-score" aria-label={`${record.checks_passed} of ${record.checks_total} checks passed`}>
+<article class:list={["run-record-row", { "run-record-row--latest": latest }]}>
+  <div
+    class="run-record-score"
+    aria-label={`${record.checks_passed} of ${record.checks_total} checks passed`}
+  >
     <strong>{record.checks_passed}/{record.checks_total}</strong>
     <span>checks</span>
   </div>
@@ -52,52 +59,70 @@ const badgeSnippet = `[![${countForm(record)}](${displayUrl}badges/${record.run_
     </div>
 
     <p class="run-record-meta">
-      run <a href={recordUrl}>{shortRunId}</a> · commit {shortSha} · fp {shortFingerprint} · {formatCreatedAt(record.created_at)} · {record.files_inspected} files · {record.wall_clock_seconds}s · {lineage}
+      run <a href={recordUrl}>{shortRunId}</a> · commit {shortSha} · fp {
+        shortFingerprint
+      } · {formatCreatedAt(record.created_at)} · {record.files_inspected} files ·
+      {record.wall_clock_seconds}s · {lineage}
     </p>
 
-    {delta && (
-      <p class="run-record-delta">
-        Δ {delta.no_change ? (
-          `no change vs run ${delta.previous_run.slice(0, 8)}`
-        ) : (
-          <>
-            {delta.fixed.map((checkId) => (
-              <span class="run-record-delta-fixed">+{checkId} </span>
-            ))}
-            {delta.regressed.map((checkId) => (
-              <span class="run-record-delta-regressed">-{checkId} </span>
-            ))}
-            {delta.added.length > 0 && `new: ${delta.added.join(', ')} `}
-            {delta.removed.length > 0 && `dropped: ${delta.removed.join(', ')} `}
-            vs run {delta.previous_run.slice(0, 8)}
-          </>
-        )}
-      </p>
-    )}
+    {
+      delta && (
+        <p class="run-record-delta">
+          Δ{" "}
+          {delta.no_change ? (
+            `no change vs run ${delta.previous_run.slice(0, 8)}`
+          ) : (
+            <>
+              {delta.fixed.map((checkId) => (
+                <span class="run-record-delta-fixed">+{checkId} </span>
+              ))}
+              {delta.regressed.map((checkId) => (
+                <span class="run-record-delta-regressed">-{checkId} </span>
+              ))}
+              {delta.added.length > 0 && `new: ${delta.added.join(", ")} `}
+              {delta.removed.length > 0 &&
+                `dropped: ${delta.removed.join(", ")} `}
+              vs run {delta.previous_run.slice(0, 8)}
+            </>
+          )}
+        </p>
+      )
+    }
 
-    {latest && (
-      <ul class="run-record-checks">
-        {record.findings.map((finding) => (
-          <li class:list={['run-record-check', { 'run-record-check--fail': !finding.passed }]}>
-            <span aria-hidden="true">{finding.passed ? '✓' : '✗'}</span>
-            {finding.check_id}
-          </li>
-        ))}
-      </ul>
-    )}
+    {
+      latest && (
+        <ul class="run-record-checks">
+          {record.findings.map((finding) => (
+            <li
+              class:list={[
+                "run-record-check",
+                { "run-record-check--fail": !finding.passed },
+              ]}
+            >
+              <span aria-hidden="true">{finding.passed ? "✓" : "✗"}</span>
+              {finding.check_id}
+            </li>
+          ))}
+        </ul>
+      )
+    }
 
-    {latest && (
-      <div class="run-record-badge">
-        <span class="run-record-badge-label">README badge</span>
-        <img src={badgePath} alt={countForm(record)} height="31" />
-        <code class="run-record-badge-snippet">{badgeSnippet}</code>
-      </div>
-    )}
+    {
+      latest && (
+        <div class="run-record-badge">
+          <span class="run-record-badge-label">README badge</span>
+          <img src={badgePath} alt={countForm(record)} height="31" />
+          <code class="run-record-badge-snippet">{badgeSnippet}</code>
+        </div>
+      )
+    }
 
-    {!latest && failing.length > 0 && (
-      <p class="run-record-fails">
-        {failing.map((finding) => `✗ ${finding.check_id}`).join(' · ')}
-      </p>
-    )}
+    {
+      !latest && failing.length > 0 && (
+        <p class="run-record-fails">
+          {failing.map((finding) => `✗ ${finding.check_id}`).join(" · ")}
+        </p>
+      )
+    }
   </div>
 </article>

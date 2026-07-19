@@ -1,6 +1,6 @@
 {
     "\\bthreads\\b": "Threads/conversation layer is deferred to >= v0.3.",
-    "\\bcohort ledger\\b": "Cohort ledgers are deferred to >= v0.3.",
+    "cohort (ledger|feed|page|tab|UI|widget)s? (page|tab|view|component|feed)|cohort ledger (service|API|endpoint|page)": "Cohort ledger UX/service surfaces are deferred to >= v0.3. The DATA layer (derivation, config, schema fields) was thawed 2026-07-19 by product decision — see docs/audits/2026-07-18-brain-dump-reconciliation.md §3 and scripts/cohort/derive.py. Rationale: contracts and derivation must exist before users arrive; social surfaces must not.",
     "\\bknows:? tags\\b": "KNOWS tags & identity systems are deferred to >= v0.3.",
     "\\bwatching mechanic\\b": "Watching/homepage pulses are deferred to >= v0.3.",
     "\\bpaid tier\\b": "Paid tier logic is deferred to >= v0.3.",

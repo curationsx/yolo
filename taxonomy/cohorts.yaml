@@ -1,0 +1,62 @@
+# Cohort boundary configuration — the temporal knowledge ledger's clock.
+#
+# Adopted 2026-07-18 (docs/audits/2026-07-18-brain-dump-reconciliation.md §6);
+# format graduated from vibe/02-silver/end-user-project-submissions/.
+#
+# A cohort is a TEMPORAL SNAPSHOT OF AGGREGATE INQUIRY PATTERNS — never a pool
+# of shared repository data. User A's repo never informs user B's suggestions.
+# What a cohort holds: anonymized category counts, retention aggregates, and
+# (at close/formation) a versioned world-state grounding reference.
+#
+# Rules encoded here, enforced by scripts/cohort/derive.py:
+#   - membership is derived from run-record `created_at` (UTC) — retroactively
+#     derivable for every record ever produced; no backfill migrations exist
+#     or are needed;
+#   - cohorts are append-only while open and IMMUTABLE once closed;
+#   - sub-cohorts (return visits within one window) are derived from
+#     `previous_run` lineage: a repo's 2nd+ linked run inside the same window
+#     lands in "<cohort_id>.r2", "<cohort_id>.r3", ... — engagement frequency
+#     as a first-class dimension;
+#   - fall-off (members with no linked re-run in any later window) is a
+#     derived aggregate signal, never a per-user dossier.
+#
+# Consent line (verbatim, shown at intake):
+#   "Your inquiry categories contribute to anonymized, time-stamped trend
+#    aggregates."
+
+config_version: "cohorts/0.1.0"
+
+cohorts:
+  - cohort_id: "v0.1-tier-a"
+    # The bootstrap cohort: every record produced during the v0.1 build-out
+    # carried this literal cohort_ref before calendar cohorts existed.
+    # Kept as a first-class alias so early records remain first-class members.
+    opened_at: "2026-07-01"
+    closes_at: "2026-09-30"
+    trigger: alias
+    alias_of: "2026-Q3"
+    event_ref: null
+
+  - cohort_id: "2026-Q3"
+    opened_at: "2026-07-01"
+    closes_at: "2026-09-30"
+    trigger: calendar
+    event_ref: null
+    sub_cohort_window: true
+    grounding:
+      provider: azure-foundry-bing-grounding
+      invoked: [close]
+      spend_cap_usd: 0        # explicit and versioned; raising it is a reviewed PR
+      snapshot_ref: null      # set at close by the grounding agent (Phase B)
+
+  - cohort_id: "2026-Q4"
+    opened_at: "2026-10-01"
+    closes_at: "2026-12-31"
+    trigger: calendar
+    event_ref: null
+    sub_cohort_window: true
+    grounding:
+      provider: azure-foundry-bing-grounding
+      invoked: [formation, close]
+      spend_cap_usd: 0
+      snapshot_ref: null

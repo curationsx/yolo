@@ -92,7 +92,7 @@ test("handler refuses anonymous requests before touching GitHub", async () => {
   globalThis.fetch = async () => {
     throw new Error("network must not be called for anonymous intake");
   };
-  const env = { RATE: { get: async () => null, delete: async () => {} } };
+  const env = { RATE: { get: async () => null, delete: async () => { } } };
   const response = await handleAuditIntake(
     new Request("https://api.curations.dev/api/audit/intake", {
       method: "POST",
@@ -117,7 +117,7 @@ test("handler walks a controlled repository through to pinned instructions", asy
     RATE: {
       get: async (key) =>
         key === `session:${sessionToken}` ? session : null,
-      delete: async () => {},
+      delete: async () => { },
     },
   };
   globalThis.fetch = async (input) => {

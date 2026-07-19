@@ -1,0 +1,69 @@
+# Category vocabulary — ONE registry, four uses (no drift by construction):
+#   1. run-record category flags        (boolean, set at audit time)
+#   2. cohort inquiry buckets           (aggregate counts per cohort window)
+#   3. wiki/OKF retrieval tags          (docs frontmatter -> RAG index)
+#   4. curator routing                  (which specialty wakes for a submission)
+#
+# Adopted 2026-07-19 as part of Phase A (moonshot dataset contracts).
+# Detection is DETERMINISTIC: marker-file / manifest patterns only — the same
+# fingerprinting philosophy as scripts/audit/hygiene.py. Nothing here calls a
+# model. Categories a detector cannot prove stay false; owners may declare
+# additional categories at intake (declared vs observed stays distinguishable,
+# mirroring the Evidence Registry rule).
+#
+# Axes:
+#   domain    — what the project is for (business/problem vertical)
+#   platform  — where it deploys/runs
+#   stack     — dominant implementation technology
+
+vocabulary_version: "categories/0.1.0"
+
+domain:
+  - id: crm
+    label: "CRM & customer ops"
+  - id: finance
+    label: "Finance & accounting"
+  - id: ecommerce
+    label: "E-commerce & storefronts"
+  - id: content
+    label: "Content, docs & publishing"
+  - id: devtools
+    label: "Developer tooling & infrastructure"
+  - id: data-ai
+    label: "Data & AI systems"
+  - id: community
+    label: "Community & social platforms"
+
+platform:
+  - id: azure
+    label: "Azure"
+    markers: ["azure.yaml", "infra/*.bicep", "Dockerfile.azure"]
+  - id: cloudflare
+    label: "Cloudflare"
+    markers: ["wrangler.toml", "wrangler.json"]
+  - id: vercel
+    label: "Vercel"
+    markers: ["vercel.json", ".vercel/"]
+  - id: github-actions
+    label: "GitHub Actions"
+    markers: [".github/workflows/*.yml"]
+  - id: containers
+    label: "Containers / Kubernetes"
+    markers: ["Dockerfile", "docker-compose.yml", "k8s/", "helm/"]
+
+stack:
+  - id: typescript
+    label: "TypeScript / JavaScript"
+    markers: ["package.json", "tsconfig.json"]
+  - id: python
+    label: "Python"
+    markers: ["pyproject.toml", "requirements.txt", "setup.py"]
+  - id: astro
+    label: "Astro"
+    markers: ["astro.config.mjs", "astro.config.ts"]
+  - id: rust
+    label: "Rust"
+    markers: ["Cargo.toml"]
+  - id: go
+    label: "Go"
+    markers: ["go.mod"]

@@ -17,7 +17,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 SCRIPT_VERSION = "0.1.0"
-SCHEMA_VERSION = "1.1.0"
+SCHEMA_VERSION = "1.2.0"
 COHORT_REF = "v0.1-tier-a"
 RULESET_VERSION = "hygiene/0.1.0"
 TOP_LEVEL_NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
