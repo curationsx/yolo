@@ -56,7 +56,11 @@ const schemaVersion = records[0]?.script_versions?.run_record_schema;
       ) : (
         <>
           {records.map((record, index) => (
-            <RunRecordRow record={record} latest={index === 0} />
+            <RunRecordRow
+              record={record}
+              previous={records.find((candidate) => candidate.run_id === record.previous_run)}
+              latest={index === 0}
+            />
           ))}
           <p class="run-records-provenance">
             {records.length} records · source <a href={recordsUrl}>docs/audits/run-records</a>{schemaVersion ? ` · run_record_schema ${schemaVersion}` : ''}

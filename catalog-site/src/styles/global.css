@@ -6070,6 +6070,22 @@ a.member-capability-row:hover,
   font-size: 0.75rem;
 }
 
+/* Truthful delta line (Lane E) — exactly what changed, or "no change". */
+.run-record-delta {
+  margin: var(--space-0-5) 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.run-record-delta-fixed {
+  background: var(--ok-bg);
+}
+
+.run-record-delta-regressed {
+  color: var(--coral-red);
+}
+
 .run-records-empty {
   border: 2px solid var(--border-color);
   background: var(--card);
@@ -6142,6 +6158,7 @@ a.member-capability-row:hover,
   -webkit-user-select: all;
   user-select: all;
 }
+
 /* Audit intake (Lane A) — /submit/project/ front door. */
 .audit-intake {
   max-width: 56rem;
@@ -6262,6 +6279,7 @@ a.member-capability-row:hover,
   font-family: var(--font-mono);
   font-size: 0.78rem;
 }
+
 /* Owner receipt view (Lane D) — private-first, explicit publish. */
 .receipt {
   border: 2px solid var(--border-color);

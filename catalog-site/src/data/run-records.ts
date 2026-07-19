@@ -92,3 +92,55 @@ export function formatCreatedAt(iso: string): string {
 export function countForm(record: RunRecord): string {
   return `Tier A: ${record.checks_passed}/${record.checks_total} · ${record.ruleset_version}`;
 }
+
+/**
+ * Truthful delta between a record and its predecessor (Lane E).
+ * Mirrors scripts/audit/delta.py: only explicit lineage with a matching
+ * ruleset_version is comparable; identical outcomes report no_change —
+ * the display never manufactures improvement.
+ */
+export interface RunDelta {
+  previous_run: string;
+  no_change: boolean;
+  fixed: string[];
+  regressed: string[];
+  added: string[];
+  removed: string[];
+}
+
+export function computeRunDelta(
+  current: RunRecord,
+  previous: RunRecord | undefined,
+): RunDelta | null {
+  if (!previous) return null;
+  if (current.previous_run !== previous.run_id) return null;
+  if (current.ruleset_version !== previous.ruleset_version) return null;
+
+  const now = new Map(current.findings.map((f) => [f.check_id, f.passed]));
+  const before = new Map(previous.findings.map((f) => [f.check_id, f.passed]));
+  const fixed: string[] = [];
+  const regressed: string[] = [];
+  const added: string[] = [];
+  for (const [checkId, passed] of now) {
+    if (!before.has(checkId)) {
+      added.push(checkId);
+    } else if (passed && !before.get(checkId)) {
+      fixed.push(checkId);
+    } else if (!passed && before.get(checkId)) {
+      regressed.push(checkId);
+    }
+  }
+  const removed = [...before.keys()].filter((checkId) => !now.has(checkId));
+  fixed.sort();
+  regressed.sort();
+  added.sort();
+  removed.sort();
+  return {
+    previous_run: previous.run_id,
+    no_change: !fixed.length && !regressed.length && !added.length && !removed.length,
+    fixed,
+    regressed,
+    added,
+    removed,
+  };
+}
