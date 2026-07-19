@@ -24,6 +24,7 @@ import {
   handleCopilotStatus,
 } from "./copilot.ts";
 import { handleAuditIntake } from "./audit-intake.ts";
+import { handleReceiptBadge } from "./audit-badges.ts";
 import {
   handlePublicAuditRecords,
   handleReceiptList,
@@ -158,6 +159,12 @@ export async function handleRequest(req: Request, env: Env): Promise<Response> {
   }
   if (url.pathname === "/api/audit/records" && req.method === "GET") {
     return handlePublicAuditRecords(env, cors);
+  }
+  const badgeMatch = url.pathname.match(
+    /^\/api\/audit\/badges\/([0-9a-fA-F-]{36})\.svg$/,
+  );
+  if (badgeMatch && req.method === "GET") {
+    return handleReceiptBadge(badgeMatch[1], env, cors);
   }
   if (url.pathname === "/api/projects/preview" && req.method === "POST") {
     return handleProjectPreview(req, env, cors);

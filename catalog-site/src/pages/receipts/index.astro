@@ -78,6 +78,11 @@ const apiBase = import.meta.env.PUBLIC_AGENT_API ?? '';
             Revoke public record
           </button>
         </div>
+        <div class="run-record-badge" data-badge hidden>
+          <span class="run-record-badge-label">README badge</span>
+          <img data-badge-img alt="" height="31" />
+          <code class="run-record-badge-snippet" data-badge-snippet></code>
+        </div>
         <p class="audit-intake-refusal" data-action-error role="alert" hidden></p>
       </article>
     </template>
@@ -125,6 +130,8 @@ const apiBase = import.meta.env.PUBLIC_AGENT_API ?? '';
     published: boolean;
     published_at: string | null;
     public_preview: unknown;
+    badge_url: string | null;
+    badge_markdown: string | null;
   }
 
   const post = async (path: string, body: object): Promise<{ ok: boolean; error?: string }> => {
@@ -174,6 +181,15 @@ const apiBase = import.meta.env.PUBLIC_AGENT_API ?? '';
     const actionError = node.querySelector<HTMLElement>('[data-action-error]')!;
     publish.hidden = entry.published;
     revoke.hidden = !entry.published;
+
+    if (entry.published && entry.badge_url && entry.badge_markdown) {
+      const badge = node.querySelector<HTMLElement>('[data-badge]')!;
+      const badgeImg = badge.querySelector<HTMLImageElement>('[data-badge-img]')!;
+      badgeImg.src = entry.badge_url;
+      badgeImg.alt = `Tier A: ${record.checks_passed}/${record.checks_total} · ${record.ruleset_version}`;
+      badge.querySelector('[data-badge-snippet]')!.textContent = entry.badge_markdown;
+      badge.hidden = false;
+    }
 
     publish.addEventListener('click', async () => {
       const consent = window.confirm(
