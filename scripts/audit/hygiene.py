@@ -82,12 +82,14 @@ def clone_repository(url: str, commit_sha: str | None = None) -> tempfile.Tempor
                 check=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
+                text=True,
             )
             subprocess.run(
                 ["git", "-C", str(clone_path), "remote", "add", "origin", url],
                 check=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
+                text=True,
             )
             subprocess.run(
                 ["git", "-C", str(clone_path), "fetch", "--depth", "1", "origin", commit_sha],
@@ -101,12 +103,12 @@ def clone_repository(url: str, commit_sha: str | None = None) -> tempfile.Tempor
                 check=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
+                text=True,
             )
         except subprocess.CalledProcessError as exc:
             tempdir.cleanup()
-            stderr = exc.stderr.strip() if isinstance(exc.stderr, str) else (exc.stderr or b"").decode(errors="replace").strip()
             raise SystemExit(
-                f"Failed to fetch commit {commit_sha} from {url}: {stderr or str(exc)}"
+                f"Failed to fetch commit {commit_sha} from {url}: {exc.stderr.strip() or str(exc)}"
             ) from exc
 
         # Verify the checked-out HEAD matches the requested SHA (fail closed on mismatch).

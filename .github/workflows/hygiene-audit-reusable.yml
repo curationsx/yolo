@@ -48,6 +48,9 @@ jobs:
 
     steps:
       - name: Validate inputs
+        # Fail-fast SHA format check before any git I/O.  hygiene.py also
+        # validates the format, so this duplication is intentional for
+        # defence-in-depth and a clear workflow-level error message.
         env:
           COMMIT_SHA: ${{ inputs.commit_sha }}
           REPO_URL: ${{ inputs.repo_url }}
