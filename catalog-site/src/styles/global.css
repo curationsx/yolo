@@ -6106,3 +6106,39 @@ a.member-capability-row:hover,
     justify-self: start;
   }
 }
+
+/* Count-form badge block (Lane C) — latest record only. */
+.run-record-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-0-5);
+  margin-top: var(--space-1);
+  padding-top: var(--space-1);
+  border-top: 1px solid var(--editorial-ink-mute);
+}
+
+.run-record-badge-label {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted-foreground);
+}
+
+.run-record-badge img {
+  display: block;
+}
+
+.run-record-badge-snippet {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  line-height: 1.5;
+  background: var(--card);
+  border: 1px solid var(--border-color);
+  padding: var(--space-1);
+  overflow-wrap: anywhere;
+  -webkit-user-select: all;
+  user-select: all;
+}
