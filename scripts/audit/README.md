@@ -2,6 +2,11 @@
 
 Deterministic only: no LLM calls, no API token spend, no repo writes.
 
+> **Running the audit as a non-maintainer?** See
+> [docs/audits/stranger-guide.md](../../docs/audits/stranger-guide.md) for the
+> step-by-step BYOC (bring-your-own-compute) path that runs in your own GitHub
+> Actions context without write access to this repository.
+
 ## Usage
 
 From the repository root:
@@ -10,6 +15,10 @@ From the repository root:
 python scripts/audit/hygiene.py .
 python scripts/audit/hygiene.py https://github.com/curationsx/yolo.git --out /tmp/run-record.json
 python scripts/audit/validate.py /tmp/run-record.json
+
+# Audit a remote repository at an explicit pinned commit SHA (never mutable HEAD):
+python scripts/audit/hygiene.py https://github.com/org/repo.git \
+    --commit-sha <full-40-char-sha> --out /tmp/run-record.json
 
 # Re-run with lineage (links run-2 back to run-1):
 python scripts/audit/hygiene.py . --previous-run <run-1-run-id> --out /tmp/run-2.json

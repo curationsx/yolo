@@ -5,11 +5,17 @@ on:
     paths:
       - "scripts/audit/**"
       - "schemas/**"
+      - "docs/audits/run-records/**"
       - ".github/workflows/hygiene-audit.yml"
+      - ".github/workflows/hygiene-audit-reusable.yml"
   workflow_dispatch:
     inputs:
       repo_url:
         description: "Public repository URL to audit"
+        required: true
+        type: string
+      commit_sha:
+        description: "Full 40-character immutable commit SHA to audit (never audits mutable HEAD)"
         required: true
         type: string
 
@@ -28,10 +34,10 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
@@ -46,27 +52,100 @@ jobs:
           python scripts/audit/hygiene.py . --out self-audit.json
           python scripts/audit/validate.py self-audit.json
 
-  run:
-    if: github.event_name == 'workflow_dispatch'
+  validate-corpus:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Install validator dependency
         run: python -m pip install jsonschema==4.26.0
 
-      - name: Run hygiene audit
+      - name: Validate all committed run-records
         run: |
-          python scripts/audit/hygiene.py "${{ inputs.repo_url }}" --out run-record.json
-          python scripts/audit/validate.py run-record.json
+          fail=0
+          count=0
+          for f in docs/audits/run-records/*.json; do
+            count=$((count + 1))
+            echo "Validating $f …"
+            python scripts/audit/validate.py "$f" || fail=1
+          done
+          echo "Validated $count run-record(s)"
+          exit $fail
+
+  run:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Validate inputs
+        env:
+          COMMIT_SHA: ${{ inputs.commit_sha }}
+        run: |
+          if ! echo "$COMMIT_SHA" | grep -qE '^[0-9a-f]{40}$'; then
+            echo "ERROR: commit_sha must be a full 40-character lowercase hexadecimal SHA."
+            echo "Supplied value: $COMMIT_SHA"
+            exit 1
+          fi
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install validator dependency
+        run: python -m pip install jsonschema==4.26.0
+
+      - name: Run hygiene audit at pinned SHA
+        env:
+          REPO_URL: ${{ inputs.repo_url }}
+          COMMIT_SHA: ${{ inputs.commit_sha }}
+        run: |
+          python scripts/audit/hygiene.py "$REPO_URL" --commit-sha "$COMMIT_SHA" --out run-record.json
+
+      - name: Validate run-record
+        run: python scripts/audit/validate.py run-record.json
+
+      - name: Write job summary
+        run: |
+          python - <<'PYEOF'
+          import json, os, sys
+          path = "run-record.json"
+          try:
+              record = json.loads(open(path).read())
+          except Exception as e:
+              print(f"Could not read {path}: {e}", file=sys.stderr)
+              sys.exit(1)
+          passed   = record["checks_passed"]
+          total    = record["checks_total"]
+          version  = record["ruleset_version"]
+          sha      = record.get("commit_sha") or "unknown"
+          summary  = os.environ.get("GITHUB_STEP_SUMMARY", "")
+          lines = [
+              f"## Tier A: {passed}/{total} \u00b7 {version}",
+              "",
+              f"**Audited commit:** `{sha}`",
+              "",
+              "The downloadable `run-record.json` artifact is commit-bound and schema-valid.",
+          ]
+          if summary:
+              with open(summary, "a", encoding="utf-8") as fh:
+                  fh.write("\n".join(lines) + "\n")
+          else:
+              print("\n".join(lines))
+          PYEOF
 
       - name: Upload run-record artifact
         uses: actions/upload-artifact@v4
