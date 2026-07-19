@@ -14,6 +14,11 @@ name: Hygiene Audit (Reusable / BYOC)
 #         repo_url: https://github.com/your-org/your-repo.git
 #         commit_sha: <full 40-character SHA>
 #         audit_ref: <same immutable yolo commit SHA as above>
+#         previous_run: <run_id of your previous run-record>   # re-runs only
+#
+# On a re-run, pass `previous_run` so the new run-record carries explicit
+# lineage — that is what makes a truthful delta possible (scripts/audit/delta.py
+# refuses comparisons between records that do not reference each other).
 #
 # See docs/audits/stranger-guide.md for complete instructions.
 # For reproducible evidence, callers should pin both the reusable workflow
@@ -35,6 +40,11 @@ on:
         description: "curationsx/yolo ref containing audit implementation (prefer immutable full commit SHA; default main is for warm-up only)"
         required: false
         default: "main"
+        type: string
+      previous_run:
+        description: "run_id (UUID) of your previous run-record for this repository. Re-runs only — gives the new record explicit lineage so a truthful delta can be computed."
+        required: false
+        default: ""
         type: string
     outputs:
       checks_passed:
@@ -64,6 +74,7 @@ jobs:
           COMMIT_SHA: ${{ inputs.commit_sha }}
           REPO_URL: ${{ inputs.repo_url }}
           AUDIT_REF: ${{ inputs.audit_ref }}
+          PREVIOUS_RUN: ${{ inputs.previous_run }}
         run: |
           if ! echo "$COMMIT_SHA" | grep -qE '^[0-9a-f]{40}$'; then
             echo "ERROR: commit_sha must be a full 40-character lowercase hexadecimal SHA."
@@ -81,6 +92,11 @@ jobs:
           if ! echo "$AUDIT_REF" | grep -qE '^[A-Za-z0-9._/-]{1,255}$'; then
             echo "ERROR: audit_ref must be a simple git ref or full commit SHA."
             echo "Supplied value: $AUDIT_REF"
+            exit 1
+          fi
+          if [ -n "$PREVIOUS_RUN" ] && ! echo "$PREVIOUS_RUN" | grep -qiE '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'; then
+            echo "ERROR: previous_run must be the run_id (UUID) from your previous run-record.json."
+            echo "Supplied value: $PREVIOUS_RUN"
             exit 1
           fi
 
@@ -107,10 +123,13 @@ jobs:
         env:
           REPO_URL: ${{ inputs.repo_url }}
           COMMIT_SHA: ${{ inputs.commit_sha }}
+          PREVIOUS_RUN: ${{ inputs.previous_run }}
         run: |
-          python yolo-audit/scripts/audit/hygiene.py "$REPO_URL" \
-            --commit-sha "$COMMIT_SHA" \
-            --out run-record.json
+          args=(--commit-sha "$COMMIT_SHA" --out run-record.json)
+          if [ -n "$PREVIOUS_RUN" ]; then
+            args+=(--previous-run "$PREVIOUS_RUN")
+          fi
+          python yolo-audit/scripts/audit/hygiene.py "$REPO_URL" "${args[@]}"
 
       - name: Validate run-record against schema
         run: python yolo-audit/scripts/audit/validate.py run-record.json
