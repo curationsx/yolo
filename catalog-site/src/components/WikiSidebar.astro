@@ -1,0 +1,18 @@
+---
+const currentPath = Astro.url.pathname;
+---
+<aside class="wiki-sidebar">
+  <h3>Governance</h3>
+  <ul>
+    <li><a href="/wiki/" class={currentPath === '/wiki/' || currentPath === '/wiki' ? 'active' : ''}>Community PRD</a></li>
+    <li><a href="#">Evidence Registry</a></li>
+    <li><a href="#">AOT Agent Protocol</a></li>
+  </ul>
+  
+  <h3 style="margin-top: 2rem;">Guides</h3>
+  <ul>
+    <li><a href="#">START HERE</a></li>
+    <li><a href="/stranger-guide/" class={currentPath === '/stranger-guide/' || currentPath === '/stranger-guide' ? 'active' : ''}>Stranger Guide</a></li>
+    <li><a href="#">Quality & Standards</a></li>
+  </ul>
+</aside>

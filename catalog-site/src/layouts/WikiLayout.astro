@@ -1,5 +1,7 @@
 ---
 import '../styles/global.css';
+import WikiHeader from '../components/WikiHeader.astro';
+import WikiSidebar from '../components/WikiSidebar.astro';
 
 interface Props {
   title: string;
@@ -50,7 +52,14 @@ const currentPath = Astro.url.pathname;
       color: var(--near-black);
       font-family: var(--font-sans);
       display: flex;
+      flex-direction: column; /* Mobile first layout */
       min-height: 100vh;
+    }
+
+    @media (min-width: 768px) {
+      body {
+        flex-direction: row;
+      }
     }
 
     /* Subordinate Header */
@@ -101,13 +110,23 @@ const currentPath = Astro.url.pathname;
 
     /* Sidebar */
     .wiki-sidebar {
-      width: 280px;
+      width: 100%; /* Mobile width */
       background: #fff;
-      border-right: 2px solid var(--near-black);
+      border-bottom: 2px solid var(--near-black);
       padding: 80px 1.5rem 2rem 1.5rem;
-      position: fixed;
-      height: 100vh;
-      overflow-y: auto;
+      position: relative; /* Mobile flow */
+      height: auto;
+    }
+
+    @media (min-width: 768px) {
+      .wiki-sidebar {
+        width: 280px;
+        border-right: 2px solid var(--near-black);
+        border-bottom: none;
+        position: fixed;
+        height: 100vh;
+        overflow-y: auto;
+      }
     }
 
     .wiki-sidebar h3 {
@@ -148,18 +167,32 @@ const currentPath = Astro.url.pathname;
     /* Main Content */
     .wiki-main {
       flex: 1;
-      margin-left: 280px;
-      padding: 100px 4rem 4rem 4rem;
-      max-width: 900px;
+      margin-left: 0; /* Mobile left margin */
+      padding: 2rem 1.5rem 4rem 1.5rem; /* Mobile padding */
+      width: 100%;
+    }
+
+    @media (min-width: 768px) {
+      .wiki-main {
+        margin-left: 280px;
+        padding: 100px 4rem 4rem 4rem;
+        max-width: 900px;
+      }
     }
 
     .wiki-main h1 {
       font-family: var(--font-editorial);
-      font-size: 3.5rem;
+      font-size: 2.5rem; /* Mobile font size */
       line-height: 1.1;
       margin-top: 0;
       margin-bottom: 1rem;
       color: var(--dark-black);
+    }
+
+    @media (min-width: 768px) {
+      .wiki-main h1 {
+        font-size: 3.5rem;
+      }
     }
 
     .wiki-main h2 {
@@ -232,30 +265,8 @@ const currentPath = Astro.url.pathname;
 </head>
 <body>
   
-  <header class="wiki-header">
-    <div class="header-logo">
-      <a href="/">&larr; Back to the Board</a>
-    </div>
-    <div class="header-search">
-      <input type="text" placeholder="Search the Wiki (CMD+K)...">
-    </div>
-  </header>
-
-  <aside class="wiki-sidebar">
-    <h3>Governance</h3>
-    <ul>
-      <li><a href="/wiki" class={currentPath === '/wiki' ? 'active' : ''}>Community PRD</a></li>
-      <li><a href="#">Evidence Registry</a></li>
-      <li><a href="#">AOT Agent Protocol</a></li>
-    </ul>
-    
-    <h3 style="margin-top: 2rem;">Guides</h3>
-    <ul>
-      <li><a href="#">START HERE</a></li>
-      <li><a href="#">Stranger Guide</a></li>
-      <li><a href="#">Quality & Standards</a></li>
-    </ul>
-  </aside>
+  <WikiHeader />
+  <WikiSidebar />
 
   <main class="wiki-main">
     <slot />

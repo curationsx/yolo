@@ -1,55 +1,43 @@
 ---
 /**
- * Audit intake (Lane A) — the front door for the v0.1 Tier A loop.
- *
- * Sign in with GitHub → submit a repository you own → receive a caller
- * workflow pinned to an immutable curationsx/yolo commit. The audit runs in
- * the submitter's own GitHub Actions (BYOC) — never on CURATIONS compute.
- * Refusals from the worker are shown verbatim: they are plain-language,
- * owner-respecting reasons, not error codes.
+ * Builder Onboarding UI (Gate 3) 
+ * 
+ * Re-aligned to the Visual Oracle "brutalist" style.
+ * Uses WikiLayout.astro to ensure 2px borders, instrument serif headings,
+ * and high-signal, stranger-friendly copy.
  */
-import BaseLayout from '../../../layouts/BaseLayout.astro';
+import WikiLayout from '../../../layouts/WikiLayout.astro';
+import WikiCallout from '../../../components/WikiCallout.astro';
 
 const apiBase = import.meta.env.PUBLIC_AGENT_API ?? '';
 ---
 
-<BaseLayout
-  title="Set up a Tier A audit — CURATIONS.DEV"
-  description="Sign in with GitHub, submit a repository you own, and get a pinned one-click workflow that runs the Tier A hygiene audit in your own Actions."
->
-  <section class="audit-intake" data-audit-intake data-api={apiBase}>
-    <header class="run-records-header">
-      <h1>Set up a Tier A audit</h1>
-      <p class="run-records-tagline">
-        Three steps: sign in, name a repository you own, commit the generated
-        workflow. The audit runs in <em>your</em> GitHub Actions — your compute,
-        your billing, your evidence.
-      </p>
-    </header>
+<WikiLayout title="Submit Your Project">
+  <h1>Submit Your Project</h1>
+  <p>Bring a public repository and working plan. Review the exact context privately, then decide whether to ask the community one useful question. The audit runs in <em>your</em> GitHub Actions — your compute, your billing, your evidence.</p>
+  
+  <WikiCallout title="What we will never do">
+    We never ask for write access to your repository, never run your code on our servers, and discard the GitHub token after sign-in. The generated workflow is pinned to an immutable commit — nothing changes underneath you.
+  </WikiCallout>
 
-    <aside class="run-records-byoc">
-      <h2>What we will never do</h2>
-      <p>
-        We never ask for write access to your repository, never run your code on
-        our servers, and discard the GitHub token after sign-in. The generated
-        workflow is pinned to an immutable commit — nothing changes underneath you.
-      </p>
-    </aside>
-
-    <div class="audit-intake-step" data-step-auth>
-      <h2 class="audit-intake-step-title">1 · Identity</h2>
-      <p class="audit-intake-status" data-auth-state>Checking GitHub identity…</p>
-      <button type="button" class="audit-intake-button" data-sign-in hidden>
-        Sign in with GitHub
+  <section class="audit-intake" data-audit-intake data-api={apiBase} style="margin-top: 3rem;">
+    
+    <!-- Step 1 -->
+    <div class="audit-intake-step" data-step-auth style="border: 2px solid var(--near-black); padding: 2rem; margin-bottom: 2rem; background: #fff; box-shadow: var(--shadow-sm);">
+      <h2 style="margin-top: 0; border-bottom: none; padding-bottom: 0;">1 · Identity</h2>
+      <p class="audit-intake-status" data-auth-state style="font-family: var(--font-mono); font-size: 0.9rem;">Checking GitHub identity…</p>
+      <button type="button" class="audit-intake-button" data-sign-in hidden style="background: var(--near-black); color: var(--seasalt-white); border: 2px solid var(--near-black); padding: 0.8rem 1.5rem; font-family: var(--font-mono); font-weight: bold; cursor: pointer; box-shadow: 2px 2px 0 var(--coral-red);">
+        [ Sign in with GitHub ]
       </button>
     </div>
 
-    <form class="audit-intake-step" data-step-repo hidden>
-      <h2 class="audit-intake-step-title">2 · Your repository</h2>
-      <label class="audit-intake-label" for="repository-url">
-        Public repository you own
+    <!-- Step 2 -->
+    <form class="audit-intake-step" data-step-repo hidden style="border: 2px solid var(--near-black); padding: 2rem; margin-bottom: 2rem; background: #fff; box-shadow: var(--shadow-sm);">
+      <h2 style="margin-top: 0; border-bottom: none; padding-bottom: 0;">2 · Your Repository</h2>
+      <label class="audit-intake-label" for="repository-url" style="display: block; margin-bottom: 0.5rem; font-family: var(--font-mono); font-weight: bold;">
+        Public repository you own:
       </label>
-      <div class="audit-intake-controls">
+      <div class="audit-intake-controls" style="display: flex; gap: 1rem; flex-wrap: wrap;">
         <input
           id="repository-url"
           name="repository-url"
@@ -59,29 +47,36 @@ const apiBase = import.meta.env.PUBLIC_AGENT_API ?? '';
           autocomplete="off"
           spellcheck="false"
           required
+          style="flex: 1; padding: 0.8rem; border: 2px solid var(--near-black); font-family: var(--font-mono); box-shadow: inset 2px 2px 0 rgba(0,0,0,0.05); min-width: 250px;"
         />
-        <button type="submit" class="audit-intake-button" data-check>
-          Check repository
+        <button type="submit" class="audit-intake-button" data-check style="background: var(--near-black); color: var(--seasalt-white); border: 2px solid var(--near-black); padding: 0.8rem 1.5rem; font-family: var(--font-mono); font-weight: bold; cursor: pointer; box-shadow: 2px 2px 0 var(--coral-red);">
+          [ Check Repository ]
         </button>
       </div>
-      <p class="audit-intake-refusal" data-refusal role="alert" hidden></p>
+      <p class="audit-intake-refusal" data-refusal role="alert" hidden style="margin-top: 1rem; color: var(--coral-red); font-family: var(--font-mono); font-weight: bold; border-left: 3px solid var(--coral-red); padding-left: 1rem;"></p>
     </form>
 
-    <div class="audit-intake-step" data-step-workflow hidden>
-      <h2 class="audit-intake-step-title">3 · Commit the pinned workflow</h2>
-      <p class="audit-intake-summary" data-summary></p>
-      <p class="audit-intake-path">
-        Create <code data-workflow-path></code> with:
+    <!-- Step 3 -->
+    <div class="audit-intake-step" data-step-workflow hidden style="border: 2px solid var(--near-black); padding: 2rem; margin-bottom: 2rem; background: #fff; box-shadow: var(--shadow-sm);">
+      <h2 style="margin-top: 0; border-bottom: none; padding-bottom: 0;">3 · Commit the Pinned Workflow</h2>
+      <p class="audit-intake-summary" data-summary style="font-family: var(--font-mono); font-weight: bold; padding: 1rem; background: var(--seasalt-white); border: 2px solid var(--near-black);"></p>
+      
+      <p class="audit-intake-path" style="margin-top: 1.5rem;">
+        Create <code data-workflow-path style="background: var(--neon-yellow);"></code> with:
       </p>
-      <pre class="audit-intake-yaml"><code data-workflow-yaml></code></pre>
-      <ol class="audit-intake-steps" data-next-steps></ol>
-      <p class="audit-intake-links">
-        <a data-guide-link href="#">Stranger guide</a> ·
-        <a href="/">Public run records</a>
-      </p>
+      
+      <!-- Overrides WikiLayout pre styles to keep them tight inside the box -->
+      <pre class="audit-intake-yaml" style="margin-top: 0;"><code data-workflow-yaml></code></pre>
+      
+      <ol class="audit-intake-steps" data-next-steps style="font-family: var(--font-sans); line-height: 1.5; margin-top: 1.5rem;"></ol>
+      
+      <div class="audit-intake-links" style="margin-top: 2rem; border-top: 2px solid var(--near-black); padding-top: 1rem;">
+        <a data-guide-link href="/stranger-guide/" style="color: var(--coral-red); font-family: var(--font-mono); font-weight: bold; text-decoration: none; margin-right: 1rem;">→ Read Stranger Guide</a>
+        <a href="/" style="color: var(--near-black); font-family: var(--font-mono); font-weight: bold; text-decoration: none;">→ View Public Run Records</a>
+      </div>
     </div>
   </section>
-</BaseLayout>
+</WikiLayout>
 
 <script>
   import {
@@ -170,7 +165,7 @@ const apiBase = import.meta.env.PUBLIC_AGENT_API ?? '';
       refusal.hidden = false;
     } finally {
       check.disabled = false;
-      check.textContent = 'Check repository';
+      check.textContent = '[ Check Repository ]';
     }
   });
 </script>
