@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wiki Design Oracle | CURATIONS.DEV</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..900;1,9..144,400..900&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --near-black: #353839;
+      --dark-black: #100b00;
+      --seasalt-white: #f7f7ff;
+      --coral-red: #ff3131;
+      --light-coral: #ff8080;
+      --cyan: #01befe;
+      --neon-yellow: #ffdd00;
+      --editorial-ink: #111;
+
+      --font-sans: 'Inter', 'Helvetica Neue', ui-sans-serif, system-ui, sans-serif;
+      --font-display: 'Fraunces', 'Merriweather', 'Times New Roman', serif;
+      --font-editorial: 'Instrument Serif', 'Fraunces', serif;
+      --font-mono: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
+      
+      --shadow-sm: 3px 3px 0 var(--near-black);
+      --shadow-md: 6px 6px 0 var(--near-black);
+      --shadow-lg: 8px 8px 0 var(--near-black);
+    }
+
+    * {
+      box-sizing: border-box;
+      border-radius: 0 !important;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #fcfcfc;
+      color: var(--near-black);
+      font-family: var(--font-sans);
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* Subordinate Header */
+    .wiki-header {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 60px;
+      background: var(--seasalt-white);
+      border-bottom: 3px solid var(--near-black);
+      display: flex;
+      align-items: center;
+      padding: 0 2rem;
+      z-index: 100;
+      justify-content: space-between;
+    }
+
+    .wiki-header a {
+      color: var(--coral-red);
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      text-decoration: none;
+      font-weight: 700;
+    }
+
+    .wiki-header a:hover {
+      text-decoration: underline;
+    }
+
+    .header-search {
+      display: flex;
+      align-items: center;
+    }
+
+    .header-search input {
+      border: 2px solid var(--near-black);
+      background: #fff;
+      padding: 0.4rem 0.8rem;
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      width: 250px;
+      box-shadow: var(--shadow-sm);
+      outline: none;
+    }
+
+    .header-search input:focus {
+      border-color: var(--coral-red);
+    }
+
+    /* Sidebar */
+    .wiki-sidebar {
+      width: 280px;
+      background: #fff;
+      border-right: 3px solid var(--near-black);
+      padding: 80px 1.5rem 2rem 1.5rem;
+      position: fixed;
+      height: 100vh;
+      overflow-y: auto;
+    }
+
+    .wiki-sidebar h3 {
+      font-family: var(--font-display);
+      font-size: 1.2rem;
+      margin-bottom: 1rem;
+      border-bottom: 2px solid var(--near-black);
+      padding-bottom: 0.5rem;
+    }
+
+    .wiki-sidebar ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .wiki-sidebar li {
+      margin-bottom: 0.6rem;
+    }
+
+    .wiki-sidebar a {
+      color: var(--near-black);
+      font-family: var(--font-sans);
+      font-size: 0.95rem;
+      text-decoration: none;
+      display: block;
+      padding: 0.4rem;
+      border: 1px solid transparent;
+    }
+
+    .wiki-sidebar a:hover, .wiki-sidebar a.active {
+      background: var(--neon-yellow);
+      border: 1px solid var(--near-black);
+      box-shadow: 2px 2px 0 var(--near-black);
+      font-weight: 600;
+    }
+
+    /* Main Content */
+    .wiki-main {
+      flex: 1;
+      margin-left: 280px;
+      padding: 100px 4rem 4rem 4rem;
+      max-width: 900px;
+    }
+
+    .wiki-main h1 {
+      font-family: var(--font-editorial);
+      font-size: 3.5rem;
+      line-height: 1.1;
+      margin-top: 0;
+      margin-bottom: 1rem;
+      color: var(--dark-black);
+    }
+
+    .wiki-main h2 {
+      font-family: var(--font-display);
+      font-size: 2rem;
+      border-bottom: 3px solid var(--near-black);
+      padding-bottom: 0.5rem;
+      margin-top: 2.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .wiki-main p {
+      font-size: 1.1rem;
+      line-height: 1.6;
+      margin-bottom: 1.5rem;
+    }
+
+    .wiki-main code {
+      font-family: var(--font-mono);
+      background: var(--seasalt-white);
+      padding: 0.2rem 0.4rem;
+      border: 1px solid var(--near-black);
+      font-size: 0.9em;
+    }
+
+    .wiki-main pre {
+      background: var(--dark-black);
+      color: var(--seasalt-white);
+      padding: 1.5rem;
+      font-family: var(--font-mono);
+      border: 3px solid var(--near-black);
+      box-shadow: var(--shadow-md);
+      overflow-x: auto;
+      margin-bottom: 2rem;
+    }
+
+    .wiki-main pre code {
+      background: transparent;
+      border: none;
+      padding: 0;
+      color: var(--seasalt-white);
+    }
+
+    /* Info Block */
+    .wiki-callout {
+      background: #fff;
+      border: 3px solid var(--near-black);
+      box-shadow: var(--shadow-md);
+      padding: 1.5rem;
+      margin: 2rem 0;
+      position: relative;
+    }
+    .wiki-callout::before {
+      content: "!";
+      position: absolute;
+      top: -15px;
+      left: -15px;
+      background: var(--coral-red);
+      color: #fff;
+      font-family: var(--font-mono);
+      font-weight: bold;
+      width: 30px;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid var(--near-black);
+    }
+  </style>
+</head>
+<body>
+  
+  <header class="wiki-header">
+    <div class="header-logo">
+      <a href="/">&larr; Back to the Board</a>
+    </div>
+    <div class="header-search">
+      <input type="text" placeholder="Search the Wiki (CMD+K)...">
+    </div>
+  </header>
+
+  <aside class="wiki-sidebar">
+    <h3>Governance</h3>
+    <ul>
+      <li><a href="#" class="active">Community PRD</a></li>
+      <li><a href="#">Evidence Registry</a></li>
+      <li><a href="#">AOT Agent Protocol</a></li>
+    </ul>
+    
+    <h3 style="margin-top: 2rem;">Guides</h3>
+    <ul>
+      <li><a href="#">START HERE</a></li>
+      <li><a href="#">Stranger Guide</a></li>
+      <li><a href="#">Quality & Standards</a></li>
+    </ul>
+  </aside>
+
+  <main class="wiki-main">
+    <h1>Community PRD</h1>
+    <p>This document governs the CURATIONS.DEV Vibe Coding Community. It outlines the product contract, our core loop, permission boundaries, and visual aesthetics.</p>
+    
+    <div class="wiki-callout">
+      <p style="margin: 0; font-family: var(--font-sans); font-weight: 500;">
+        <strong>Authority:</strong> On merge, this document is the governing product contract for CURATIONS.DEV. It controls product purpose, the canonical social object, and public information architecture.
+      </p>
+    </div>
+
+    <h2>1. The Product Contract</h2>
+    <p>CURATIONS.DEV is a conversation-first Vibe Coding community where a builder shares a public GitHub Project and working plan, asks a human question, receives human and explicitly requested AI guidance, chooses what to use, and returns with a stronger plan or Project revision.</p>
+
+    <pre><code>// The overarching goal
+public Project + versioned working plan + human question
+  -> human and disclosed AI feedback
+  -> matched, source-linked artifacts</code></pre>
+
+    <h2>2. Visual Oracle</h2>
+    <p>We embrace a mix of editorial precision and brutalist architecture. We use <code>Instrument Serif</code> for massive, print-like headings, supported by <code>Inter</code> for readability, enclosed within unforgiving <code>3px</code> solid borders and offset shadows.</p>
+  </main>
+
+</body>
+</html>
