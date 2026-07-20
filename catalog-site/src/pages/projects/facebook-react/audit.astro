@@ -1,0 +1,80 @@
+---
+import WikiLayout from '../../../layouts/WikiLayout.astro';
+import WikiCallout from '../../../components/WikiCallout.astro';
+---
+
+<WikiLayout title="PRD Audit: Facebook React">
+  <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid var(--near-black); padding-bottom: 1rem; margin-bottom: 2rem;">
+    <div>
+      <p style="font-family: var(--font-mono); font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--coral-red); font-weight: bold;">MOCK PRD AUDIT // EXAMPLE</p>
+      <h1 style="margin: 0; border: none; padding: 0;">Lightweight CRM for Venues</h1>
+      <p style="font-family: var(--font-mono); margin-top: 0.5rem;">Submitted by @wyattstephens • 2 hours ago</p>
+    </div>
+  </div>
+
+  <p style="font-size: 1.2rem; font-family: var(--font-editorial);">This is an execution and verification report. We evaluated your repository and working plan against community trends, modern vibe-coding constraints, and architectural viability.</p>
+
+  <!-- The 4 Core Vitals (The "PageSpeed" style circles) -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin: 3rem 0;">
+    
+    <!-- Score 1: Viability -->
+    <div style="border: 2px solid var(--near-black); padding: 1.5rem; text-align: center; box-shadow: var(--shadow-sm); background: #fff;">
+      <h3 style="font-family: var(--font-mono); margin-top: 0; color: var(--editorial-ink);">VIABILITY</h3>
+      <div style="font-size: 3.5rem; font-family: var(--font-editorial); font-weight: bold; color: var(--coral-red);">78</div>
+      <p style="font-size: 0.85rem; margin-bottom: 0;">Market Need & Moat</p>
+    </div>
+
+    <!-- Score 2: Stack & Skills -->
+    <div style="border: 2px solid var(--near-black); padding: 1.5rem; text-align: center; box-shadow: var(--shadow-sm); background: #fff;">
+      <h3 style="font-family: var(--font-mono); margin-top: 0; color: var(--editorial-ink);">STACK & SKILLS</h3>
+      <div style="font-size: 3.5rem; font-family: var(--font-editorial); font-weight: bold;">92</div>
+      <p style="font-size: 0.85rem; margin-bottom: 0;">Tooling & Agent Workflow</p>
+    </div>
+
+    <!-- Score 3: Resilience -->
+    <div style="border: 2px solid var(--near-black); padding: 1.5rem; text-align: center; box-shadow: var(--shadow-sm); background: #fff;">
+      <h3 style="font-family: var(--font-mono); margin-top: 0; color: var(--editorial-ink);">RESILIENCE</h3>
+      <div style="font-size: 3.5rem; font-family: var(--font-editorial); font-weight: bold; color: var(--coral-red);">45</div>
+      <p style="font-size: 0.85rem; margin-bottom: 0;">Edge Cases & Failure States</p>
+    </div>
+
+    <!-- Score 4: Community -->
+    <div style="border: 2px solid var(--near-black); padding: 1.5rem; text-align: center; box-shadow: var(--shadow-sm); background: #fff;">
+      <h3 style="font-family: var(--font-mono); margin-top: 0; color: var(--editorial-ink);">COMMUNITY</h3>
+      <div style="font-size: 3.5rem; font-family: var(--font-editorial); font-weight: bold;">88</div>
+      <p style="font-size: 0.85rem; margin-bottom: 0;">Trend Alignment</p>
+    </div>
+  </div>
+
+  <h2>1. Viability: Is there a Moat?</h2>
+  <p><strong>The Good:</strong> Independent venues are massively underserved by generic SaaS tools like Salesforce. Your focus on lightweight onboarding is a strong wedge.</p>
+  <p><strong>The Ducky Critique:</strong> Your moat is thin. If a competitor clones your UI with an AI agent in one weekend, what keeps your users? You need a proprietary data loop or community feature to lock them in. (<em>See Community Trend: 64% of successful CRMs submitted this month leverage local-first data ownership.</em>)</p>
+
+  <h2>2. Stack & Skills: Are you missing anything?</h2>
+  <p>Your PRD indicates you are using Next.js and Supabase. That is the 95th percentile stack for this category. You are in excellent company.</p>
+  <WikiCallout title="Missing Skill Detected">
+    You have not defined a <strong>Schema-First Planning</strong> skill. Vibe coding a CRM without defining the exact database schemas first will result in agents hallucinating relationships between `Venues` and `Events`. Add a strict `schemas/` folder before generating code.
+  </WikiCallout>
+
+  <h2>3. Resilience: Where does this break?</h2>
+  <p>You have heavily designed the "Happy Path" where a venue manager signs up seamlessly. However, your resilience score is a 45 because your PRD lacks explicit recovery instructions.</p>
+  <pre><code>// Missing in your PRD:
+What happens when the venue's Stripe account is unverified?
+What happens when an AI agent deletes a user by mistake?
+Do you have a soft-delete fallback?</code></pre>
+
+  <!-- The Unlockable Layer UI -->
+  <div style="margin-top: 4rem; padding: 2rem; background: var(--near-black); color: var(--seasalt-white); border: 2px solid var(--near-black); box-shadow: var(--shadow-md); position: relative;">
+    <div style="position: absolute; top: -15px; right: 20px; background: var(--neon-yellow); color: var(--near-black); font-family: var(--font-mono); font-weight: bold; padding: 0.2rem 0.8rem; border: 2px solid var(--near-black);">LOCKED: MACRO TRENDS</div>
+    <h2 style="color: var(--seasalt-white); border-bottom-color: var(--seasalt-white); margin-top: 0;">Ready for the next layer?</h2>
+    <p style="font-size: 1.1rem; max-width: 80%;">You have the baseline execution report. Want to see exactly how your CRM architecture compares against the top 10 most successful projects submitted this month? Want the full AI Delegation breakdown?</p>
+    <a href="/submit/project" style="display: inline-block; background: var(--seasalt-white); color: var(--near-black); padding: 0.8rem 1.5rem; font-family: var(--font-mono); font-weight: bold; text-decoration: none; border: 2px solid var(--seasalt-white); margin-top: 1rem;">
+      [ Submit a revision in 14 days to unlock ]
+    </a>
+  </div>
+
+  <p style="margin-top: 3rem; font-family: var(--font-mono); font-size: 0.85rem; color: #666;">
+    <a href="#" style="color: inherit; text-decoration: underline;">Curious how our agents actually score PRDs under the hood? Read the technical rubric here.</a>
+  </p>
+
+</WikiLayout>
