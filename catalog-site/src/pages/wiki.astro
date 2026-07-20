@@ -1,16 +1,15 @@
 ---
 import WikiLayout from '../layouts/WikiLayout.astro';
+import WikiCallout from '../components/WikiCallout.astro';
 ---
 
 <WikiLayout title="Community PRD">
   <h1>Community PRD</h1>
   <p>This document governs the CURATIONS.DEV Vibe Coding Community. It outlines the product contract, our core loop, permission boundaries, and visual aesthetics.</p>
   
-  <div class="wiki-callout">
-    <p style="margin: 0; font-family: var(--font-sans); font-weight: 500;">
-      <strong>Authority:</strong> On merge, this document is the governing product contract for CURATIONS.DEV. It controls product purpose, the canonical social object, and public information architecture.
-    </p>
-  </div>
+  <WikiCallout title="Authority">
+    On merge, this document is the governing product contract for CURATIONS.DEV. It controls product purpose, the canonical social object, and public information architecture.
+  </WikiCallout>
 
   <h2>1. The Product Contract</h2>
   <p>CURATIONS.DEV is a conversation-first Vibe Coding community where a builder shares a public GitHub Project and working plan, asks a human question, receives human and explicitly requested AI guidance, chooses what to use, and returns with a stronger plan or Project revision.</p>
@@ -21,5 +20,5 @@ public Project + versioned working plan + human question
 -> matched, source-linked artifacts</code></pre>
 
   <h2>2. Visual Oracle</h2>
-  <p>We embrace a mix of editorial precision and brutalist architecture. We use <code>Instrument Serif</code> for massive, print-like headings, supported by <code>Inter</code> for readability, enclosed within unforgiving <code>3px</code> solid borders and offset shadows.</p>
+  <p>We embrace a mix of editorial precision and brutalist architecture. We use <code>Instrument Serif</code> for massive, print-like headings, supported by <code>Inter</code> for readability, enclosed within unforgiving <code>2px</code> solid borders and offset shadows.</p>
 </WikiLayout>

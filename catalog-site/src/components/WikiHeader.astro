@@ -1,0 +1,15 @@
+---
+interface Props {
+  backLink?: string;
+  backText?: string;
+}
+const { backLink = "/", backText = "← Back to the Board" } = Astro.props;
+---
+<header class="wiki-header">
+  <div class="header-logo">
+    <a href={backLink}>{backText}</a>
+  </div>
+  <div class="header-search">
+    <input type="text" placeholder="Search the Wiki (CMD+K)...">
+  </div>
+</header>

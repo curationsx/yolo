@@ -1,0 +1,11 @@
+---
+interface Props {
+  title?: string;
+}
+const { title = "Authority" } = Astro.props;
+---
+<div class="wiki-callout">
+  <p style="margin: 0; font-family: var(--font-sans); font-weight: 500;">
+    <strong>{title}:</strong> <slot />
+  </p>
+</div>
