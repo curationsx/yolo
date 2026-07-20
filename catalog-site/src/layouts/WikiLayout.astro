@@ -1,9 +1,19 @@
+---
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+}
+
+const { title } = Astro.props;
+const currentPath = Astro.url.pathname;
+---
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Wiki Design Oracle | CURATIONS.DEV</title>
+  <title>{title} | CURATIONS.DEV</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..900;1,9..144,400..900&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -23,9 +33,9 @@
       --font-editorial: 'Instrument Serif', 'Fraunces', serif;
       --font-mono: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
       
-      --shadow-sm: 3px 3px 0 var(--near-black);
-      --shadow-md: 6px 6px 0 var(--near-black);
-      --shadow-lg: 8px 8px 0 var(--near-black);
+      --shadow-sm: 2px 2px 0 var(--near-black);
+      --shadow-md: 4px 4px 0 var(--near-black);
+      --shadow-lg: 6px 6px 0 var(--near-black);
     }
 
     * {
@@ -49,7 +59,7 @@
       top: 0; left: 0; right: 0;
       height: 60px;
       background: var(--seasalt-white);
-      border-bottom: 3px solid var(--near-black);
+      border-bottom: 2px solid var(--near-black);
       display: flex;
       align-items: center;
       padding: 0 2rem;
@@ -93,7 +103,7 @@
     .wiki-sidebar {
       width: 280px;
       background: #fff;
-      border-right: 3px solid var(--near-black);
+      border-right: 2px solid var(--near-black);
       padding: 80px 1.5rem 2rem 1.5rem;
       position: fixed;
       height: 100vh;
@@ -155,7 +165,7 @@
     .wiki-main h2 {
       font-family: var(--font-display);
       font-size: 2rem;
-      border-bottom: 3px solid var(--near-black);
+      border-bottom: 2px solid var(--near-black);
       padding-bottom: 0.5rem;
       margin-top: 2.5rem;
       margin-bottom: 1.5rem;
@@ -180,7 +190,7 @@
       color: var(--seasalt-white);
       padding: 1.5rem;
       font-family: var(--font-mono);
-      border: 3px solid var(--near-black);
+      border: 2px solid var(--near-black);
       box-shadow: var(--shadow-md);
       overflow-x: auto;
       margin-bottom: 2rem;
@@ -196,7 +206,7 @@
     /* Info Block */
     .wiki-callout {
       background: #fff;
-      border: 3px solid var(--near-black);
+      border: 2px solid var(--near-black);
       box-shadow: var(--shadow-md);
       padding: 1.5rem;
       margin: 2rem 0;
@@ -234,7 +244,7 @@
   <aside class="wiki-sidebar">
     <h3>Governance</h3>
     <ul>
-      <li><a href="#" class="active">Community PRD</a></li>
+      <li><a href="/wiki" class={currentPath === '/wiki' ? 'active' : ''}>Community PRD</a></li>
       <li><a href="#">Evidence Registry</a></li>
       <li><a href="#">AOT Agent Protocol</a></li>
     </ul>
@@ -248,25 +258,7 @@
   </aside>
 
   <main class="wiki-main">
-    <h1>Community PRD</h1>
-    <p>This document governs the CURATIONS.DEV Vibe Coding Community. It outlines the product contract, our core loop, permission boundaries, and visual aesthetics.</p>
-    
-    <div class="wiki-callout">
-      <p style="margin: 0; font-family: var(--font-sans); font-weight: 500;">
-        <strong>Authority:</strong> On merge, this document is the governing product contract for CURATIONS.DEV. It controls product purpose, the canonical social object, and public information architecture.
-      </p>
-    </div>
-
-    <h2>1. The Product Contract</h2>
-    <p>CURATIONS.DEV is a conversation-first Vibe Coding community where a builder shares a public GitHub Project and working plan, asks a human question, receives human and explicitly requested AI guidance, chooses what to use, and returns with a stronger plan or Project revision.</p>
-
-    <pre><code>// The overarching goal
-public Project + versioned working plan + human question
-  -> human and disclosed AI feedback
-  -> matched, source-linked artifacts</code></pre>
-
-    <h2>2. Visual Oracle</h2>
-    <p>We embrace a mix of editorial precision and brutalist architecture. We use <code>Instrument Serif</code> for massive, print-like headings, supported by <code>Inter</code> for readability, enclosed within unforgiving <code>3px</code> solid borders and offset shadows.</p>
+    <slot />
   </main>
 
 </body>
