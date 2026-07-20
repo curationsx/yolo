@@ -3,6 +3,8 @@
 Now / Next / Later. No dates, no promises - direction, honestly stated. Items
 move only when someone does the work.
 
+> **Operational Note (2026-07-20):** Day-to-day execution and progress tracking is managed via the **GitHub Project Board**. All new tasks, features, and bugs must be filed as GitHub Issues and routed through the Project Board. This document (`ROADMAP.md`) serves as the directional, high-level compass and v0.1 cut-list.
+
 The governing delivery order is the
 [CURATIONS.DEV Vibe Coding Community PRD](PRD-curations-community.md). The
 [Project Evidence Registry PRD](PRD-project-evidence-registry.md) governs its

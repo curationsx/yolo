@@ -115,6 +115,7 @@ engineering skills:
    symptom without evidence.
 5. Ship gate: verify preview behavior and source-control state before rollout.
    Agents may prepare and recommend; they do not auto-merge.
+6. Tracking gate: All work must begin as a GitHub Issue and be associated with the official GitHub Project Board for roadmap tracking. Agents and humans must link PRs to Issues using keywords (e.g., `fixes #123`) to ensure the Project Board automated tracking updates upon commit, push, and merge.
 
 Do not adopt external memory systems, browser-cookie import, opaque telemetry, or
 automated merge/deploy workflows without explicit per-session approval.
