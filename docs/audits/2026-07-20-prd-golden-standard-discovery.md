@@ -32,3 +32,43 @@ The academic terms are too heavy for a Vibe Coding dashboard. We are currently i
 
 ## Next Steps
 We are pausing to sleep on these concepts. The goal is not to force a rigid 4-pillar structure if 5 or 6 pillars serve the human and the AI better. We will refine these concepts (Safety, Blueprint, AI Readability, etc.) into the final `prd-audit.schema.json` upon resuming the session.
+
+---
+
+## Morning Session: 2026-07-22 - Corpus Research & Systemic Design
+
+### Wyatt's Core Observations
+
+**On Data Sources:**
+- Reverse engineer public GitHub repos as the training corpus
+- Source by: Stars, Recently Updated, Tech Stack presence, SKILLS.md (present vs absent), AI/LLM workflow mentions (present vs absent)
+- Academic literature: arxiv.org, Google Scholar on GitHub repo ecosystems
+
+**On Conditional Audits:**
+- Not every repo needs SEO/AI Discovery. A private internal tool, an administrative CLI, a single React component — these must not be penalized on irrelevant metrics
+- Our agents must understand *when* a bucket applies vs when it would actively harm the end-user's audit score unfairly
+
+**On The Spectrum:**
+- Meh → OK → Good → Great → Amazing → Moonshot
+- Must apply to Human x AI workflows AND pure-code repos
+
+**⚠️ CRITICAL: Agent Legal/Moral Protocol**
+- What happens when an agent encounters illegal content in a public repo?
+- What happens when an agent encounters accidentally-public private data (medical records)?
+- Agents must disengage cleanly, avoid hallucination about content, and protect CURATIONS from third-party liability
+- No association. No continuation. No flagging that could trigger LLM monitoring red alerts on our infrastructure
+
+**On The Moat:**
+- There is NO live product that aggregates public repo data through boolean matrices, categorical libraries, and AI Communication layers to identify PRD gaps
+- We surface things builders cannot see from inside their own repo
+- The Product = Real-time cross-repo intelligence + individual progress tracking
+
+**On Two End-User Types:**
+1. The GitHub SSO submitter: Wants progress tracking, skill discovery, personal audit history
+2. The anonymous observer: No GitHub, no submission. Wants to see what people are building, what stacks are popular, what categories are trending
+
+### Open Research Questions (For NotebookLM)
+- Is there existing academic measurement of "Human x AI workflow quality" in software engineering?
+- What are the established GitHub ecosystem metrics researchers use to measure repo health?
+- What is the current state of adversarial content detection in public code repositories?
+- Does any existing framework address conditional audit scoring (i.e., skipping irrelevant categories)?
