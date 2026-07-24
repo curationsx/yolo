@@ -154,7 +154,7 @@ jobs:
           PYEOF
 
       - name: Upload run-record artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: hygiene-run-record
           path: run-record.json
