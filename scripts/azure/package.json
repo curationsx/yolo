@@ -9,7 +9,7 @@
     "test:node": "node --test test/*.test.mjs"
   },
   "dependencies": {
-    "@azure/cosmos": "^4.9.3",
+    "@azure/cosmos": "^4.10.0",
     "@azure/identity": "^4.13.1"
   }
 }
