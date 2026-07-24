@@ -39,7 +39,7 @@ jobs:
     steps:
       - name: Update Human Actions advisory comment
         # API-only workflow: do not check out or execute untrusted PR code.
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const marker = "<!-- curations-human-actions -->";
