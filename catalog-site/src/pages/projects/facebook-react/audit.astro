@@ -1,80 +1,183 @@
 ---
 import WikiLayout from '../../../layouts/WikiLayout.astro';
 import WikiCallout from '../../../components/WikiCallout.astro';
+
+// MOCK. Illustrative only — no real audit has been run against this subject.
+//
+// This page is the human face of schemas/prd-audit.schema.json (v0.1.0) and
+// must stay in step with it. Two properties are deliberately visible here
+// because they are the product, not decoration:
+//
+//   1. Conditional applicability. DELEGATION is rendered as NOT SCORED, with a
+//      reason. A pillar that does not apply is excluded from the composite,
+//      never scored zero. The schema forbids a not_applicable pillar from
+//      carrying a score at all.
+//   2. Community is NOT a pillar. The 2026-07-20 Golden Standard session
+//      established that a sensitive medical pipeline or a forensic cold-case
+//      tool must not be scored on community. It appears below as non-scoring
+//      cross-repository context and does not move the number.
+//
+// The composite arithmetic is shown on the page on purpose: the schema requires
+// pillars_scored and pillars_excluded so a reader can rebuild the number and
+// argue with the exclusions instead of trusting the headline.
+
+const pillars = [
+  {
+    key: 'VIABILITY',
+    caption: 'Reason to exist, and a moat',
+    score: 78,
+    band: 'great',
+  },
+  {
+    key: 'BLUEPRINT',
+    caption: 'Can an agent build this without guessing?',
+    score: 64,
+    band: 'good',
+  },
+  {
+    key: 'RESILIENCE',
+    caption: 'What happens when it breaks',
+    score: 45,
+    band: 'ok',
+  },
+  {
+    key: 'SAFETY',
+    caption: 'Privacy by design, agent containment',
+    score: 38,
+    band: 'meh',
+  },
+  {
+    key: 'DELEGATION',
+    caption: 'Human x AI: who decides, who executes',
+    score: null,
+    band: null,
+    rationale:
+      'Your PRD states no agent or AI workflow, so there is no delegation contract to audit yet. This is not a deduction.',
+  },
+  {
+    key: 'LEGIBILITY',
+    caption: 'Can a model read this without hallucinating?',
+    score: 82,
+    band: 'great',
+  },
+];
+
+const scored = pillars.filter((pillar) => pillar.score !== null);
+const excluded = pillars.filter((pillar) => pillar.score === null);
+const composite = Math.round(
+  scored.reduce((total, pillar) => total + pillar.score, 0) / scored.length,
+);
+
+// Deterministic bands, so a band is never a matter of opinion.
+// Mirrors the $defs.band description in schemas/prd-audit.schema.json.
+const bandFor = (score) =>
+  score >= 95 ? 'moonshot'
+  : score >= 85 ? 'amazing'
+  : score >= 70 ? 'great'
+  : score >= 55 ? 'good'
+  : score >= 40 ? 'ok'
+  : 'meh';
+
+const weak = (score) => score !== null && score < 55;
+
+const delegation = pillars.find((pillar) => pillar.key === 'DELEGATION');
 ---
 
-<WikiLayout title="PRD Audit: Facebook React">
+<WikiLayout title="PRD Audit: Lightweight CRM for Venues">
   <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid var(--near-black); padding-bottom: 1rem; margin-bottom: 2rem;">
     <div>
       <p style="font-family: var(--font-mono); font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--coral-red); font-weight: bold;">MOCK PRD AUDIT // EXAMPLE</p>
       <h1 style="margin: 0; border: none; padding: 0;">Lightweight CRM for Venues</h1>
-      <p style="font-family: var(--font-mono); margin-top: 0.5rem;">Submitted by @wyattstephens • 2 hours ago</p>
+      <p style="font-family: var(--font-mono); margin-top: 0.5rem;">Submitted by @wyattstephens &bull; 2 hours ago &bull; ruleset 0.1.0 &bull; Tier A</p>
     </div>
   </div>
 
-  <p style="font-size: 1.2rem; font-family: var(--font-editorial);">This is an execution and verification report. We evaluated your repository and working plan against community trends, modern vibe-coding constraints, and architectural viability.</p>
+  <p style="font-size: 1.2rem; font-family: var(--font-editorial);">This is an execution and verification report. We read your repository and your working plan, and we tell you what you cannot see from inside your own repo. Every number below is built from findings you can open and argue with.</p>
 
-  <!-- The 4 Core Vitals (The "PageSpeed" style circles) -->
+  <!-- Six pillars. One is deliberately not scored. -->
   <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin: 3rem 0;">
-    
-    <!-- Score 1: Viability -->
-    <div style="border: 2px solid var(--near-black); padding: 1.5rem; text-align: center; box-shadow: var(--shadow-sm); background: #fff;">
-      <h3 style="font-family: var(--font-mono); margin-top: 0; color: var(--editorial-ink);">VIABILITY</h3>
-      <div style="font-size: 3.5rem; font-family: var(--font-editorial); font-weight: bold; color: var(--coral-red);">78</div>
-      <p style="font-size: 0.85rem; margin-bottom: 0;">Market Need & Moat</p>
-    </div>
-
-    <!-- Score 2: Stack & Skills -->
-    <div style="border: 2px solid var(--near-black); padding: 1.5rem; text-align: center; box-shadow: var(--shadow-sm); background: #fff;">
-      <h3 style="font-family: var(--font-mono); margin-top: 0; color: var(--editorial-ink);">STACK & SKILLS</h3>
-      <div style="font-size: 3.5rem; font-family: var(--font-editorial); font-weight: bold;">92</div>
-      <p style="font-size: 0.85rem; margin-bottom: 0;">Tooling & Agent Workflow</p>
-    </div>
-
-    <!-- Score 3: Resilience -->
-    <div style="border: 2px solid var(--near-black); padding: 1.5rem; text-align: center; box-shadow: var(--shadow-sm); background: #fff;">
-      <h3 style="font-family: var(--font-mono); margin-top: 0; color: var(--editorial-ink);">RESILIENCE</h3>
-      <div style="font-size: 3.5rem; font-family: var(--font-editorial); font-weight: bold; color: var(--coral-red);">45</div>
-      <p style="font-size: 0.85rem; margin-bottom: 0;">Edge Cases & Failure States</p>
-    </div>
-
-    <!-- Score 4: Community -->
-    <div style="border: 2px solid var(--near-black); padding: 1.5rem; text-align: center; box-shadow: var(--shadow-sm); background: #fff;">
-      <h3 style="font-family: var(--font-mono); margin-top: 0; color: var(--editorial-ink);">COMMUNITY</h3>
-      <div style="font-size: 3.5rem; font-family: var(--font-editorial); font-weight: bold;">88</div>
-      <p style="font-size: 0.85rem; margin-bottom: 0;">Trend Alignment</p>
-    </div>
+    {pillars.map((pillar) => (
+      <div style={`border: 2px solid var(--near-black); padding: 1.5rem; text-align: center; box-shadow: var(--shadow-sm); background: ${pillar.score === null ? 'transparent' : '#fff'};`}>
+        <h3 style="font-family: var(--font-mono); margin-top: 0; color: var(--editorial-ink); font-size: 0.95rem;">{pillar.key}</h3>
+        {pillar.score === null ? (
+          <div style="font-family: var(--font-mono); font-size: 0.95rem; font-weight: bold; padding: 1.1rem 0; line-height: 1.3;">NOT<br />SCORED</div>
+        ) : (
+          <div style={`font-size: 3.5rem; font-family: var(--font-editorial); font-weight: bold; ${weak(pillar.score) ? 'color: var(--coral-red);' : ''}`}>{pillar.score}</div>
+        )}
+        <p style="font-size: 0.85rem; margin-bottom: 0;">{pillar.caption}</p>
+        {pillar.band && (
+          <p style="font-family: var(--font-mono); font-size: 0.75rem; margin: 0.4rem 0 0; text-transform: uppercase; letter-spacing: 0.05em;">{pillar.band}</p>
+        )}
+      </div>
+    ))}
   </div>
 
-  <h2>1. Viability: Is there a Moat?</h2>
-  <p><strong>The Good:</strong> Independent venues are massively underserved by generic SaaS tools like Salesforce. Your focus on lightweight onboarding is a strong wedge.</p>
-  <p><strong>The Ducky Critique:</strong> Your moat is thin. If a competitor clones your UI with an AI agent in one weekend, what keeps your users? You need a proprietary data loop or community feature to lock them in. (<em>See Community Trend: 64% of successful CRMs submitted this month leverage local-first data ownership.</em>)</p>
+  <!-- The arithmetic, shown rather than asserted. -->
+  <div style="border: 2px solid var(--near-black); padding: 1.5rem; box-shadow: var(--shadow-sm); background: #fff; margin-bottom: 3rem;">
+    <p style="font-family: var(--font-mono); font-size: 0.85rem; margin: 0 0 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">Composite</p>
+    <p style="margin: 0; font-size: 1.1rem;">
+      <strong style="font-family: var(--font-editorial); font-size: 2rem;">{composite}</strong>
+      <span style="font-family: var(--font-mono); text-transform: uppercase; margin-left: 0.5rem;">{bandFor(composite)}</span>
+    </p>
+    <p style="font-family: var(--font-mono); font-size: 0.85rem; margin: 1rem 0 0; line-height: 1.6;">
+      Averaged over {scored.length} applicable pillars: {scored.map((pillar) => `${pillar.key.toLowerCase()} ${pillar.score}`).join(' + ')}.<br />
+      Excluded, not zeroed: {excluded.map((pillar) => pillar.key.toLowerCase()).join(', ')}.
+    </p>
+    <p style="font-size: 0.9rem; margin: 1rem 0 0;">If you think an exclusion is wrong, dispute it. The excluded pillars are named so you can.</p>
+  </div>
 
-  <h2>2. Stack & Skills: Are you missing anything?</h2>
-  <p>Your PRD indicates you are using Next.js and Supabase. That is the 95th percentile stack for this category. You are in excellent company.</p>
-  <WikiCallout title="Missing Skill Detected">
-    You have not defined a <strong>Schema-First Planning</strong> skill. Vibe coding a CRM without defining the exact database schemas first will result in agents hallucinating relationships between `Venues` and `Events`. Add a strict `schemas/` folder before generating code.
+  <h2>1. Viability: is there a moat?</h2>
+  <p><strong>The Good:</strong> Independent venues are badly served by generic SaaS. Lightweight onboarding is a real wedge.</p>
+  <p><strong>The Ducky Critique:</strong> Your moat is thin. If someone clones your UI with an agent in one weekend, what keeps your users? You need a proprietary data loop or a community feature to hold them.</p>
+
+  <h2>2. Blueprint: can an agent build this without guessing?</h2>
+  <p>Your PRD names a <code>Venues</code> entity and an <code>Events</code> entity but never states the relationship between them. That single missing sentence is where agents start inventing.</p>
+  <WikiCallout title="Missing skill detected">
+    You have not defined a <strong>Schema-First Planning</strong> skill. Vibe coding a CRM without fixing the schemas first will produce hallucinated relationships between <code>Venues</code> and <code>Events</code>. Add a strict <code>schemas/</code> folder before generating code.
   </WikiCallout>
 
-  <h2>3. Resilience: Where does this break?</h2>
-  <p>You have heavily designed the "Happy Path" where a venue manager signs up seamlessly. However, your resilience score is a 45 because your PRD lacks explicit recovery instructions.</p>
-  <pre><code>// Missing in your PRD:
+  <h2>3. Resilience: where does this break?</h2>
+  <p>You have designed the happy path thoroughly. You have not written down a single recovery instruction.</p>
+  <pre><code>{`// Missing in your PRD:
 What happens when the venue's Stripe account is unverified?
-What happens when an AI agent deletes a user by mistake?
-Do you have a soft-delete fallback?</code></pre>
+What happens when an agent deletes a user by mistake?
+Is there a soft-delete fallback?`}</code></pre>
+
+  <h2>4. Safety: your weakest pillar, and the one that matters most</h2>
+  <p>Your PRD gives an agent write access to customer records and never states a boundary. Safety is not a compliance checkbox here. It is the pillar that says whether anyone should trust this with real people's data.</p>
+  <pre><code>{`// Missing in your PRD:
+Which tables may an agent write to, and which are read-only?
+What personal data does a venue contact record actually hold?
+What must an agent never read? (.env, exports, billing history)
+Who reviews an agent's destructive action before it lands?`}</code></pre>
+
+  <h2>5. Delegation: not scored, and here is why</h2>
+  <p style="border-left: 4px solid var(--near-black); padding-left: 1rem;">{delegation.rationale}</p>
+  <p>Not every project is a Human x AI project, and we will not invent a deficiency to fill a column. When you add an agent workflow, this pillar switches on and starts counting.</p>
+
+  <h2>6. Legibility: can a model read this?</h2>
+  <p>Strong. Your headings are consistent, your terms are defined once, and your references resolve. This is the pillar most invisible from inside your own repository, and you are ahead on it.</p>
+
+  <!-- Non-scoring. Community lives here, not in the pillars. -->
+  <div style="border: 2px solid var(--near-black); padding: 1.5rem; box-shadow: var(--shadow-sm); background: #fff; margin: 3rem 0;">
+    <p style="font-family: var(--font-mono); font-size: 0.85rem; margin: 0 0 0.75rem; text-transform: uppercase; letter-spacing: 0.05em;">Cross-repository context &mdash; does not affect your score</p>
+    <p style="margin: 0 0 0.75rem;">64% of comparable projects in this cohort declare their schemas before generating code. You do not, yet.</p>
+    <p style="font-family: var(--font-mono); font-size: 0.8rem; margin: 0;">cohort of 12 &bull; docs/audits/cohort-ledger.json#2026-08</p>
+    <p style="font-size: 0.9rem; margin: 1rem 0 0;">Popularity is not quality. What other people do is context for your judgement, never a deduction from your score.</p>
+  </div>
 
   <!-- The Unlockable Layer UI -->
   <div style="margin-top: 4rem; padding: 2rem; background: var(--near-black); color: var(--seasalt-white); border: 2px solid var(--near-black); box-shadow: var(--shadow-md); position: relative;">
     <div style="position: absolute; top: -15px; right: 20px; background: var(--neon-yellow); color: var(--near-black); font-family: var(--font-mono); font-weight: bold; padding: 0.2rem 0.8rem; border: 2px solid var(--near-black);">LOCKED: MACRO TRENDS</div>
     <h2 style="color: var(--seasalt-white); border-bottom-color: var(--seasalt-white); margin-top: 0;">Ready for the next layer?</h2>
-    <p style="font-size: 1.1rem; max-width: 80%;">You have the baseline execution report. Want to see exactly how your CRM architecture compares against the top 10 most successful projects submitted this month? Want the full AI Delegation breakdown?</p>
+    <p style="font-size: 1.1rem; max-width: 80%;">You have the baseline execution report. Want to see how your architecture compares against the strongest projects submitted this month, and the full delegation breakdown once you add an agent workflow?</p>
     <a href="/submit/project" style="display: inline-block; background: var(--seasalt-white); color: var(--near-black); padding: 0.8rem 1.5rem; font-family: var(--font-mono); font-weight: bold; text-decoration: none; border: 2px solid var(--seasalt-white); margin-top: 1rem;">
       [ Submit a revision in 14 days to unlock ]
     </a>
   </div>
 
   <p style="margin-top: 3rem; font-family: var(--font-mono); font-size: 0.85rem; color: #666;">
-    <a href="#" style="color: inherit; text-decoration: underline;">Curious how our agents actually score PRDs under the hood? Read the technical rubric here.</a>
+    <a href="/methodology/" style="color: inherit; text-decoration: underline;">Curious how our agents actually score PRDs under the hood? Read the technical rubric.</a>
   </p>
 
 </WikiLayout>

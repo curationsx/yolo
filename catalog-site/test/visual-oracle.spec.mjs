@@ -158,6 +158,7 @@ test.describe('No horizontal scroll (responsive sweep)', () => {
       '/',
       '/community/new/',
       '/projects/new/',
+      '/projects/facebook-react/audit/',
       '/showcase/',
       '/showcase/member-profiles-and-prd-showcase/',
       '/showcase/new/',
