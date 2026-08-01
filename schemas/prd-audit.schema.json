@@ -1,0 +1,310 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/curationsx/yolo/schemas/prd-audit.schema.json",
+  "title": "PRD audit report",
+  "description": "Validates PRD audit reports emitted by Curations.DEV. Schema version 0.1.0 — the first cut of the Golden Standard defined in docs/audits/2026-07-20-prd-golden-standard-discovery.md. Six pillars, each independently applicable, each scored only from evidence. Two properties are load-bearing and deliberate. First, conditional applicability: a pillar that does not apply to a subject is EXCLUDED from the composite, never scored zero, so an internal admin CLI is not punished for having no market and a forensic tool is not punished for having no community. Second, disengagement: if an agent encounters restricted content, apparent personal data, or apparent credentials, it terminates the audit and records a reason code ONLY. The disengagement object has no free-text field by construction, so a report cannot describe, quote, characterise, or flag what was seen.",
+  "type": "object",
+  "required": [
+    "report_id",
+    "schema_version",
+    "subject",
+    "tier",
+    "ruleset_version",
+    "created_at",
+    "pillars",
+    "composite",
+    "comparison",
+    "disengagement"
+  ],
+  "additionalProperties": false,
+
+  "$defs": {
+    "band": {
+      "description": "The public spectrum. Deterministic bands over the 0-100 pillar score, so a band is never a matter of opinion: meh 0-39, ok 40-54, good 55-69, great 70-84, amazing 85-94, moonshot 95-100. Moonshot is intended to be rare.",
+      "type": "string",
+      "enum": ["meh", "ok", "good", "great", "amazing", "moonshot"]
+    },
+
+    "finding": {
+      "description": "One evidence-bound observation. Shape is intentionally identical to the finding in run-record.schema.json so a deterministic Tier A check and a generative Tier B critique are equally citable and equally disputable.",
+      "type": "object",
+      "required": ["check_id", "passed", "artifact", "confidence", "detail", "severity"],
+      "additionalProperties": false,
+      "properties": {
+        "check_id": { "type": "string", "minLength": 1 },
+        "passed": { "type": "boolean" },
+        "artifact": {
+          "description": "Path, anchor, or reference the reader can open to verify this finding. A finding with no artifact is an opinion, not evidence.",
+          "type": "string",
+          "minLength": 1
+        },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "detail": { "type": "string", "minLength": 1 },
+        "severity": { "type": "string", "enum": ["info", "warn", "fail"] }
+      }
+    },
+
+    "pillar": {
+      "description": "One audit pillar. When applicability is 'not_applicable' the pillar carries a rationale and nothing else: no score, no band, no findings. That is the whole point — silence is the correct output for an irrelevant metric, and a zero would be a lie.",
+      "type": "object",
+      "required": ["applicability"],
+      "additionalProperties": false,
+      "properties": {
+        "applicability": {
+          "type": "string",
+          "enum": ["applies", "not_applicable"]
+        },
+        "rationale": {
+          "description": "Required when not_applicable. Plain language, addressed to the builder, explaining why this pillar was skipped rather than failed.",
+          "type": "string",
+          "minLength": 1
+        },
+        "score": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "band": { "$ref": "#/$defs/band" },
+        "findings": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/finding" },
+          "minItems": 1
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "applicability": { "const": "applies" } },
+            "required": ["applicability"]
+          },
+          "then": {
+            "required": ["score", "band", "findings"],
+            "not": { "required": ["rationale"] }
+          }
+        },
+        {
+          "if": {
+            "properties": { "applicability": { "const": "not_applicable" } },
+            "required": ["applicability"]
+          },
+          "then": {
+            "required": ["rationale"],
+            "not": { "anyOf": [
+              { "required": ["score"] },
+              { "required": ["band"] },
+              { "required": ["findings"] }
+            ] }
+          }
+        }
+      ]
+    }
+  },
+
+  "properties": {
+    "report_id": { "type": "string", "format": "uuid" },
+
+    "schema_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+
+    "subject": {
+      "description": "What was audited. Recorded by immutable reference so a report can always be re-derived and disputed against the exact same input.",
+      "type": "object",
+      "required": ["repository", "commit_sha", "prd_paths", "repo_fingerprint"],
+      "additionalProperties": false,
+      "properties": {
+        "repository": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$"
+        },
+        "commit_sha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+        "prd_paths": {
+          "description": "The documents actually read. An empty list is legal and meaningful: it is how the report says 'there was no PRD here', which is itself the finding.",
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "repo_fingerprint": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      }
+    },
+
+    "tier": {
+      "description": "A = deterministic checks the builder can re-run on their own billing. B = generative curation. The tier must be visible because a Tier B claim carries different weight than a Tier A one.",
+      "type": "string",
+      "enum": ["A", "B"]
+    },
+
+    "ruleset_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+
+    "created_at": { "type": "string", "format": "date-time" },
+
+    "pillars": {
+      "description": "Exactly six pillars, always all six keys present, because 'not applicable' is a result that must be shown rather than hidden. Community is deliberately NOT a pillar: the 2026-07-20 discovery session established that a sensitive medical pipeline or a forensic cold-case tool should not be scored on community, so it lives in 'comparison' as non-scoring context instead.",
+      "type": "object",
+      "required": [
+        "viability",
+        "blueprint",
+        "resilience",
+        "safety",
+        "delegation",
+        "legibility"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "viability": {
+          "description": "VIABILITY — is there a reason for this to exist, and does anything protect it? Frequently not applicable: internal tooling, administrative CLIs, single components, and personal utilities have no market and must not be penalised for it.",
+          "$ref": "#/$defs/pillar"
+        },
+        "blueprint": {
+          "description": "BLUEPRINT — technical steering. Can an agent execute this plan without guessing? Are the data shapes, boundaries, and order of work stated? Always applies: a plan that cannot be executed is not a plan.",
+          "$ref": "#/$defs/pillar"
+        },
+        "resilience": {
+          "description": "RESILIENCE — failure determinism. What happens when it breaks? Unverified payment, revoked token, empty state, partial write, an agent deleting the wrong record. Always applies.",
+          "$ref": "#/$defs/pillar"
+        },
+        "safety": {
+          "description": "SAFETY — privacy by design and agentic containment, the academic Constraint Governance and Context Coverage pillar in human language. What may an agent touch, what must it never touch, and what data is it trusted with? Always applies, and is the enterprise-grade moat: it is the pillar that signals digital stewardship.",
+          "$ref": "#/$defs/pillar"
+        },
+        "delegation": {
+          "description": "DELEGATION — the Human x AI contract. Who decides, who executes, who reviews, and are the skills actually assigned? Not applicable to repositories with no stated agent or AI workflow: a pure-code project is not worse for being human-authored.",
+          "$ref": "#/$defs/pillar"
+        },
+        "legibility": {
+          "description": "LEGIBILITY — AI readability. Can a model ingest this document set and act on it without hallucinating? Covers structure, resolvable references, stated vocabulary, and absence of contradiction. Always applies, and is the pillar most invisible from inside your own repository.",
+          "$ref": "#/$defs/pillar"
+        }
+      }
+    },
+
+    "composite": {
+      "description": "The headline number, or null when the audit disengaged. Computed ONLY across applicable pillars. pillars_scored and pillars_excluded are required so a reader can reconstruct the arithmetic and challenge the exclusions rather than trusting the score.",
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["score", "band", "pillars_scored", "pillars_excluded"],
+          "additionalProperties": false,
+          "properties": {
+            "score": { "type": "integer", "minimum": 0, "maximum": 100 },
+            "band": { "$ref": "#/$defs/band" },
+            "pillars_scored": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["viability", "blueprint", "resilience", "safety", "delegation", "legibility"]
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "pillars_excluded": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["viability", "blueprint", "resilience", "safety", "delegation", "legibility"]
+              },
+              "uniqueItems": true
+            }
+          }
+        }
+      ]
+    },
+
+    "comparison": {
+      "description": "Cross-repository context. NON-SCORING by design. This is where 'what everyone else is doing' lives, and it must never move the composite, because popularity is not quality and the roadmap forbids ranking projects as 'best' from counts. Null when no comparable cohort exists.",
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["cohort_ref", "cohort_size", "observations"],
+          "additionalProperties": false,
+          "properties": {
+            "cohort_ref": { "type": "string", "minLength": 1 },
+            "cohort_size": { "type": "integer", "minimum": 1 },
+            "observations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["statement", "artifact"],
+                "additionalProperties": false,
+                "properties": {
+                  "statement": { "type": "string", "minLength": 1 },
+                  "artifact": {
+                    "description": "Reference to the measurement that supports the statement. A comparison without one is a rumour.",
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+
+    "disengagement": {
+      "description": "The legal and moral protocol. Null in the normal case. When an agent encounters restricted content, apparent personal data, or apparent credentials in a public repository it stops, and records ONLY a reason code and a timestamp. There is deliberately no detail, excerpt, description, path, or severity field, and additionalProperties is false, so the shape itself makes it impossible to describe, quote, or flag what was seen. No association, no continuation, no hallucination, no third-party liability.",
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["reason", "disengaged_at"],
+          "additionalProperties": false,
+          "properties": {
+            "reason": {
+              "type": "string",
+              "enum": [
+                "restricted_content",
+                "apparent_personal_data",
+                "apparent_credentials",
+                "access_revoked",
+                "consent_withdrawn",
+                "out_of_scope"
+              ]
+            },
+            "disengaged_at": { "type": "string", "format": "date-time" }
+          }
+        }
+      ]
+    }
+  },
+
+  "allOf": [
+    {
+      "description": "A disengaged audit produces no scores and no comparison. Stopping means stopping.",
+      "if": {
+        "properties": { "disengagement": { "type": "object" } },
+        "required": ["disengagement"]
+      },
+      "then": {
+        "properties": {
+          "composite": { "type": "null" },
+          "comparison": { "type": "null" },
+          "pillars": {
+            "properties": {
+              "viability": { "properties": { "applicability": { "const": "not_applicable" } } },
+              "blueprint": { "properties": { "applicability": { "const": "not_applicable" } } },
+              "resilience": { "properties": { "applicability": { "const": "not_applicable" } } },
+              "safety": { "properties": { "applicability": { "const": "not_applicable" } } },
+              "delegation": { "properties": { "applicability": { "const": "not_applicable" } } },
+              "legibility": { "properties": { "applicability": { "const": "not_applicable" } } }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "A completed audit must produce a composite. A report with neither a composite nor a disengagement is a silent failure, which is the one outcome this contract will not allow.",
+      "if": {
+        "properties": { "disengagement": { "type": "null" } },
+        "required": ["disengagement"]
+      },
+      "then": {
+        "properties": { "composite": { "type": "object" } }
+      }
+    }
+  ]
+}
