@@ -72,3 +72,114 @@ We are pausing to sleep on these concepts. The goal is not to force a rigid 4-pi
 - What are the established GitHub ecosystem metrics researchers use to measure repo health?
 - What is the current state of adversarial content detection in public code repositories?
 - Does any existing framework address conditional audit scoring (i.e., skipping irrelevant categories)?
+
+---
+
+## Resolution: 2026-08-01 - the pillars, decided
+
+**Phase:** Bronze -> Silver (the concepts became a contract)
+**Artifact:** `schemas/prd-audit.schema.json` v0.1.0, with contract tests at
+`scripts/audit/tests/test_prd_audit_schema.py`
+
+The session above ended with "we are pausing to sleep on these concepts." This
+is what we woke up with. Six pillars, not four, because the note explicitly
+allowed 5 or 6 if they serve the human and the AI better, and they do.
+
+| Pillar | The question a builder actually asks | Applies |
+|---|---|---|
+| **VIABILITY** | Is there a reason for this to exist, and does anything protect it? | Conditional |
+| **BLUEPRINT** | Can an agent build this without guessing? | Always |
+| **RESILIENCE** | What happens when it breaks? | Always |
+| **SAFETY** | What may an agent touch, and what must it never touch? | Always |
+| **DELEGATION** | Human x AI: who decides, who executes, who reviews? | Conditional |
+| **LEGIBILITY** | Can a model read this without hallucinating? | Always |
+
+### How the academic four map onto the human six
+
+- Viability survived unchanged. It was already a builder's word.
+- Execution / Technical Steering became **Blueprint**, which the session flagged
+  as "highly resonant."
+- Failure Determinism became **Resilience**, unchanged.
+- Constraint Governance and Context Coverage became **Safety**. This was the
+  right call for the reason the session gave: it signals digital stewardship,
+  and it is the enterprise-grade moat. Nobody will ever type "CGCC" into a
+  search bar.
+- Human x AI became **Delegation**, because the pillar is not about whether you
+  use AI, it is about whether the handoff is written down.
+- AI Readability became **Legibility**, one word, and it is the pillar most
+  invisible from inside your own repository.
+
+### Two Wyattisms that did not become pillars, and why
+
+- **Mapping / Organization** is real but it is not separable. Logical flow is
+  measured by Blueprint (can an agent follow it) and by Legibility (can a model
+  parse it). A third pillar would have double-counted the same evidence.
+- **Delivery** was described in the session as "a gut-feeling metric." We did
+  not ship it. Every pillar in this contract must be reconstructible from
+  findings that cite an artifact the builder can open. A gut feeling cannot cite
+  anything, and a score nobody can dispute is not a score, it is an assertion.
+  If Delivery returns, it returns with evidence.
+
+### The decision that mattered most: Community is not a pillar
+
+The session's own critique was correct and we followed it all the way. A
+sensitive medical pipeline and a forensic cold-case tool must not be scored on
+community. Community now lives in a non-scoring `comparison` object that carries
+cross-repository context and **cannot move the composite**. This also keeps the
+roadmap's promise not to rank projects as "best" from counts or votes.
+
+Note that the audit landing page mock still shipped a COMMUNITY score card until
+today. The page and the schema now agree.
+
+### Conditional scoring, enforced rather than requested
+
+The morning session asked that agents understand when a bucket applies versus
+when scoring it would unfairly harm the builder. That is now structural, not a
+matter of agent judgement:
+
+- A pillar marked `not_applicable` **cannot carry a score**. The schema rejects
+  the document.
+- It **must** carry a rationale addressed to the builder.
+- The composite is averaged only over applicable pillars, and the report must
+  publish `pillars_scored` and `pillars_excluded` so a reader can rebuild the
+  arithmetic and dispute the exclusions rather than trust the number.
+
+An internal admin CLI is not punished for having no market. A human-authored
+repository is not punished for having no agent workflow.
+
+### The spectrum, made deterministic
+
+Meh -> OK -> Good -> Great -> Amazing -> Moonshot is now a fixed mapping over
+0-100: meh 0-39, ok 40-54, good 55-69, great 70-84, amazing 85-94, moonshot
+95-100. A band is therefore never a matter of opinion, and Moonshot is rare by
+construction.
+
+### The legal and moral protocol, encoded so it cannot be softened
+
+The session raised the hardest question: what happens when an agent meets
+illegal content, or medical records somebody made public by accident. The answer
+is now enforced by the shape of the data, not by asking an agent nicely.
+
+A report may record a `disengagement` object containing exactly two fields: a
+reason code from a closed vocabulary, and a timestamp. There is no `detail`,
+`excerpt`, `description`, `path`, `severity`, or `notes` field, and
+`additionalProperties` is `false`. It is structurally impossible for a
+CURATIONS report to describe, quote, locate, or flag what was seen. When
+disengagement is present the composite and the comparison must both be null:
+stopping means stopping.
+
+This is "no association, no continuation, no flagging" expressed as a schema
+rather than as a policy that a future well-meaning patch could erode. The
+contract tests assert it by attempting eight different leak fields and requiring
+every one to be rejected.
+
+### Still open
+
+- Ruleset 0.1.0 defines the shape, not the checks. Which deterministic Tier A
+  checks feed each pillar is the next piece of work.
+- The corpus research in Issue #82 should inform the Blueprint and Legibility
+  check sets, since those are the two pillars where cross-repo evidence is
+  strongest.
+- `docs/QUALITY.md` and the public methodology page should absorb the band
+  thresholds once the check sets exist, so the rubric is public before any real
+  repository is scored.
