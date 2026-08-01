@@ -1,0 +1,129 @@
+#:schema node_modules/wrangler/config-schema.json
+#
+# CURATIONS agent gateway — Cloudflare TEST + TYPECHECK CONTRACT ONLY.
+#
+# ============================================================================
+# READ THIS BEFORE EDITING. THIS FILE IS NOT A DEPLOYMENT TARGET.
+# ============================================================================
+#
+# Azure is the sole production authority for curations.dev and
+# api.curations.dev. See docs/PRD-project-evidence-registry.md §12 and the
+# retirement note at the bottom of .github/workflows/catalog-site.yml.
+# Production ships exclusively through .github/workflows/azure-deploy.yml.
+#
+# This file exists for exactly two reasons, both of which are validation:
+#
+#   1. agent-worker/test/gateway-integration.test.mjs runs the real gateway
+#      under `wrangler dev --local` and seeds session state with
+#      `wrangler kv key put --binding RATE --local`. Both require a wrangler
+#      config that declares the bindings the Worker source expects.
+#
+#   2. .github/workflows/catalog-site.yml runs `npx wrangler deploy --dry-run`
+#      to prove the Worker source stays platform-neutral and still compiles
+#      for the Cloudflare target. That is a portability check, not a deploy.
+#
+# History: this file was deleted in f8197b8 to stop Cloudflare from becoming a
+# second production authority. That risk was real — the deleted version bound
+# `api.curations.dev` as a custom domain. But deleting it also broke the
+# validation gate, and curations.dev served a frozen build for twelve days as a
+# result (issue #102). The correct control is a config that is structurally
+# incapable of deploying, plus a CI guard, not the absence of a config.
+#
+# INVARIANTS — a CI guard in catalog-site.yml fails the build if these break:
+#   * no `routes`            — cannot attach to any hostname
+#   * no `custom_domain`     — cannot claim api.curations.dev
+#   * `workers_dev = false`  — cannot expose a *.workers.dev origin
+#   * no real KV namespace id — local `--persist-to` state only
+#
+# Secrets are never committed and are never needed here; `wrangler dev --local`
+# receives everything it needs from the test's own `--var` flags.
+
+name = "curations-agent-gateway"
+main = "src/index.ts"
+compatibility_date = "2026-07-12"
+
+# Deployment is disabled by construction. Do not set this to true, and do not
+# add a `routes` block. Azure owns production. See §12 of the Evidence
+# Registry PRD.
+workers_dev = false
+
+[vars]
+# Non-secret defaults so `wrangler deploy --dry-run` and the local dev run have
+# a complete shape to typecheck against. The integration test overrides every
+# value below with `--var`, so these are never the values under test.
+AZURE_OPENAI_ENDPOINT = "https://yolo-foundry.cognitiveservices.azure.com"
+AZURE_OPENAI_DEPLOYMENT = "gpt-5.4-mini"
+COSMOS_ENDPOINT = "https://yolo-curations-feed.documents.azure.com"
+COSMOS_DATABASE = "curations"
+COSMOS_CONTAINER = "engagements"
+COSMOS_VOTES_CONTAINER = "votes"
+COSMOS_SCORES_CONTAINER = "scores"
+COSMOS_DISCUSSIONS_CONTAINER = "discussions"
+ALLOWED_ORIGINS = "https://curations.dev,https://www.curations.dev,http://localhost:4321"
+MAX_QUESTION_CHARS = "4000"
+MAX_OUTPUT_TOKENS = "512"
+PER_IP_DAILY_LIMIT = "10"
+GLOBAL_DAILY_LIMIT = "200"
+COPILOT_MODEL = "gpt-5.4"
+COPILOT_MAX_PROMPT_CHARS = "60000"
+COPILOT_MAX_RESPONSE_CHARS = "40000"
+COPILOT_MAX_AI_CREDITS = "10"
+COPILOT_CONNECTION_TTL_SECONDS = "600"
+COPILOT_RUNS_PER_USER_DAILY = "5"
+COPILOT_RUNS_PER_IP_DAILY = "10"
+COPILOT_RUNS_GLOBAL_DAILY = "100"
+SOFTWARE_TARGETS = "zotero,ollama,hugging-face,n8n,langfuse,obsidian,sqlite,git,vs-code,pandoc,github,discourse,cloudflare,supabase"
+PROJECT_MAINTAINER_GITHUB_IDS = "219447171"
+VOTE_BACKEND = "durable"
+
+# Placeholder id. Local runs use `--persist-to` state and never touch a remote
+# namespace; a real namespace id here would imply an account binding this
+# config is not permitted to have.
+[[kv_namespaces]]
+binding = "RATE"
+id = "00000000000000000000000000000000"
+
+[[durable_objects.bindings]]
+name = "QUOTA"
+class_name = "QuotaGuard"
+
+[[durable_objects.bindings]]
+name = "PROJECT_PREVIEW"
+class_name = "ProjectPreviewGuard"
+
+[[durable_objects.bindings]]
+name = "VOTE_GUARD"
+class_name = "VoteGuard"
+
+[[durable_objects.bindings]]
+name = "COPILOT_GRANT"
+class_name = "CopilotGrantGuard"
+
+[[durable_objects.bindings]]
+name = "COPILOT_RUNTIME"
+class_name = "CopilotRuntime"
+
+[[containers]]
+class_name = "CopilotRuntime"
+image = "./copilot-runtime/Dockerfile"
+instance_type = "basic"
+max_instances = 1
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["QuotaGuard"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["VoteGuard"]
+
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["CopilotGrantGuard", "CopilotRuntime"]
+
+[[migrations]]
+tag = "v4"
+new_sqlite_classes = ["ProjectPreviewGuard"]
+
+[observability]
+enabled = true
