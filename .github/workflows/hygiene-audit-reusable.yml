@@ -101,7 +101,7 @@ jobs:
           fi
 
       - name: Check out curationsx/yolo audit scripts
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: curationsx/yolo
           ref: ${{ inputs.audit_ref }}
