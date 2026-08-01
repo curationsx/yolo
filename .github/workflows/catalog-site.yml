@@ -105,13 +105,45 @@ jobs:
           path: catalog-site/test/visual-oracle.spec.mjs-snapshots/*-linux.png
           if-no-files-found: error
 
+      # Azure is the sole production authority (docs/PRD-project-evidence-registry.md
+      # §12). agent-worker/wrangler.toml exists only so the gateway integration
+      # test can run the Worker under `wrangler dev --local` and so the dry-run
+      # below can prove the source stays platform-neutral. This guard enforces
+      # that mandate mechanically. Deleting the config instead — as f8197b8 did —
+      # silently breaks this whole job and freezes production (issue #102).
+      - name: Guard — Cloudflare config must stay non-deployable
+        run: |
+          config=agent-worker/wrangler.toml
+          test -f "$config" || {
+            echo "::error file=$config::Missing. The gateway integration test and the"
+            echo "::error file=$config::portability dry-run both require it. See issue #102."
+            exit 1
+          }
+          # Compare directives only; the file's own header documents these bans.
+          directives=$(grep -vE '^[[:space:]]*#' "$config")
+          fail=0
+          if echo "$directives" | grep -nE '^[[:space:]]*(routes|route)[[:space:]]*='; then
+            echo "::error file=$config::'routes' reintroduces a second production authority."
+            fail=1
+          fi
+          if echo "$directives" | grep -n 'custom_domain'; then
+            echo "::error file=$config::'custom_domain' would claim a production hostname."
+            fail=1
+          fi
+          if echo "$directives" | grep -nE '^[[:space:]]*workers_dev[[:space:]]*=[[:space:]]*true'; then
+            echo "::error file=$config::'workers_dev = true' exposes a deployable origin."
+            fail=1
+          fi
+          test "$fail" -eq 0 || exit 1
+          echo "OK — Cloudflare config is validation-only; Azure remains sole production authority."
+
       - name: Test and typecheck Cloudflare Worker
         working-directory: agent-worker
         run: |
           npm ci
           npm test
           npm run check
-          npx wrangler deploy --dry-run
+          npx wrangler deploy --dry-run --containers-rollout=none
 
       - name: Test isolated Copilot runtime
         working-directory: agent-worker/copilot-runtime
